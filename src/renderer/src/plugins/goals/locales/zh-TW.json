@@ -1,0 +1,34 @@
+{
+  "page": {
+    "title": "目標"
+  },
+  "heading": "目標",
+  "back": "← 目標",
+  "new": "新目標",
+  "newHint": "跟 agent 聊聊就好",
+  "newPrefill": "我想開始一個新目標：",
+  "progress": "{{goal}}的進度",
+  "sections": {
+    "rules": "它怎麼幫你排的",
+    "estimates": "時間估得準不準",
+    "report": "週報"
+  },
+  "rulesCount_other": "{{count}} 條規則",
+  "ruleRecord": "{{tries}} 次做到 {{hits}} 次",
+  "basis": {
+    "stated": "你說的",
+    "records_other": "根據 {{count}} 次"
+  },
+  "legendDone": "實心：做了",
+  "legendPlanned": "斜線：這週排了，還沒做",
+  "proposal": "提案",
+  "proposalHint": "有提案",
+  "acceptRule": "改成這樣",
+  "rejectRule": "不要",
+  "estimated": "你估的",
+  "actual": "實際花的",
+  "minutes": "分鐘",
+  "ideas": "還在想的目標",
+  "ideasHint": "從隨手記來的。點一個，跟 agent 聊聊怎麼變成目標。",
+  "ideaPrefill": "我想把「{{title}}」變成目標"
+}

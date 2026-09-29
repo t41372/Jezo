@@ -1,0 +1,118 @@
+{
+  "page": {
+    "title": "More"
+  },
+  "heading": "More",
+  "intro": "You don't need anything here for everyday use. Come here to see how the agent works, or to adjust it.",
+  "back": "← More",
+  "sections": {
+    "memory": {
+      "title": "What it remembers",
+      "description": "What you told it and what it guessed. Delete anything."
+    },
+    "skills": {
+      "title": "Methods it uses",
+      "description": "How it breaks down goals and estimates time. All swappable."
+    },
+    "experiments": {
+      "title": "Experiments",
+      "description": "Find out whether a way of working suits you"
+    },
+    "history": {
+      "title": "Change history",
+      "description": "Everything the agent changed, and a way to undo it"
+    },
+    "connections": {
+      "title": "Connections",
+      "description": "Calendars, Strava, Anki"
+    }
+  },
+  "counts": {
+    "skills_one": "{{count}} on",
+    "skills_other": "{{count}} on",
+    "experiments_one": "{{count}} running",
+    "experiments_other": "{{count}} running",
+    "connections_one": "{{count}}",
+    "connections_other": "{{count}}"
+  },
+  "memory": {
+    "intro": "What you told it and what it guessed are kept apart. If a guess is wrong, delete it and it won't be used again.",
+    "stated": "What you told it",
+    "inferred": "What it guessed (only with evidence)",
+    "statedIn": "{{day}} · {{where}}",
+    "evidence_one": "From {{count}} record · confidence: {{confidence}}",
+    "evidence_other": "From {{count}} records · confidence: {{confidence}}",
+    "confidence": {
+      "low": "low",
+      "medium": "medium",
+      "high": "high"
+    },
+    "delete": "Delete"
+  },
+  "skills": {
+    "intro": "These are the methods the agent uses when it plans for you. No method suits everyone, so turn off any that don't fit.",
+    "tip": "To change the details, just tell the agent, for example “count my commute when you estimate time”.",
+    "back": "← Methods it uses",
+    "proposalBadge": "Change proposed",
+    "reviewed": "You reviewed it",
+    "proposal": "The agent wants to change this method",
+    "basedOn": "Based on",
+    "apply": "Apply",
+    "reject": "No",
+    "file": "Contents"
+  },
+  "experiments": {
+    "intro": "Want to know whether something works for you? The agent alternates two kinds of weeks and tells you what it found.",
+    "finished_one": "{{count}} week · finished",
+    "finished_other": "{{count}} weeks · finished",
+    "running": "Running · week {{week}} of {{weeks}}",
+    "choices": {
+      "adopt": {
+        "label": "Plan this way for two weeks",
+        "reply": "OK. The next two weeks follow this, and I'll ask how it felt afterward."
+      },
+      "rerun": {
+        "label": "Test again",
+        "reply": "OK, two more weeks. This time I'll keep the number of meetings about the same in both."
+      },
+      "drop": {
+        "label": "Not interested",
+        "reply": "OK, dropping it. The results stay in the record."
+      }
+    }
+  },
+  "history": {
+    "intro": "Everything the agent changed is here. Undo puts things back the way they were. Your own edits are never undone.",
+    "source": {
+      "morning": "Morning plan",
+      "evening": "Evening check-in",
+      "weekly": "Weekly review",
+      "hotkey": "⌥X",
+      "user": "Chat",
+      "you": "You",
+      "notes": "Sorting notes"
+    },
+    "retried_one": "Took {{count}} retry to get the format right",
+    "retried_other": "Took {{count}} retries to get the format right",
+    "claimedWithoutChange": "A check caught this, and the next retry worked",
+    "undo": "Undo",
+    "undone": "Undone",
+    "files_one": "Changed {{count}} file",
+    "files_other": "Changed {{count}} files"
+  },
+  "connections": {
+    "intro": "Once connected, calendar events show up on the Calendar page, and runs and flashcard reviews count as done automatically.",
+    "connected": "Connected",
+    "notConnected": "Not connected",
+    "connect": "Connect",
+    "outside": "Content from outside is marked with where it came from and kept apart from what you say, so it never becomes instructions for the agent.",
+    "dialogTitle": "Connect {{name}}",
+    "reads": "Reads",
+    "writes": "Writes",
+    "noWrites": "Nothing",
+    "local": "What it reads stays in the workspace on this computer. Jezo doesn't send it anywhere else.",
+    "browser": "Your browser opens next so you can sign in.",
+    "cancel": "Not now",
+    "justNow": "Just connected"
+  }
+}

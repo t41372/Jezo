@@ -1,0 +1,55 @@
+{
+  "page": {
+    "title": "隨手記"
+  },
+  "intro": "想到什麼先丟進來，不用分類。整理交給 agent。",
+  "placeholder": "想到什麼就寫，一件事、一個想法、一個目標都行…",
+  "keys": "↵ 記下　⇧↵ 換行",
+  "unsorted": "還沒整理",
+  "empty": "都整理好了。想到什麼再丟進來。",
+  "flush_other": "交給 agent 整理 {{count}} 則",
+  "flushHint": "它會提議每一則變成什麼，你說好才算。",
+  "sorted_other": "已整理 · {{count}}",
+  "edit": "修改",
+  "delete": "刪掉",
+  "deleted": "已刪掉「{{text}}」",
+  "viaHotkey": "⌥X",
+  "kind": {
+    "todo": "待辦",
+    "goal": "目標想法",
+    "memory": "記住",
+    "keep": "留著",
+    "ask": "問你"
+  },
+  "became": {
+    "todo": "變成待辦",
+    "goal": "變成目標想法",
+    "memory": "記住了",
+    "keep": "留著當筆記"
+  },
+  "card": {
+    "title": "整理隨手記",
+    "meta_other": "{{count}} 則 · 草稿，你說好才算",
+    "accept": "好",
+    "reject": "不要",
+    "acceptAll": "全部照這樣",
+    "undo": "撤銷",
+    "original": "你寫的：{{text}}",
+    "done": "整理好了",
+    "openChat": "在對話裡看",
+    "answer": {
+      "todo": "是待辦",
+      "goal": "是目標",
+      "memory": "記住就好",
+      "keep": "先留著"
+    },
+    "accepted": {
+      "todo": "放進 Backlog 了",
+      "goal": "記成目標想法，在「目標」頁",
+      "memory": "記住了",
+      "keep": "留在隨手記"
+    },
+    "rejected": "放回隨手記了",
+    "close": "收起"
+  }
+}

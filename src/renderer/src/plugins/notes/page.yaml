@@ -1,0 +1,7 @@
+id: notes
+title: page.title
+icon: notebook-pen
+# Right after 今天: jotting something down happens many times a day.
+order: 25
+layout:
+  widget: notes.notes

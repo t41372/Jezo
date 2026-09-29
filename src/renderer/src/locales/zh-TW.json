@@ -1,0 +1,119 @@
+{
+  "rail": {
+    "switchToLight": "淺色",
+    "switchToDark": "深色"
+  },
+  "layout": {
+    "missingWidget": "找不到元件「{{id}}」。可能是它的插件被關掉或移除了。",
+    "missingMessage": "這則訊息來自「{{id}}」，但它的插件被關掉或移除了。"
+  },
+  "time": {
+    "minutes_other": "{{count}} 分",
+    "hours": "{{hours}} 小時",
+    "hoursMinutes": "{{hours}} 小時 {{minutes}} 分",
+    "today": "今天",
+    "yesterday": "昨天",
+    "tomorrow": "明天",
+    "dayTime": "{{day}} {{time}}"
+  },
+  "trigger": {
+    "morning": {
+      "title": "早上排程",
+      "short": "自動",
+      "started": "每天早上自動開始"
+    },
+    "evening": {
+      "title": "晚上 check-in",
+      "short": "自動",
+      "started": "每天晚上自動開始"
+    },
+    "weekly": {
+      "title": "這週回顧",
+      "short": "自動",
+      "started": "每週自動開始"
+    },
+    "hotkey": {
+      "title": "⌥X",
+      "short": "⌥X",
+      "started": ""
+    },
+    "user": {
+      "title": "新對話",
+      "short": "你開的",
+      "started": ""
+    },
+    "notes": {
+      "title": "整理隨手記",
+      "short": "隨手記",
+      "started": "從隨手記交給 agent"
+    }
+  },
+  "todo": {
+    "noGoal": "沒有目標",
+    "after": "{{cue}}之後",
+    "fromCalendar": "{{time}}（行事曆）",
+    "unscheduled": "還沒排時間",
+    "draft": "草稿 · {{title}}",
+    "when": "什麼時候",
+    "slot": "排在",
+    "estimate": "大約",
+    "estimateInline": "大約 {{duration}}",
+    "accept": "好",
+    "acceptTime": "就這個時間",
+    "reject": "不要",
+    "why": "為什麼這樣排？",
+    "markDone": "做完了",
+    "markUndone": "標成沒做",
+    "unschedule": "先不排時間",
+    "ask": "問 agent 這件事",
+    "askPrefill": "關於「{{title}}」，",
+    "close": "關閉",
+    "subtasks": "步驟"
+  },
+  "event": {
+    "readOnly": "來自 {{source}}，時間要在那邊改。",
+    "whatNext": "結束之後想接著做點什麼？",
+    "whatNextPrefill": "開完「{{title}}」之後，我想",
+    "allDay": "{{days}} · 全天"
+  },
+  "plan": {
+    "pending_other": "{{count}} 件 · 草稿，你說好才算",
+    "accepted": "已放進今天",
+    "notStarted": "已放進今天 · 還沒開始做",
+    "someDone_other": "已放進今天 · 做了 {{count}} 件",
+    "accept": "好，就這樣",
+    "tweak": "改一下",
+    "tweakPrefill": "我想改：",
+    "goToday": "去今天 →",
+    "undo": "撤銷"
+  },
+  "quick": {
+    "placeholder": "跟 Jezo 說…",
+    "ask": "問 Jezo：「{{text}}」",
+    "note": "記到隨手記：「{{text}}」",
+    "noted": "記到隨手記了",
+    "common": "常用",
+    "planTomorrow": "幫我安排明天",
+    "badDay": "今天不太順",
+    "freeEvenings": "這週哪天晚上有空？",
+    "continue": "開主視窗繼續",
+    "close": "關閉",
+    "release": "放開送出",
+    "context": "正在看：{{page}}",
+    "contextNote": "會一起帶進對話",
+    "micDenied": "沒辦法用麥克風。到「系統設定 → 隱私權與安全性 → 麥克風」打開 Jezo。",
+    "mockTranscript": "把明天的健身挪到週四，然後幫我看一下下週",
+    "thinking": "想一下…"
+  },
+  "undo": {
+    "action": "撤銷",
+    "discarded": "已拿掉「{{title}}」",
+    "unscheduled": "「{{title}}」放回 Backlog 了",
+    "memoryDeleted": "已刪掉這條記憶"
+  },
+  "focus": {
+    "running": "進行中 · {{elapsed}}",
+    "pause": "停下來",
+    "done": "做完了"
+  }
+}

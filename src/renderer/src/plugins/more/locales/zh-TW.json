@@ -1,0 +1,111 @@
+{
+  "page": {
+    "title": "更多"
+  },
+  "heading": "更多",
+  "intro": "不用管這裡也能正常用。想知道 agent 怎麼運作、或想調整它，再來看。",
+  "back": "← 更多",
+  "sections": {
+    "memory": {
+      "title": "它記住的事",
+      "description": "你說過的、它猜的，都可以刪"
+    },
+    "skills": {
+      "title": "它用的方法",
+      "description": "怎麼拆目標、怎麼估時間，都能換"
+    },
+    "experiments": {
+      "title": "小實驗",
+      "description": "試試某個做法對你有沒有用"
+    },
+    "history": {
+      "title": "修改紀錄",
+      "description": "每次 agent 動過什麼，都能撤銷"
+    },
+    "connections": {
+      "title": "連接",
+      "description": "行事曆、Strava、Anki"
+    }
+  },
+  "counts": {
+    "skills_other": "{{count}} 個開著",
+    "experiments_other": "{{count}} 個進行中",
+    "connections_other": "{{count}} 個"
+  },
+  "memory": {
+    "intro": "你說過的和它猜的分開放。猜錯了就刪掉，它不會再用。",
+    "stated": "你說過的",
+    "inferred": "它猜的（有證據才會猜）",
+    "statedIn": "{{day}} · {{where}}",
+    "evidence_other": "根據 {{count}} 次紀錄 · 把握：{{confidence}}",
+    "confidence": {
+      "low": "低",
+      "medium": "中",
+      "high": "高"
+    },
+    "delete": "刪掉"
+  },
+  "skills": {
+    "intro": "這些是 agent 幫你排事情時用的方法。沒有一套適合所有人，覺得不對就關掉。",
+    "tip": "想改細節，直接跟 agent 說，例如「估時間的時候，把通勤也算進去」。",
+    "back": "← 它用的方法",
+    "proposalBadge": "有修改提案",
+    "reviewed": "你看過",
+    "proposal": "agent 想改這個方法",
+    "basedOn": "根據",
+    "apply": "套用",
+    "reject": "不要",
+    "file": "內容"
+  },
+  "experiments": {
+    "intro": "想知道某個做法對你有沒有用？agent 會輪流排兩種週，最後告訴你結果。",
+    "finished_other": "{{count}} 週 · 結束了",
+    "running": "進行中 · 第 {{week}} / {{weeks}} 週",
+    "choices": {
+      "adopt": {
+        "label": "先照這樣排兩週",
+        "reply": "好，接下來兩週先照這個方式排，兩週後再問你感覺。"
+      },
+      "rerun": {
+        "label": "再測一次",
+        "reply": "好，再測兩週，這次我會讓兩種週的會議數差不多。"
+      },
+      "drop": {
+        "label": "不用了",
+        "reply": "好，不用這個做法。結果還是留在紀錄裡。"
+      }
+    }
+  },
+  "history": {
+    "intro": "agent 每次動過什麼都在這裡。撤銷之後就回到那之前的樣子。你自己改的不會被撤銷。",
+    "source": {
+      "morning": "早上排程",
+      "evening": "晚上 check-in",
+      "weekly": "每週回顧",
+      "hotkey": "⌥X",
+      "user": "對話",
+      "you": "你自己改的",
+      "notes": "整理隨手記"
+    },
+    "retried_other": "重試了 {{count}} 次才寫對格式",
+    "claimedWithoutChange": "系統抓到了，下一次重試成功",
+    "undo": "撤銷",
+    "undone": "已撤銷",
+    "files_other": "改了 {{count}} 個檔案"
+  },
+  "connections": {
+    "intro": "連上之後，行事曆上的事會出現在「行事曆」頁；運動、背卡的紀錄會自動算成「做了」。",
+    "connected": "已連接",
+    "notConnected": "還沒連接",
+    "connect": "連接",
+    "outside": "外面進來的內容會標上來源，跟你自己說的分開，不會直接變成 agent 的指令。",
+    "dialogTitle": "連接 {{name}}",
+    "reads": "會讀",
+    "writes": "會寫",
+    "noWrites": "不會寫入任何東西",
+    "local": "讀到的內容只存在這台電腦的工作區，Jezo 不會傳到別的地方。",
+    "browser": "接下來會打開瀏覽器讓你登入。",
+    "cancel": "先不要",
+    "justNow": "剛剛連上"
+  }
+}

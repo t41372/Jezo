@@ -1,0 +1,50 @@
+{
+  "page": {
+    "title": "聊天"
+  },
+  "newChat": "新對話",
+  "empty": "想做什麼？",
+  "suggestions": {
+    "planNextWeek": "幫我安排下週",
+    "newGoal": "我想開始一個新目標",
+    "badDay": "今天不太順"
+  },
+  "placeholder": "跟我說想做什麼，或按住 ⌥X 用說的",
+  "attach": "加附件",
+  "voice": "用說的",
+  "rework": {
+    "energy": {
+      "low": {
+        "title": "很累，只想躺",
+        "hint": "只留最小的一件"
+      },
+      "some": {
+        "title": "還行，能做一點",
+        "hint": "留兩三件短的"
+      },
+      "plenty": {
+        "title": "其實還有力",
+        "hint": "照原本排，只挪來不及的"
+      }
+    },
+    "draft": "agent 的草稿",
+    "untilYouSay": "你確認之前什麼都不會動",
+    "keep": "保留",
+    "move": "挪走",
+    "drop": "放掉",
+    "recorded": "週報會記成「重排」，不會記成「沒做」。",
+    "apply": "就這樣排",
+    "edit": "我自己改",
+    "applied": "已重排",
+    "undo": "撤銷",
+    "goToday": "回到今天 →"
+  },
+  "memoryPreview": {
+    "title": "這個 session 會寫進記憶的",
+    "stated": "你說的",
+    "skipped": "不寫",
+    "plan": "計畫",
+    "save": "寫進去",
+    "saved": "已寫進記憶"
+  }
+}

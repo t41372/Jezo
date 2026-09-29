@@ -1,0 +1,122 @@
+{
+  "rail": {
+    "switchToLight": "Light",
+    "switchToDark": "Dark"
+  },
+  "layout": {
+    "missingWidget": "Can't find the widget “{{id}}”. Its plugin may have been turned off or removed.",
+    "missingMessage": "This message comes from \"{{id}}\", but its plugin is turned off or removed."
+  },
+  "time": {
+    "minutes_one": "{{count}} min",
+    "minutes_other": "{{count}} min",
+    "hours": "{{hours}} h",
+    "hoursMinutes": "{{hours}} h {{minutes}} min",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "tomorrow": "Tomorrow",
+    "dayTime": "{{day}} {{time}}"
+  },
+  "trigger": {
+    "morning": {
+      "title": "Morning plan",
+      "short": "Automatic",
+      "started": "Starts every morning"
+    },
+    "evening": {
+      "title": "Evening check-in",
+      "short": "Automatic",
+      "started": "Starts every evening"
+    },
+    "weekly": {
+      "title": "Weekly review",
+      "short": "Automatic",
+      "started": "Starts every week"
+    },
+    "hotkey": {
+      "title": "⌥X",
+      "short": "⌥X",
+      "started": ""
+    },
+    "user": {
+      "title": "New chat",
+      "short": "You started it",
+      "started": ""
+    },
+    "notes": {
+      "title": "Sorting notes",
+      "short": "Notes",
+      "started": "handed over from Notes"
+    }
+  },
+  "todo": {
+    "noGoal": "No goal",
+    "after": "After {{cue}}",
+    "fromCalendar": "{{time}} (calendar)",
+    "unscheduled": "Not scheduled",
+    "draft": "Draft · {{title}}",
+    "when": "When",
+    "slot": "Scheduled",
+    "estimate": "About",
+    "estimateInline": "about {{duration}}",
+    "accept": "OK",
+    "acceptTime": "This time works",
+    "reject": "No",
+    "why": "Why this time?",
+    "markDone": "Done",
+    "markUndone": "Not done",
+    "unschedule": "Unschedule",
+    "ask": "Ask the agent",
+    "askPrefill": "About “{{title}}”, ",
+    "close": "Close",
+    "subtasks": "Steps"
+  },
+  "event": {
+    "readOnly": "From {{source}}. Change the time there.",
+    "whatNext": "Want to do something right after?",
+    "whatNextPrefill": "After “{{title}}”, I want to ",
+    "allDay": "{{days}} · all day"
+  },
+  "plan": {
+    "pending_one": "{{count}} item · draft until you say OK",
+    "pending_other": "{{count}} items · draft until you say OK",
+    "accepted": "Added to today",
+    "notStarted": "Added to today · not started yet",
+    "someDone_one": "Added to today · {{count}} done",
+    "someDone_other": "Added to today · {{count}} done",
+    "accept": "Looks good",
+    "tweak": "Change something",
+    "tweakPrefill": "I'd like to change: ",
+    "goToday": "Go to Today →",
+    "undo": "Undo"
+  },
+  "quick": {
+    "placeholder": "Tell Jezo…",
+    "ask": "Ask Jezo: “{{text}}”",
+    "note": "Add to Notes: \"{{text}}\"",
+    "noted": "Added to Notes",
+    "common": "Suggestions",
+    "planTomorrow": "Plan tomorrow for me",
+    "badDay": "Today isn't going well",
+    "freeEvenings": "Which evenings are free this week?",
+    "continue": "Continue in the main window",
+    "close": "Close",
+    "release": "Release to send",
+    "context": "Looking at: {{page}}",
+    "contextNote": "It comes along as context",
+    "micDenied": "Can't use the microphone. Turn on Jezo in System Settings → Privacy & Security → Microphone.",
+    "mockTranscript": "Move tomorrow's gym session to Thursday, then look at next week for me",
+    "thinking": "Thinking…"
+  },
+  "undo": {
+    "action": "Undo",
+    "discarded": "Removed “{{title}}”",
+    "unscheduled": "“{{title}}” is back in the backlog",
+    "memoryDeleted": "Memory deleted"
+  },
+  "focus": {
+    "running": "In progress · {{elapsed}}",
+    "pause": "Stop",
+    "done": "Done"
+  }
+}

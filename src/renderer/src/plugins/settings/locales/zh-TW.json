@@ -1,0 +1,22 @@
+{
+  "page": {
+    "title": "設定"
+  },
+  "heading": "設定",
+  "model": "模型",
+  "modelHint": "本地模型比較慢，但資料不離開電腦",
+  "local": "本地模型",
+  "cloud": "雲端",
+  "language": "語言",
+  "appearance": "外觀",
+  "system": "跟隨系統",
+  "light": "淺色",
+  "dark": "深色",
+  "hotkey": "叫出 agent",
+  "hotkeyHint": "短按打字，長按說話",
+  "morning": "早上排程",
+  "morningHint": "每天這個時間，agent 幫你排今天",
+  "evening": "晚上 check-in",
+  "eveningHint": "每天這個時間，聊聊今天怎麼樣",
+  "hotkeyHintPressOnly": "按一下打字。這台電腦上沒辦法長按說話。"
+}

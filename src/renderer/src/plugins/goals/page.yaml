@@ -1,0 +1,6 @@
+id: goals
+title: page.title
+icon: target
+order: 40
+layout:
+  widget: goals.goals

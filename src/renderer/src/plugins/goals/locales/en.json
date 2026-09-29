@@ -1,0 +1,36 @@
+{
+  "page": {
+    "title": "Goals"
+  },
+  "heading": "Goals",
+  "back": "← Goals",
+  "new": "New goal",
+  "newHint": "Just talk it through with the agent",
+  "newPrefill": "I want to start a new goal: ",
+  "progress": "Progress on {{goal}}",
+  "sections": {
+    "rules": "How it schedules this",
+    "estimates": "How good the estimates are",
+    "report": "Weekly report"
+  },
+  "rulesCount_one": "{{count}} rule",
+  "rulesCount_other": "{{count}} rules",
+  "ruleRecord": "{{hits}} of {{tries}} times",
+  "basis": {
+    "stated": "You said so",
+    "records_one": "From {{count}} record",
+    "records_other": "From {{count}} records"
+  },
+  "legendDone": "Solid: done",
+  "legendPlanned": "Hatched: planned this week, not done yet",
+  "proposal": "Proposal",
+  "proposalHint": "Proposal",
+  "acceptRule": "Change it",
+  "rejectRule": "No",
+  "estimated": "Your estimate",
+  "actual": "What it took",
+  "minutes": "minutes",
+  "ideas": "Goal ideas",
+  "ideasHint": "From Notes. Pick one to talk it into a goal with the agent.",
+  "ideaPrefill": "I want to turn \"{{title}}\" into a goal"
+}

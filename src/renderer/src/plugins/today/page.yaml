@@ -1,0 +1,8 @@
+id: today
+title: page.title
+icon: square-check
+order: 20
+layout:
+  row:
+    - widget: today.agenda
+    - widget: today.detail

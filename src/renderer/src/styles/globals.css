@@ -1,0 +1,199 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Tokens come from the design mockup and use shadcn's names.
+ *
+ * The window is glass. The OS material (macOS vibrancy, Windows acrylic) blurs
+ * and tints the desktop behind the window, so --win only adds a faint wash over
+ * it, and the content panel (--background) is about half see-through: enough for
+ * the colors behind to show, not so much that text sits on a bright wallpaper.
+ * Tuned by screenshot over a colorful wallpaper; see docs/design/frontend.md.
+ */
+:root {
+  --win: rgb(242 244 250 / 0.2);
+  --win-border: rgb(255 255 255 / 0.6);
+  --background: rgb(255 255 255 / 0.55);
+  --foreground: oklch(0.22 0.02 265);
+  --card: rgb(255 255 255 / 0.94);
+  --card-foreground: var(--foreground);
+  --card-border: rgb(20 24 60 / 0.07);
+  --popover: oklch(0.99 0.003 265);
+  --popover-foreground: var(--foreground);
+  --primary: oklch(0.22 0.02 265);
+  --primary-foreground: #fff;
+  --secondary: rgb(255 255 255 / 0.7);
+  --secondary-foreground: var(--foreground);
+  --muted: rgb(20 24 60 / 0.05);
+  --muted-foreground: oklch(0.5 0.02 265);
+  --accent: rgb(255 255 255 / 0.85);
+  --accent-foreground: var(--foreground);
+  --destructive: oklch(0.6 0.19 25);
+  --border: oklch(0.9 0.01 265);
+  --input: oklch(0.9 0.01 265);
+  --ring: oklch(0.68 0.13 285);
+  --radius: 0.625rem;
+
+  /* Agent proposals: anything the agent suggested that the user hasn't accepted. */
+  --draft: oklch(0.68 0.13 285);
+  --draft-bg: oklch(0.68 0.13 285 / 0.07);
+  --draft-chip: oklch(0.68 0.13 285 / 0.18);
+  --draft-ink: oklch(0.45 0.15 285);
+  --ok: oklch(0.62 0.15 155);
+  --warn: oklch(0.7 0.14 70);
+}
+
+.dark {
+  --win: rgb(20 18 34 / 0.1);
+  --win-border: rgb(255 255 255 / 0.12);
+  --background: rgb(30 28 48 / 0.4);
+  --foreground: #eeedf6;
+  --card: rgb(255 255 255 / 0.06);
+  --card-border: rgb(255 255 255 / 0.07);
+  --popover: oklch(0.24 0.03 285);
+  --primary: #eeedf6;
+  --primary-foreground: #17151f;
+  --secondary: rgb(255 255 255 / 0.08);
+  --muted: rgb(255 255 255 / 0.06);
+  --muted-foreground: rgb(238 237 246 / 0.58);
+  --accent: rgb(255 255 255 / 0.1);
+  --border: rgb(255 255 255 / 0.1);
+  --input: rgb(255 255 255 / 0.12);
+  --draft: oklch(0.72 0.13 285);
+  --draft-bg: oklch(0.72 0.13 285 / 0.08);
+  --draft-chip: oklch(0.72 0.13 285 / 0.22);
+  --draft-ink: oklch(0.84 0.1 285);
+}
+
+@theme inline {
+  --font-sans: "Geist Variable", "Noto Sans TC Variable", system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, monospace;
+
+  --color-win: var(--win);
+  --color-win-border: var(--win-border);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-card-border: var(--card-border);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-draft: var(--draft);
+  --color-draft-bg: var(--draft-bg);
+  --color-draft-chip: var(--draft-chip);
+  --color-draft-ink: var(--draft-ink);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+
+  /* Set per element with goalStyle(); see lib/goal-color.ts. */
+  --color-goal: var(--goal);
+  --color-goal-tint: var(--goal-tint);
+  --color-goal-deep: var(--goal-deep);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+}
+
+/* Stronger than the built-in curves. Mirrored in lib/motion.ts for Motion. */
+@theme {
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-transparent font-sans text-foreground antialiased;
+    margin: 0;
+    overflow: hidden;
+    user-select: none;
+  }
+  /* Text the user reads or might copy stays selectable. */
+  input,
+  textarea,
+  [data-selectable] {
+    user-select: text;
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+/* Linux has no window vibrancy, so the window needs a solid backdrop. */
+[data-platform="linux"] body {
+  background: oklch(0.93 0.02 265);
+}
+[data-platform="linux"].dark body {
+  background: oklch(0.2 0.03 285);
+}
+
+/*
+ * Anything you can click shrinks a little while pressed, so the press registers
+ * before the result shows. Colors ease on hover. Reduced motion keeps the colors
+ * and drops the shrink.
+ */
+@utility pressable {
+  transition-property: scale, color, background-color, border-color, box-shadow, opacity;
+  transition-duration: 150ms;
+  transition-timing-function: var(--ease-out);
+  &:active:not(:disabled, [aria-disabled="true"], [data-disabled]) {
+    scale: 0.97;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    &:active {
+      scale: none;
+    }
+  }
+}
+
+/*
+ * A block dragged off the calendar (onto the backlog, say) hides the calendar's
+ * own idea of where it would land. The body attribute is set by our change to
+ * ReUI's drag engine in components/reui.
+ */
+body[data-ec-outside]
+  :is([data-slot="event-calendar-drag-ghost"], [data-slot="event-calendar-drop-placeholder"], [data-slot="event-calendar-drop-hint"]) {
+  visibility: hidden;
+}
+
+/* Parts of the window you can drag it by. */
+@utility drag-region {
+  -webkit-app-region: drag;
+}
+/*
+ * Anything you can click keeps its clicks, even under a drag region. Chromium
+ * applies app-region rects in document order, so this works as long as the
+ * drag region comes before the controls in the DOM.
+ */
+@layer base {
+  :is(button, a, input, textarea, select, label, summary, [contenteditable], [role="button"], [role="option"], [role="menuitem"], [role="tab"], [role="checkbox"], [role="switch"], [role="slider"]) {
+    -webkit-app-region: no-drag;
+  }
+}

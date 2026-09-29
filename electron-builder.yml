@@ -1,0 +1,12 @@
+appId: org.jezo.app
+productName: Jezo
+directories:
+  buildResources: build
+files:
+  - out/**
+  - package.json
+mac:
+  category: public.app-category.productivity
+  extendInfo:
+    # Shown when macOS asks for the microphone, the first time ⌥X is held to talk.
+    NSMicrophoneUsageDescription: Jezo listens while you hold ⌥X, so you can talk to it instead of typing.

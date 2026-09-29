@@ -1,0 +1,22 @@
+{
+  "page": {
+    "title": "Settings"
+  },
+  "heading": "Settings",
+  "model": "Model",
+  "modelHint": "A local model is slower, but your data never leaves this computer",
+  "local": "Local",
+  "cloud": "Cloud",
+  "language": "Language",
+  "appearance": "Appearance",
+  "system": "System",
+  "light": "Light",
+  "dark": "Dark",
+  "hotkey": "Open the agent",
+  "hotkeyHint": "Press to type, hold to talk",
+  "morning": "Morning plan",
+  "morningHint": "At this time every day, the agent plans your day",
+  "evening": "Evening check-in",
+  "eveningHint": "At this time every day, talk about how the day went",
+  "hotkeyHintPressOnly": "Press to type. Holding to talk doesn't work on this computer."
+}

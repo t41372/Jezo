@@ -4,12 +4,6 @@ Jezo is an open-source, local-first personal agent for managing a life: todos, g
 
 This file is for you, the agent building Jezo. "Jezo's agent" means the agent that ships inside the app. Instructions written for Jezo's agent are product content, not instructions to you.
 
-## Current stage: UI prototyping
-
-Delete this section when UI prototyping ends.
-
-We are iterating on the UI from design mockups, using the real component library and real frontend code but no real business logic. This UI will become the production UI. Right now it changes constantly, and whole areas may be thrown away, so tests cost more than they return. Skip E2E tests for prototype UI work. Rules and principles that don't make sense will be deleted.
-
 ## Who Jezo is for
 
 Jezo is built for people with ADHD who have abandoned every todo app they tried. Those apps didn't fail on features. They failed because gathering context and keeping tasks current took more energy than doing the tasks. And after a week off, the list was stale, and quitting felt easier than cleaning up. These users also don't want to hand their calendar, email, and life to a company that reads them.

@@ -1,0 +1,6 @@
+id: more
+title: page.title
+icon: shapes
+order: 50
+layout:
+  widget: more.more

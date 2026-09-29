@@ -1,0 +1,58 @@
+{
+  "page": {
+    "title": "Notes"
+  },
+  "intro": "Put anything here first, unsorted. The agent sorts it.",
+  "placeholder": "Jot anything down: a thing to do, a thought, a goal…",
+  "keys": "↵ add　⇧↵ new line",
+  "unsorted": "Not sorted yet",
+  "empty": "All sorted. Add more whenever something comes up.",
+  "flush_one": "Hand {{count}} note to the agent",
+  "flush_other": "Hand {{count}} notes to the agent",
+  "flushHint": "It proposes what each one becomes. Nothing happens until you say yes.",
+  "sorted_one": "Sorted · {{count}}",
+  "sorted_other": "Sorted · {{count}}",
+  "edit": "Edit",
+  "delete": "Delete",
+  "deleted": "Deleted \"{{text}}\"",
+  "viaHotkey": "⌥X",
+  "kind": {
+    "todo": "Todo",
+    "goal": "Goal idea",
+    "memory": "Remember",
+    "keep": "Keep",
+    "ask": "Question"
+  },
+  "became": {
+    "todo": "Became a todo",
+    "goal": "Became a goal idea",
+    "memory": "Remembered",
+    "keep": "Kept as a note"
+  },
+  "card": {
+    "title": "Sorting notes",
+    "meta_one": "{{count}} note · drafts until you say yes",
+    "meta_other": "{{count}} notes · drafts until you say yes",
+    "accept": "Yes",
+    "reject": "No",
+    "acceptAll": "Accept all",
+    "undo": "Undo",
+    "original": "You wrote: {{text}}",
+    "done": "All sorted",
+    "openChat": "See the conversation",
+    "answer": {
+      "todo": "A todo",
+      "goal": "A goal",
+      "memory": "Just remember it",
+      "keep": "Keep it"
+    },
+    "accepted": {
+      "todo": "Added to the backlog",
+      "goal": "Saved as a goal idea on Goals",
+      "memory": "Remembered",
+      "keep": "Kept in Notes"
+    },
+    "rejected": "Back in Notes",
+    "close": "Put away"
+  }
+}

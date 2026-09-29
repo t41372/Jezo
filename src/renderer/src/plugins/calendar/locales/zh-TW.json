@@ -1,0 +1,53 @@
+{
+  "page": {
+    "title": "行事曆"
+  },
+  "backlog": {
+    "title": "Backlog",
+    "subtitle": "還沒排時間",
+    "hint": "拖到行事曆上就排好了；行事曆上的也可以拖回來。",
+    "add": "＋ 加一件事，Enter",
+    "dropHere": "放在這裡 = 先不排時間",
+    "empty": "都排好了。",
+    "findTime": "讓 agent 幫我找時間",
+    "card": "{{goal}} · 大約 {{duration}}"
+  },
+  "legend": {
+    "events": "行事曆上的事",
+    "todos": "待辦，顏色是目標",
+    "drafts": "agent 的草稿"
+  },
+  "week": {
+    "this": "這週",
+    "last": "上週",
+    "next": "下週",
+    "later_other": "{{count}} 週後",
+    "earlier_other": "{{count}} 週前"
+  },
+  "nav": {
+    "previous": "往前",
+    "next": "往後",
+    "today": "今天",
+    "view": "顯示範圍"
+  },
+  "views": {
+    "day": "日",
+    "week": "週",
+    "month": "月"
+  },
+  "synced": "{{source}} · {{ago}}同步",
+  "subscribe": "＋ 訂閱行事曆",
+  "noTodos": "還沒排待辦",
+  "askToPlan": "請 agent 幫我排",
+  "planNextWeek": "幫我安排下週",
+  "planWeekOf": "幫我安排 {{date}} 那週",
+  "grid": {
+    "allDay": "全天",
+    "more_other": "還有 {{count}} 件",
+    "noEvents": "沒有事",
+    "dropNotAllowed": "不能放這裡",
+    "continues": "跨日",
+    "events_other": "{{count}} 件事",
+    "newTodo": "要做什麼？Enter 加上"
+  }
+}

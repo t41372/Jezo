@@ -1,0 +1,9 @@
+id: calendar
+title: page.title
+icon: calendar
+order: 30
+layout:
+  row:
+    - widget: calendar.backlog
+    - widget: calendar.grid
+    - widget: calendar.detail

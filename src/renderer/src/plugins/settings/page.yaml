@@ -1,0 +1,8 @@
+id: settings
+title: page.title
+icon: settings
+order: 100
+# Where the page sits in the icon rail: "top" (the default) or "bottom".
+rail: bottom
+layout:
+  widget: settings.settings

@@ -73,6 +73,7 @@ Session 模型
 功能
 - 目標（第一個插件，抄 Muse）：進度條、把任務丟進每天的 todo、定期 report。Dashboard 由 agent 填 layout schema 生成。
 - Todo list，給人和 AI。
+- 隨手記（第一方插件）：想到什麼先丟進來，不分類。按一下交給 agent 整理，它提議每一則變成待辦、目標想法、要記住的事，還是留著；看不懂就問。你說好才算。⌥X 裡按 ⌥↵ 直接記進來。見 notes.md。
 - 行事曆 connector、各種 connector、MCP、skills。
 - AI 有自己的文檔，用戶不知道怎麼用直接問。
 - 新功能 = 新目錄，AGENTS.md + skill + manifest。可以掛 hook 到主 agent，可以註冊新的 UI 元件。

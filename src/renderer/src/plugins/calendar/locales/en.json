@@ -1,0 +1,57 @@
+{
+  "page": {
+    "title": "Calendar"
+  },
+  "backlog": {
+    "title": "Backlog",
+    "subtitle": "not scheduled",
+    "hint": "Drag onto the calendar to schedule. Drag back here to unschedule.",
+    "add": "+ Add a todo",
+    "dropHere": "Drop here to unschedule",
+    "empty": "Everything is scheduled.",
+    "findTime": "Let the agent find time",
+    "card": "{{goal}} · about {{duration}}"
+  },
+  "legend": {
+    "events": "Calendar events",
+    "todos": "Todos, colored by goal",
+    "drafts": "The agent's drafts"
+  },
+  "week": {
+    "this": "This week",
+    "last": "Last week",
+    "next": "Next week",
+    "later_one": "In {{count}} week",
+    "later_other": "In {{count}} weeks",
+    "earlier_one": "{{count}} week ago",
+    "earlier_other": "{{count}} weeks ago"
+  },
+  "nav": {
+    "previous": "Previous",
+    "next": "Next",
+    "today": "Today",
+    "view": "Range"
+  },
+  "views": {
+    "day": "Day",
+    "week": "Week",
+    "month": "Month"
+  },
+  "synced": "{{source}} · synced {{ago}}",
+  "subscribe": "+ Subscribe to a calendar",
+  "noTodos": "No todos yet",
+  "askToPlan": "Ask the agent to plan it",
+  "planNextWeek": "Plan next week for me",
+  "planWeekOf": "Plan the week of {{date}} for me",
+  "grid": {
+    "allDay": "All day",
+    "more_one": "{{count}} more",
+    "more_other": "{{count}} more",
+    "noEvents": "Nothing scheduled",
+    "dropNotAllowed": "Can't go here",
+    "continues": "continues",
+    "events_one": "{{count}} event",
+    "events_other": "{{count}} events",
+    "newTodo": "What is it? Enter to add"
+  }
+}

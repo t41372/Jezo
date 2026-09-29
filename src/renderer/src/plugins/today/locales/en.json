@@ -1,0 +1,15 @@
+{
+  "page": { "title": "Today" },
+  "heading": "Today",
+  "done": "done",
+  "drafts": "The agent's draft",
+  "now": "Now",
+  "later": "Later",
+  "doneList_one": "Done {{count}}",
+  "doneList_other": "Done {{count}}",
+  "start": "Start",
+  "details": "Details",
+  "badDay": "Today not going well? Tell me and I'll rework it →",
+  "badDayMessage": "Today isn't going well",
+  "seeWeek": "See this week on the calendar →"
+}

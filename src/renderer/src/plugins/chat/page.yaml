@@ -1,0 +1,8 @@
+id: chat
+title: page.title
+icon: message-circle
+order: 10
+layout:
+  row:
+    - widget: chat.sessions
+    - widget: chat.thread
