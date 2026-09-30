@@ -16,5 +16,8 @@
     "src/preload/**/*",
     "src/shared/**/*",
     "native/hotkey/index.d.ts"
+  ],
+  "exclude": [
+    "**/*.test.ts"
   ]
 }

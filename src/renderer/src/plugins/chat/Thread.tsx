@@ -1,4 +1,4 @@
-import { Mic, Plus } from 'lucide-react'
+import { ArrowUp, Mic, Plus, Square } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useRef } from 'react'
 import { getMessageView } from '@/app/registry'
@@ -6,7 +6,7 @@ import { Disclosure } from '@/components/Disclosure'
 import { PlanCard } from '@/components/todo/PlanCard'
 import { Button } from '@/components/ui/button'
 import { useStore } from '@/data/store'
-import type { Message } from '@/data/types'
+import type { Message, Step } from '@/data/types'
 import { useTranslation } from 'react-i18next'
 import { easeOut } from '@/lib/motion'
 import { MemoryPreviewCard, ReworkCard } from './cards'
@@ -49,6 +49,7 @@ export function Thread() {
                   ),
                 )}
               </AnimatePresence>
+              {session.running && !session.messages.some((m) => m.kind === 'agent' && m.streaming) && <Working />}
             </>
           ) : (
             <Empty />
@@ -62,12 +63,13 @@ export function Thread() {
 
 function MessageView({ message: m, sessionId, index }: { message: Message; sessionId: string; index: number }) {
   const { t } = useTranslation()
+  const { t: tc } = useTranslation('chat')
   const { navigate, setComposer, pickChoice } = useStore.getState()
   switch (m.kind) {
     case 'agent':
       return (
-        <div className="rounded-[18px] border border-card-border bg-card px-4.5 py-3.5 text-[14.5px] leading-[1.7] text-pretty" data-selectable>
-          {m.text}
+        <div className="rounded-[18px] border border-card-border bg-card px-4.5 py-3.5 text-[14.5px] leading-[1.7] text-pretty whitespace-pre-wrap" data-selectable>
+          {m.text.trim()}
         </div>
       )
     case 'user':
@@ -77,14 +79,12 @@ function MessageView({ message: m, sessionId, index }: { message: Message; sessi
         </div>
       )
     case 'steps':
+      return <Steps steps={m.steps} />
+    case 'error':
       return (
-        <Disclosure label={m.summary} className="px-1.5" triggerClassName="text-[12.5px]">
-          <div className="mt-1.5 rounded-[9px] bg-muted px-3 py-2 font-mono text-[11.5px] leading-[1.7] text-muted-foreground" data-selectable>
-            {m.lines.map((l) => (
-              <div key={l}>{l}</div>
-            ))}
-          </div>
-        </Disclosure>
+        <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-[13.5px] text-pretty" data-selectable>
+          {m.code === 'no-model' ? tc('error.noModel') : tc('error.failed', { text: m.text ?? '' })}
+        </div>
       )
     case 'plan':
       return <PlanCard title={m.title} todoIds={m.todoIds} onTweak={() => setComposer(t('plan.tweakPrefill'))} onGoToday={() => navigate('today')} />
@@ -122,6 +122,53 @@ function MessageView({ message: m, sessionId, index }: { message: Message; sessi
   }
 }
 
+const LOOKING = new Set(['read', 'ls'])
+const CHANGING = new Set(['write', 'edit', 'todos_propose', 'todos_update', 'notes_propose'])
+
+/** What the agent did, folded: "看了 3 個檔案，改了 1 個", and each step inside. */
+function Steps({ steps }: { steps: Step[] }) {
+  const { t } = useTranslation('chat')
+  const distinct = (tools: Set<string>) => new Set(steps.filter((s) => tools.has(s.tool)).map((s) => `${s.tool === 'ls' ? 'ls' : ''}${s.target}`)).size
+  const looked = distinct(LOOKING)
+  const changed = distinct(CHANGING)
+  const summary =
+    looked && changed
+      ? t('steps.lookedAndChanged', { looked, changed })
+      : looked
+        ? t('steps.looked', { count: looked })
+        : changed
+          ? t('steps.changed', { count: changed })
+          : t('steps.did', { count: steps.length })
+  return (
+    <Disclosure label={summary} className="px-1.5" triggerClassName="text-[12.5px]">
+      <div className="mt-1.5 rounded-[9px] bg-muted px-3 py-2 font-mono text-[11.5px] leading-[1.7] text-muted-foreground" data-selectable>
+        {steps.map((s, i) => (
+          <div key={i} className={s.error ? 'text-destructive' : undefined}>
+            {(t as (key: string, options: object) => string)(`steps.tool.${s.tool}`, { defaultValue: s.tool })}
+            {s.target && ` ${s.target}`}
+            {s.error && ` · ${t('steps.refused')}`}
+          </div>
+        ))}
+      </div>
+    </Disclosure>
+  )
+}
+
+/** While the agent works and hasn't said anything yet. */
+function Working() {
+  const { t } = useTranslation('chat')
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.2, delay: 0.3, ease: easeOut }}
+      className="px-1.5 text-[12.5px] text-muted-foreground motion-safe:animate-pulse"
+    >
+      {t('working')}
+    </motion.div>
+  )
+}
+
 function Empty() {
   const { t } = useTranslation('chat')
   const send = useStore((s) => s.send)
@@ -143,7 +190,8 @@ function Composer() {
   const { t } = useTranslation('chat')
   const text = useStore((s) => s.composer)
   const sessionId = useStore((s) => s.sessionId)
-  const { setComposer, send } = useStore.getState()
+  const running = useStore((s) => s.sessions.find((x) => x.id === s.sessionId)?.running ?? false)
+  const { setComposer, send, stop } = useStore.getState()
   const input = useRef<HTMLTextAreaElement>(null)
 
   // Focus when a conversation opens or someone prefills the box.
@@ -151,9 +199,10 @@ function Composer() {
     input.current?.focus()
   }, [sessionId, text === ''])
 
+  // While the agent works, a message waits in the box until it's done.
   const submit = () => {
     const t = text.trim()
-    if (t) send(t)
+    if (t && !running) send(t)
   }
 
   return (
@@ -177,9 +226,19 @@ function Composer() {
           placeholder={t('placeholder')}
           className="max-h-40 flex-1 resize-none self-center bg-transparent py-1.5 text-[14.5px] leading-relaxed outline-none [field-sizing:content] placeholder:text-muted-foreground"
         />
-        <Button variant="ghost" size="icon" className="size-9 rounded-full text-muted-foreground" aria-label={t('voice')}>
-          <Mic className="size-[18px]" />
-        </Button>
+        {running ? (
+          <Button size="icon" className="size-9 rounded-full" aria-label={t('stop')} onClick={stop}>
+            <Square className="size-3.5 fill-current" />
+          </Button>
+        ) : text.trim() ? (
+          <Button size="icon" className="size-9 rounded-full" aria-label={t('send')} onClick={submit}>
+            <ArrowUp className="size-[18px]" />
+          </Button>
+        ) : (
+          <Button variant="ghost" size="icon" className="size-9 rounded-full text-muted-foreground" aria-label={t('voice')}>
+            <Mic className="size-[18px]" />
+          </Button>
+        )}
       </div>
     </div>
   )

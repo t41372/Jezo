@@ -18,5 +18,19 @@
   "morningHint": "At this time every day, the agent plans your day",
   "evening": "Evening check-in",
   "eveningHint": "At this time every day, talk about how the day went",
-  "hotkeyHintPressOnly": "Press to type. Holding to talk doesn't work on this computer."
+  "hotkeyHintPressOnly": "Press to type. Holding to talk doesn't work on this computer.",
+  "localFound_one": "Found {{count}} model",
+  "localFound_other": "Found {{count}} models",
+  "localMissing": "No local model found",
+  "localMissingHint": "Open LM Studio or Ollama and load a model.",
+  "lookAgain": "Look again",
+  "provider": "Service",
+  "cloudModel": "Model",
+  "key": "{{provider}} key",
+  "keyHint": "Kept in this computer's keychain, never written to a file.",
+  "keySavedHint": "Kept in this computer's keychain.",
+  "keySaved": "Saved",
+  "keyRemove": "Remove",
+  "keyPlaceholder": "Paste the key",
+  "keySave": "Save"
 }

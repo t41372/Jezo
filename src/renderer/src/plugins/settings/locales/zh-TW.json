@@ -18,5 +18,18 @@
   "morningHint": "每天這個時間，agent 幫你排今天",
   "evening": "晚上 check-in",
   "eveningHint": "每天這個時間，聊聊今天怎麼樣",
-  "hotkeyHintPressOnly": "按一下打字。這台電腦上沒辦法長按說話。"
+  "hotkeyHintPressOnly": "按一下打字。這台電腦上沒辦法長按說話。",
+  "localFound_other": "找到 {{count}} 個模型",
+  "localMissing": "沒找到本地模型",
+  "localMissingHint": "打開 LM Studio 或 Ollama，載入一個模型。",
+  "lookAgain": "再找一次",
+  "provider": "服務",
+  "cloudModel": "用哪個模型",
+  "key": "{{provider}} 的金鑰",
+  "keyHint": "存在這台電腦的鑰匙圈，不會寫進任何檔案。",
+  "keySavedHint": "存在這台電腦的鑰匙圈。",
+  "keySaved": "已存",
+  "keyRemove": "移除",
+  "keyPlaceholder": "貼上金鑰",
+  "keySave": "存"
 }

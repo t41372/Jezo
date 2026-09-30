@@ -1,12 +1,17 @@
-// The renderer's state. For now it holds mock data; when the backend exists,
-// the entities come from the index over IPC and the actions become writes.
+// The renderer's state. Todos and notes come from the workspace, and
+// conversations and the change history from Jezo's agent (docs/design/backend.md).
+// The store applies the user's changes at once and writes them, and what comes
+// back replaces them. Goals, memory, skills and the rest are still mock data.
 
+import { generateKeyBetween } from 'fractional-indexing'
+import { toast } from 'sonner'
 import { create } from 'zustand'
 import type { ThemeSource } from '../../../shared/bridge'
+import type { Fields, Item, ItemChanges } from '../../../shared/workspace'
+import i18n, { applyLanguage, storedLanguage, type LanguageSetting } from '@/i18n'
+import { entities, localDate, stamp, toNote, toTodo, todoFields } from './entities'
 import * as mock from './mock'
-import { applyLanguage, storedLanguage, type LanguageSetting } from '@/i18n'
-import { applyChoice, replyTo, sortNote, sortSteps, sortSummary } from './mock-agent'
-import type { CalendarEvent, CalendarViewName, Connection, Energy, Experiment, Goal, HistoryEntry, ISODate, Memory, Message, Note, NoteKind, NoteOutcome, Session, Skill, SortItem, Todo, Trigger } from './types'
+import type { CalendarEvent, CalendarViewName, Connection, Energy, Experiment, Goal, HistoryEntry, ISODate, Memory, Message, Note, NoteKind, NoteOutcome, NoteProposal, Session, Skill, Todo, Trigger } from './types'
 
 export interface Nav {
   page: string
@@ -16,8 +21,14 @@ export interface Nav {
 
 type Slot = NonNullable<Todo['slot']>
 
+/** The current date, and hours from midnight. */
+export interface Now {
+  date: ISODate
+  hour: number
+}
+
 interface State {
-  now: typeof mock.NOW
+  now: Now
   goals: Goal[]
   todos: Todo[]
   events: CalendarEvent[]
@@ -28,7 +39,7 @@ interface State {
   history: HistoryEntry[]
   connections: Connection[]
   notes: Note[]
-  settings: { theme: ThemeSource; language: LanguageSetting; model: 'local' | 'cloud' }
+  settings: { theme: ThemeSource; language: LanguageSetting }
 
   nav: Nav
   /** The open conversation. Null is a new one that hasn't been sent yet. */
@@ -47,6 +58,8 @@ interface State {
   openSession(id: string | null, composer?: string): void
   /** Sends a message in the open conversation, or starts one. */
   send(text: string, trigger?: Trigger): void
+  /** Stops the agent in the open conversation. */
+  stop(): void
   pickChoice(sessionId: string, index: number, option: string): void
 
   setDone(id: string, done: boolean): void
@@ -81,14 +94,14 @@ interface State {
   addNote(text: string, source: Note['source']): void
   editNote(id: string, text: string): void
   deleteNote(id: string): void
-  /** Puts a deleted note back where it was, for undo. */
-  restoreNote(note: Note, index: number): void
+  /** Puts a deleted note back, for undo. */
+  restoreNote(note: Note): void
   /**
    * Hands the unsorted notes to the agent: a short session in which it proposes
    * what each becomes. Nothing is created until the user accepts. Returns the
    * session, or null when there was nothing to sort.
    */
-  flushNotes(): string | null
+  flushNotes(): void
   /**
    * Accepts or turns down the agent's proposal for one note. Accepting creates
    * what it proposed; turning it down puts the note back in the list. For a note
@@ -98,7 +111,9 @@ interface State {
   /** Takes a decision back: removes what accepting created, and the proposal waits again. */
   undoNoteDecision(sessionId: string, index: number, noteId: string): void
   /** Puts away a fully decided proposal on the 隨手記 page. It stays in the conversation. */
-  closeNoteProposal(sessionId: string, index: number): void
+  closeNoteProposal(sessionId: string): void
+  /** Proposals put away on the 隨手記 page, by session. Kept in this window's storage. */
+  closedProposals: string[]
 
   setTodayDetail(id: string | null): void
   setCalendarDetail(id: string | null): void
@@ -108,6 +123,8 @@ interface State {
   deleteMemory(id: string): void
   restoreMemory(memory: Memory, index: number): void
   toggleSkill(id: string): void
+  /** Reads the skills again; the agent may have changed them. */
+  loadSkills(): void
   /** Accepts or turns down a change the agent proposed to a skill. */
   decideSkillProposal(id: string, accept: boolean): void
   /** Accepts or turns down the agent's rewrite of a goal's failing rule. */
@@ -117,7 +134,6 @@ interface State {
   decideExperiment(id: string, decision: NonNullable<Experiment['decision']>): void
   setTheme(theme: ThemeSource): void
   setLanguage(language: LanguageSetting): void
-  setModel(model: 'local' | 'cloud'): void
 }
 
 const THEME_KEY = 'jezo.theme'
@@ -132,24 +148,113 @@ function storedTheme(): ThemeSource {
   return 'system'
 }
 
-const appendTo = (sessions: Session[], id: string, messages: Message[]) =>
-  sessions.map((s) => (s.id === id ? { ...s, messages: [...s.messages, ...messages] } : s))
-
-/** The mock agent answers after a beat, so the conversation reads like one. */
-function replyLater(sessionId: string, messages: Message[]) {
-  window.setTimeout(() => useStore.setState((s) => ({ sessions: appendTo(s.sessions, sessionId, messages) })), 600)
-}
 
 const mapTodo = (todos: Todo[], id: string, f: (t: Todo) => Todo) => todos.map((t) => (t.id === id ? f(t) : t))
 
-/** Moves one todo in front of another, or with null to the end. */
-function placeBefore(todos: Todo[], id: string, before: string | null) {
-  const todo = todos.find((t) => t.id === id)
-  if (!todo || before === id) return todos
+const clock = (at = new Date()): Now => ({ date: localDate(at), hour: at.getHours() + at.getMinutes() / 60 })
+
+// ─── The workspace ───
+
+const workspace = () => window.jezo.workspace
+
+/** A write the main process refused. The file on disk wins, so the list is read again. */
+function failed(error: unknown) {
+  console.error(error)
+  toast.error(i18n.t('workspace.writeFailed'))
+  void loadWorkspace()
+}
+
+/** The backlog's order is the todos' ranks; todos without one go last, oldest first. */
+const byRank = (a: Todo, b: Todo) =>
+  a.rank && b.rank ? (a.rank < b.rank ? -1 : a.rank > b.rank ? 1 : 0) : a.rank ? -1 : b.rank ? 1 : a.id < b.id ? -1 : 1
+
+const byCreated = (a: Note, b: Note) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`) || a.id.localeCompare(b.id)
+
+/** Replaces the entities that changed, leaving the others, which may have writes of their own on the way. */
+function upsert<T extends { id: string }>(list: T[], changed: T[], removed: string[], order: (a: T, b: T) => number) {
+  const next = new Map(list.map((x) => [x.id, x]))
+  for (const id of removed) next.delete(id)
+  for (const x of changed) next.set(x.id, x)
+  return [...next.values()].sort(order)
+}
+
+function applyChanges({ changed, removed }: ItemChanges) {
+  useStore.setState((s) => ({
+    todos: upsert(s.todos, entities(changed, 'todo', toTodo), removed, byRank),
+    notes: upsert(s.notes, entities(changed, 'note', toNote), removed, byCreated),
+  }))
+}
+
+const newestFirst = (a: Session, b: Session) => (a.date + a.time < b.date + b.time ? 1 : -1)
+
+function applySession(view: Session) {
+  useStore.setState((s) => ({ sessions: [view, ...s.sessions.filter((x) => x.id !== view.id)].sort(newestFirst) }))
+}
+
+async function loadHistory() {
+  useStore.setState({ history: await window.jezo.history.list() })
+}
+
+const CLOSED_KEY = 'jezo.closedProposals'
+
+function storedClosed(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem(CLOSED_KEY) ?? '[]')
+  } catch {
+    return []
+  }
+}
+
+async function loadWorkspace() {
+  const items: Item[] = await workspace().list()
+  useStore.setState({ todos: entities(items, 'todo', toTodo).sort(byRank), notes: entities(items, 'note', toNote).sort(byCreated) })
+}
+
+/** Reads the workspace and follows its changes. Called once, when the window opens. */
+export async function connectWorkspace() {
+  workspace().onChange(applyChanges)
+  window.jezo.agent.onChange(applySession)
+  window.jezo.history.onChange(() => void loadHistory())
+  await Promise.all([
+    loadWorkspace(),
+    loadHistory(),
+    window.jezo.agent.list().then((sessions) => useStore.setState({ sessions })),
+    useStore.getState().loadSkills(),
+  ])
+  // The clock moves on; the day changes at midnight.
+  window.setInterval(() => useStore.setState({ now: clock() }), 30_000)
+}
+
+/** Changes a todo right away and writes it. */
+function writeTodo(id: string, change: Partial<Todo>) {
+  useStore.setState((s) => ({ todos: mapTodo(s.todos, id, (t) => ({ ...t, ...change })).sort(byRank) }))
+  workspace().update(id, todoFields(change)).catch(failed)
+}
+
+function writeNote(id: string, fields: Fields, body?: string) {
+  workspace().update(id, fields, body === undefined ? {} : { body }).catch(failed)
+}
+
+/** A rank that puts a todo in front of `before`, or last. */
+function rankBefore(todos: Todo[], id: string, before: string | null) {
   const rest = todos.filter((t) => t.id !== id)
   const at = before === null ? rest.length : rest.findIndex((t) => t.id === before)
-  return at < 0 ? todos : [...rest.slice(0, at), todo, ...rest.slice(at)]
+  if (at < 0) return undefined
+  const prev = rest[at - 1]?.rank ?? null
+  const next = rest[at]?.rank ?? null
+  // Todos written without a rank sort last; a rank can't go between them, so it goes after the ranked ones.
+  if (prev === null && at > 0) return generateKeyBetween(lastRank(rest), null)
+  return generateKeyBetween(prev, next !== null && (prev === null || prev < next) ? next : null)
 }
+
+const lastRank = (todos: Todo[]) => todos.reduce<string | null>((max, t) => (t.rank && (!max || t.rank > max) ? t.rank : max), null)
+
+/** All the fields of a todo, to write it back as it was. */
+const allTodoFields = (todo: Todo): Fields => ({
+  title: todo.title,
+  state: todo.state,
+  ...todoFields({ goalId: todo.goalId, cue: todo.cue, estimateMinutes: todo.estimateMinutes, slot: todo.slot, subtasks: todo.subtasks, why: todo.why, startedAt: todo.startedAt, rank: todo.rank }),
+})
 
 /** Changes one message of one session. */
 function mapMessage(sessions: Session[], sessionId: string, index: number, f: (m: Message) => Message) {
@@ -157,25 +262,26 @@ function mapMessage(sessions: Session[], sessionId: string, index: number, f: (m
 }
 
 export const useStore = create<State>()((set, get) => ({
-  now: mock.NOW,
+  now: clock(),
   goals: mock.goals,
-  todos: mock.todos,
+  todos: [],
   events: mock.events,
-  sessions: mock.sessions,
+  sessions: [],
   memories: mock.memories,
-  notes: mock.notes,
-  skills: mock.skills,
+  notes: [],
+  skills: [],
   experiments: mock.experiments,
-  history: mock.history,
+  history: [],
   connections: mock.connections,
-  settings: { theme: storedTheme(), language: storedLanguage(), model: 'local' },
+  settings: { theme: storedTheme(), language: storedLanguage() },
 
   nav: { page: 'chat', sub: null },
-  sessionId: 's1',
+  sessionId: null,
+  closedProposals: storedClosed(),
   composer: '',
   todayDetail: null,
   calendarDetail: null,
-  calendarDate: mock.NOW.date,
+  calendarDate: localDate(new Date()),
   calendarView: 'week',
 
   navigate: (page, sub = null) => set({ nav: { page, sub } }),
@@ -183,97 +289,87 @@ export const useStore = create<State>()((set, get) => ({
   openSession: (sessionId, composer = '') => set({ sessionId, composer, nav: { page: 'chat', sub: null } }),
 
   send: (text, trigger = 'user') => {
-    const { sessionId, sessions, now } = get()
-    const user: Message = { kind: 'user', text }
-    let id = sessionId
-    if (id && sessions.some((s) => s.id === id)) {
-      set({ composer: '', sessions: appendTo(sessions, id, [user]) })
-    } else {
-      const session: Session = {
-        id: `s-${Date.now()}`,
-        title: text.length > 14 ? `${text.slice(0, 14)}…` : text,
-        trigger,
-        date: now.date,
-        time: now.hour,
-        messages: [user],
-      }
-      id = session.id
-      set({ composer: '', sessionId: id, sessions: [session, ...sessions] })
-    }
-    replyLater(id, replyTo(text))
+    const { sessionId, sessions } = get()
+    const id = sessionId && sessions.some((s) => s.id === sessionId) ? sessionId : null
+    set({ composer: '' })
+    window.jezo.agent.send(id, text, trigger).then((opened) => {
+      if (!id) set({ sessionId: opened })
+    }, failed)
+  },
+  stop: () => {
+    const { sessionId } = get()
+    if (sessionId) void window.jezo.agent.abort(sessionId)
   },
 
   pickChoice: (sessionId, index, option) => {
-    const s = get()
-    const session = s.sessions.find((x) => x.id === sessionId)
-    const msg = session?.messages[index]
-    if (!session || msg?.kind !== 'choices') return
-
-    const todos = applyChoice(option, s.todos, s.now.date)
-    const messages: Message[] = session.messages.map((m, i) => (i === index ? { ...m, picked: option } : m))
-    set({
-      todos,
-      sessions: s.sessions.map((x) => (x.id === sessionId ? { ...x, messages: [...messages, { kind: 'user', text: option }] } : x)),
-    })
-    replyLater(sessionId, replyTo(option))
+    const message = get().sessions.find((x) => x.id === sessionId)?.messages[index]
+    if (message?.kind !== 'choices' || message.picked) return
+    window.jezo.agent.send(sessionId, option).catch(failed)
   },
 
-  setDone: (id, done) =>
-    set((s) => ({ todos: mapTodo(s.todos, id, (t) => ({ ...t, state: done ? 'done' : 'open', startedAt: undefined })) })),
-  accept: (ids) =>
+  setDone: (id, done) => {
+    writeTodo(id, { state: done ? 'done' : 'open', startedAt: undefined })
+    workspace().update(id, { completed: done ? stamp() : null }).catch(failed)
+  },
+  accept: (ids) => {
+    for (const t of get().todos) {
+      if (ids.includes(t.id) && t.state === 'draft') writeTodo(t.id, { state: 'open', slot: t.slot && { ...t.slot, proposed: false } })
+    }
+  },
+  unaccept: (ids) => {
+    for (const t of get().todos) if (ids.includes(t.id) && t.state === 'open') writeTodo(t.id, { state: 'draft' })
+  },
+  discard: (id) => {
+    const todo = get().todos.find((t) => t.id === id)
+    if (todo?.state !== 'draft') return
     set((s) => ({
-      todos: s.todos.map((t) =>
-        ids.includes(t.id) && t.state === 'draft' ? { ...t, state: 'open', slot: t.slot && { ...t.slot, proposed: false } } : t,
-      ),
-    })),
-  unaccept: (ids) =>
-    set((s) => ({ todos: s.todos.map((t) => (ids.includes(t.id) && t.state === 'open' ? { ...t, state: 'draft' } : t)) })),
-  discard: (id) =>
-    set((s) => ({
-      todos: s.todos.filter((t) => !(t.id === id && t.state === 'draft')),
+      todos: s.todos.filter((t) => t.id !== id),
       todayDetail: s.todayDetail === id ? null : s.todayDetail,
       calendarDetail: s.calendarDetail === id ? null : s.calendarDetail,
-    })),
+    }))
+    workspace().remove(id).catch(failed)
+  },
   // Moving a todo yourself settles it: the time is yours, and a draft becomes a real todo.
-  moveTodo: (id, slot, { minutes, before } = {}) =>
-    set((s) => {
-      const todos = mapTodo(s.todos, id, (t) => ({
-        ...t,
-        slot,
-        estimateMinutes: minutes ?? t.estimateMinutes,
-        state: t.state === 'draft' ? 'open' : t.state,
-      }))
-      return { todos: before === undefined ? todos : placeBefore(todos, id, before), calendarDetail: slot ? s.calendarDetail : null }
-    }),
-  proposeSlots: () =>
-    set((s) => {
-      const ids = s.todos.filter((t) => !t.slot && mock.suggestedSlots[t.id]).map((t) => t.id)
-      return {
-        todos: s.todos.map((t) => {
-          const suggestion = ids.includes(t.id) ? mock.suggestedSlots[t.id] : undefined
-          return suggestion ? { ...t, slot: { date: suggestion.date, start: suggestion.start, proposed: true }, why: suggestion.why } : t
-        }),
-        lastProposal: { ids, at: Date.now() },
-      }
-    }),
+  moveTodo: (id, slot, { minutes, before } = {}) => {
+    const todo = get().todos.find((t) => t.id === id)
+    if (!todo) return
+    const rank = before === undefined ? undefined : rankBefore(get().todos, id, before)
+    writeTodo(id, {
+      slot,
+      ...(minutes !== undefined && { estimateMinutes: minutes }),
+      ...(todo.state === 'draft' && { state: 'open' }),
+      ...(rank && { rank }),
+    })
+    if (!slot) set((s) => ({ calendarDetail: s.calendarDetail === id ? null : s.calendarDetail }))
+  },
+  proposeSlots: () => {
+    const ids = get().todos.filter((t) => !t.slot && mock.suggestedSlots[t.id]).map((t) => t.id)
+    for (const id of ids) {
+      const suggestion = mock.suggestedSlots[id]
+      writeTodo(id, { slot: { date: suggestion.date, start: suggestion.start, proposed: true }, why: suggestion.why })
+    }
+    set({ lastProposal: { ids, at: Date.now() } })
+  },
   lastProposal: null,
-  confirmSlot: (id) => set((s) => ({ todos: mapTodo(s.todos, id, (t) => ({ ...t, slot: t.slot && { ...t.slot, proposed: false } })) })),
-  addTodo: (title, slot, minutes = 30) =>
-    set((s) => ({
-      todos: [...s.todos, { id: `n-${Date.now()}`, title, goalId: null, state: 'open', estimateMinutes: minutes, slot: slot ?? null }],
-    })),
+  confirmSlot: (id) => {
+    const todo = get().todos.find((t) => t.id === id)
+    if (todo?.slot) writeTodo(id, { slot: { ...todo.slot, proposed: false } })
+  },
+  addTodo: (title, slot, minutes = 30) => {
+    const fields = { title, state: 'open', ...todoFields({ estimateMinutes: minutes, slot: slot ?? null, rank: generateKeyBetween(lastRank(get().todos), null) }) }
+    workspace().create('todo', { ...fields, created: stamp() }).catch(failed)
+  },
 
-  toggleSubtask: (todoId, index) =>
-    set((s) => ({
-      todos: mapTodo(s.todos, todoId, (t) => ({
-        ...t,
-        subtasks: t.subtasks?.map((sub, i) => (i === index ? { ...sub, done: !sub.done } : sub)),
-      })),
-    })),
-  setStarted: (todoId, startedAt) =>
-    set((s) => ({ todos: mapTodo(s.todos, todoId, (t) => ({ ...t, startedAt: startedAt ?? undefined })) })),
-  restoreTodo: (todo) =>
-    set((s) => ({ todos: s.todos.some((t) => t.id === todo.id) ? mapTodo(s.todos, todo.id, () => todo) : [...s.todos, todo] })),
+  toggleSubtask: (todoId, index) => {
+    const todo = get().todos.find((t) => t.id === todoId)
+    if (!todo?.subtasks) return
+    writeTodo(todoId, { subtasks: todo.subtasks.map((sub, i) => (i === index ? { ...sub, done: !sub.done } : sub)) })
+  },
+  setStarted: (todoId, startedAt) => writeTodo(todoId, { startedAt: startedAt ?? undefined }),
+  restoreTodo: (todo) => {
+    if (get().todos.some((t) => t.id === todo.id)) writeTodo(todo.id, todo)
+    else workspace().create('todo', { id: todo.id, ...allTodoFields(todo) }).catch(failed)
+  },
 
   chooseEnergy: (sessionId, index, energy) =>
     set((s) => ({ sessions: mapMessage(s.sessions, sessionId, index, (m) => (m.kind === 'rework' ? { ...m, energy } : m)) })),
@@ -283,8 +379,8 @@ export const useStore = create<State>()((set, get) => ({
     if (message?.kind !== 'rework' || !message.energy) return
     const plan = mock.reworkPlans[message.energy]
     const changes = new Map([...plan.keep, ...plan.move, ...plan.drop].map((item) => [item.todoId, item.change]))
+    for (const [id, change] of changes) if (s.todos.some((t) => t.id === id)) writeTodo(id, change)
     set({
-      todos: s.todos.map((t) => (changes.has(t.id) ? { ...t, ...changes.get(t.id) } : t)),
       sessions: mapMessage(s.sessions, sessionId, index, (m) => ({
         ...m,
         applied: true,
@@ -296,9 +392,8 @@ export const useStore = create<State>()((set, get) => ({
     const s = get()
     const message = s.sessions.find((x) => x.id === sessionId)?.messages[index]
     if (message?.kind !== 'rework' || !message.before) return
-    const before = new Map(message.before.map((t) => [t.id, t]))
+    for (const todo of message.before) writeTodo(todo.id, todo)
     set({
-      todos: s.todos.map((t) => before.get(t.id) ?? t),
       sessions: mapMessage(s.sessions, sessionId, index, (m) => ({ ...m, applied: false, before: undefined })),
     })
   },
@@ -311,101 +406,86 @@ export const useStore = create<State>()((set, get) => ({
   setCalendarDate: (calendarDate) => set({ calendarDate }),
   setCalendarView: (calendarView) => set({ calendarView }),
 
-  addNote: (text, source) =>
-    set((s) => ({
-      notes: [...s.notes, { id: `n-${Date.now()}`, text, date: s.now.date, time: s.now.hour, source, state: 'new' }],
-    })),
-  editNote: (id, text) => set((s) => ({ notes: s.notes.map((n) => (n.id === id ? { ...n, text } : n)) })),
-  deleteNote: (id) => set((s) => ({ notes: s.notes.filter((n) => n.id !== id) })),
-  restoreNote: (note, index) => set((s) => ({ notes: [...s.notes.slice(0, index), note, ...s.notes.slice(index)] })),
-  flushNotes: () => {
-    const s = get()
-    const batch = s.notes.filter((n) => n.state === 'new')
-    if (!batch.length) return null
-    const items: SortItem[] = batch.map((n) => ({ noteId: n.id, ...sortNote(n.text) }))
-    const session: Session = {
-      id: `s-notes-${Date.now()}`,
-      trigger: 'notes',
-      date: s.now.date,
-      time: s.now.hour,
-      messages: [
-        { kind: 'steps', summary: sortSteps(batch.length), lines: [`讀 notes/items/*.md · ${batch.length} 則`, '讀 notes/skills/整理隨手記/SKILL.md'] },
-        { kind: 'agent', text: sortSummary(items) },
-        { kind: 'plugin', plugin: 'notes', type: 'sort', data: { items } },
-      ],
-    }
-    set({
-      sessions: [session, ...s.sessions],
-      notes: s.notes.map((n) => (batch.includes(n) ? { ...n, state: 'sorting' } : n)),
-    })
-    return session.id
+  addNote: (text, source) => {
+    workspace().create('note', { created: stamp(), source, state: 'new' }, `${text}\n`).catch(failed)
   },
-  decideNote: (sessionId, index, noteId, accept, as) =>
-    set((s) => {
-      const message = s.sessions.find((x) => x.id === sessionId)?.messages[index]
-      const note = s.notes.find((n) => n.id === noteId)
-      if (message?.kind !== 'plugin' || !note) return {}
-      const items = (message.data as { items: SortItem[] }).items
-      const item = items.find((i) => i.noteId === noteId)
-      const kind = as ?? (item?.as === 'ask' ? undefined : item?.as)
-      if (!item || item.decision || (accept && !kind)) return {}
-
-      // What the note becomes. The user's own answer to a question keeps their words.
-      const title = as ? note.text : item.title
-      const stamp = Date.now()
-      let { todos, memories } = s
-      let became: NoteOutcome | undefined
-      if (accept && kind === 'todo') {
-        const todoId = `t-${stamp}`
-        todos = [{ id: todoId, title, goalId: null, state: 'open', estimateMinutes: 30, slot: null, why: `從隨手記：「${note.text}」` }, ...todos]
-        became = { kind: 'todo', todoId }
-      } else if (accept && kind === 'memory') {
-        const memoryId = `m-${stamp}`
-        memories = [{ id: memoryId, text: title, kind: 'stated', date: s.now.date, via: 'notes' }, ...memories]
-        became = { kind: 'memory', memoryId }
-      } else if (accept && kind === 'goal') {
-        became = { kind: 'goal', title }
-      } else if (accept) {
-        became = { kind: 'keep' }
-      }
-      const decided: SortItem = { ...item, decision: accept ? 'accepted' : 'rejected', ...(accept && as ? { as, title, question: item.title } : {}) }
-      return {
-        todos,
-        memories,
-        notes: s.notes.map((n) => (n.id !== noteId ? n : accept ? { ...n, state: 'sorted', became } : { ...n, state: 'new', became: undefined })),
-        sessions: mapMessage(s.sessions, sessionId, index, () => ({ ...message, data: { items: items.map((i) => (i.noteId === noteId ? decided : i)) } })),
-      }
-    }),
-  undoNoteDecision: (sessionId, index, noteId) =>
-    set((s) => {
-      const message = s.sessions.find((x) => x.id === sessionId)?.messages[index]
-      const note = s.notes.find((n) => n.id === noteId)
-      if (message?.kind !== 'plugin' || !note) return {}
-      const items = (message.data as { items: SortItem[] }).items
-      const became = note.became
-      return {
-        todos: became?.kind === 'todo' ? s.todos.filter((t) => t.id !== became.todoId) : s.todos,
-        memories: became?.kind === 'memory' ? s.memories.filter((m) => m.id !== became.memoryId) : s.memories,
-        notes: s.notes.map((n) => (n.id === noteId ? { ...n, state: 'sorting', became: undefined } : n)),
-        sessions: mapMessage(s.sessions, sessionId, index, () => ({
-          ...message,
-          // An answered question goes back to being a question.
-          data: {
-            items: items.map((i) =>
-              i.noteId !== noteId ? i : i.question ? { noteId, as: 'ask', title: i.question } : { ...i, decision: undefined },
-            ),
-          },
-        })),
-      }
-    }),
-  closeNoteProposal: (sessionId, index) =>
-    set((s) => ({
-      sessions: mapMessage(s.sessions, sessionId, index, (m) => (m.kind === 'plugin' ? { ...m, data: { ...(m.data as object), closed: true } } : m)),
-    })),
+  editNote: (id, text) => {
+    set((s) => ({ notes: s.notes.map((n) => (n.id === id ? { ...n, text } : n)) }))
+    writeNote(id, {}, `${text}\n`)
+  },
+  deleteNote: (id) => {
+    set((s) => ({ notes: s.notes.filter((n) => n.id !== id) }))
+    workspace().remove(id).catch(failed)
+  },
+  restoreNote: (note) => {
+    const created = `${note.date}T${String(Math.floor(note.time)).padStart(2, '0')}:${String(Math.round((note.time % 1) * 60)).padStart(2, '0')}`
+    const fields = { id: note.id, created, source: note.source, state: note.state, proposal: note.proposal, became: note.became }
+    workspace().create('note', fields, `${note.text}\n`).catch(failed)
+  },
+  flushNotes: () => {
+    if (!get().notes.some((n) => n.state === 'new')) return
+    window.jezo.agent.start('notes').catch(failed)
+  },
+  decideNote: (sessionId, _index, noteId, accept, as) => {
+    const note = get().notes.find((n) => n.id === noteId)
+    const proposal = note?.proposal
+    if (!note || !proposal || proposal.session !== sessionId || proposal.decision) return
+    const kind = as ?? (proposal.as === 'ask' ? undefined : proposal.as)
+    if (accept && !kind) return
+    // The user's own answer to a question keeps their words.
+    const title = as ? note.text : proposal.title
+    const decided: NoteProposal = { ...proposal, decision: accept ? 'accepted' : 'rejected', ...(accept && as && { as, title, question: proposal.title }) }
+    const settle = (became: NoteOutcome | null) => {
+      set((s) => ({ notes: s.notes.map((n) => (n.id === noteId ? { ...n, state: accept ? 'sorted' : 'new', proposal: decided, became: became ?? undefined } : n)) }))
+      writeNote(noteId, { state: accept ? 'sorted' : 'new', proposal: decided, became })
+    }
+    if (!accept) return settle(null)
+    if (kind === 'todo') {
+      const fields = { title, state: 'open', estimate: 30, why: i18n.t('notes:fromNote', { text: note.text }), rank: generateKeyBetween(lastRank(get().todos), null), created: stamp() }
+      workspace()
+        .create('todo', fields)
+        .then((todo) => settle({ kind: 'todo', ref: todo.id }), failed)
+    } else if (kind === 'memory') {
+      const ref = `m-${Date.now()}`
+      set((s) => ({ memories: [{ id: ref, text: title, kind: 'stated', date: s.now.date, via: 'notes' }, ...s.memories] }))
+      settle({ kind: 'memory', ref })
+    } else {
+      settle(kind === 'goal' ? { kind: 'goal', title } : { kind: 'keep' })
+    }
+  },
+  undoNoteDecision: (_sessionId, _index, noteId) => {
+    const note = get().notes.find((n) => n.id === noteId)
+    if (!note?.proposal) return
+    const { became, proposal } = note
+    if (became?.kind === 'todo' && became.ref) workspace().remove(became.ref).catch(failed)
+    if (became?.kind === 'memory') set((s) => ({ memories: s.memories.filter((m) => m.id !== became.ref) }))
+    // An answered question goes back to being a question.
+    const { decision: _, question, ...rest } = proposal
+    const reopened: NoteProposal = question ? { as: 'ask', title: question, session: proposal.session } : rest
+    set((s) => ({ notes: s.notes.map((n) => (n.id === noteId ? { ...n, state: 'sorting', proposal: reopened, became: undefined } : n)) }))
+    writeNote(noteId, { state: 'sorting', proposal: reopened, became: null })
+  },
+  closeNoteProposal: (sessionId) => {
+    const closedProposals = [...get().closedProposals, sessionId].slice(-50)
+    try {
+      localStorage.setItem(CLOSED_KEY, JSON.stringify(closedProposals))
+    } catch {
+      // Forgetting it only means the card shows again.
+    }
+    set({ closedProposals })
+  },
   deleteMemory: (id) => set((s) => ({ memories: s.memories.filter((m) => m.id !== id) })),
   restoreMemory: (memory, index) =>
     set((s) => ({ memories: [...s.memories.slice(0, index), memory, ...s.memories.slice(index)] })),
-  toggleSkill: (id) => set((s) => ({ skills: s.skills.map((k) => (k.id === id ? { ...k, enabled: !k.enabled } : k)) })),
+  toggleSkill: (id) => {
+    const skill = get().skills.find((k) => k.id === id)
+    if (!skill) return
+    set((s) => ({ skills: s.skills.map((k) => (k.id === id ? { ...k, enabled: !k.enabled } : k)) }))
+    window.jezo.skills.setEnabled(id, !skill.enabled).then((skills) => set({ skills }), failed)
+  },
+  loadSkills: () => {
+    window.jezo.skills.list().then((skills) => set({ skills }), failed)
+  },
   decideSkillProposal: (id, accept) =>
     set((s) => ({
       skills: s.skills.map((k) =>
@@ -425,7 +505,11 @@ export const useStore = create<State>()((set, get) => ({
     })),
   connect: (id) =>
     set((s) => ({ connections: s.connections.map((c) => (c.id === id ? { ...c, connected: true, detail: undefined } : c)) })),
-  undo: (id) => set((s) => ({ history: s.history.map((h) => (h.id === id ? { ...h, undone: true } : h)) })),
+  undo: (id) => {
+    window.jezo.history.undo(id).then(({ kept }) => {
+      if (kept.length) toast(i18n.t('more:history.kept', { count: kept.length }))
+    }, failed)
+  },
   decideExperiment: (id, decision) =>
     set((s) => ({ experiments: s.experiments.map((x) => (x.id === id ? { ...x, decision } : x)) })),
   setTheme: (theme) => {
@@ -440,7 +524,6 @@ export const useStore = create<State>()((set, get) => ({
     applyLanguage(language)
     set((s) => ({ settings: { ...s.settings, language } }))
   },
-  setModel: (model) => set((s) => ({ settings: { ...s.settings, model } })),
 }))
 
 export const goalById = (goals: Goal[], id: string | null) => goals.find((g) => g.id === id)

@@ -5,6 +5,7 @@ import { Segmented } from '@/components/Segmented'
 import { Kbd } from '@/components/ui/kbd'
 import { useStore } from '@/data/store'
 import { LANGUAGE_NAMES, LANGUAGES } from '@/i18n'
+import { ModelRows } from './ModelRows'
 
 export function Settings() {
   const { t } = useTranslation('settings')
@@ -13,23 +14,13 @@ export function Settings() {
     window.jezo.quick.canHold().then(setCanHold)
   }, [])
   const settings = useStore((s) => s.settings)
-  const { setTheme, setLanguage, setModel } = useStore.getState()
+  const { setTheme, setLanguage } = useStore.getState()
   return (
     <div className="flex-1 overflow-auto px-10 py-9">
       <div className="mx-auto flex max-w-[620px] flex-col gap-4.5">
       <h1 className="text-[30px] font-semibold tracking-tight">{t('heading')}</h1>
       <ListCard>
-        <Row title={t('model')} description={t('modelHint')}>
-          <Segmented
-            label={t('model')}
-            value={settings.model}
-            onChange={setModel}
-            options={[
-              { value: 'local', label: t('local') },
-              { value: 'cloud', label: t('cloud') },
-            ]}
-          />
-        </Row>
+        <ModelRows />
         <Row title={t('language')}>
           <Segmented
             label={t('language')}

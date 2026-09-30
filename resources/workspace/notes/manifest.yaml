@@ -1,0 +1,27 @@
+# What a note is. The app checks every file in items/ against this schema.
+kind: note
+prefix: n
+schema:
+  type: object
+  required: [id, created, source, state]
+  properties:
+    id: { type: string, pattern: "^n-" }
+    created: { type: string, pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}" }
+    source: { enum: [page, hotkey] }
+    state: { enum: [new, sorting, sorted] }
+    proposal:
+      type: object
+      required: [as, title]
+      properties:
+        as: { enum: [todo, goal, memory, keep, ask] }
+        title: { type: string, minLength: 1 }
+        question: { type: string }
+        session: { type: string }
+        decision: { enum: [accepted, rejected] }
+    became:
+      type: object
+      required: [kind]
+      properties:
+        kind: { enum: [todo, goal, memory, keep] }
+        ref: { type: string }
+        title: { type: string }

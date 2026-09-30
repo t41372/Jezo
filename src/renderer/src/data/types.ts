@@ -1,8 +1,9 @@
 // Entities the UI works with. They follow docs/design/storage.md, so the mock
 // store can later be replaced by the real index without reshaping the UI.
 
-/** A date without a time, like "2026-09-29". */
-export type ISODate = string
+import type { DiffLine, HistoryEntry, ISODate, SessionMessage, SessionView, Step, Trigger } from '../../../shared/session'
+
+export type { DiffLine, HistoryEntry, ISODate, Step, Trigger }
 
 export interface Goal {
   id: string
@@ -65,6 +66,8 @@ export interface Todo {
   fromCalendar?: boolean
   /** When the user pressed 開始, in milliseconds since the epoch. Cleared when they stop. */
   startedAt?: number
+  /** Where it sits in the backlog, as a fractional index. Lower comes first. */
+  rank?: string
 }
 
 /**
@@ -84,17 +87,34 @@ export interface Note {
    * hasn't decided on. `sorted` is done, and `became` says what it turned into.
    */
   state: 'new' | 'sorting' | 'sorted'
+  /**
+   * What the agent proposed it becomes. It stays after the user decides, so
+   * taking the decision back shows the proposal again.
+   */
+  proposal?: NoteProposal
   became?: NoteOutcome
 }
 
 /** What a note can become. `keep` stays a note: a thought worth keeping, nothing to do. */
 export type NoteKind = 'todo' | 'goal' | 'memory' | 'keep'
 
-export type NoteOutcome =
-  | { kind: 'todo'; todoId: string }
-  | { kind: 'goal'; title: string }
-  | { kind: 'memory'; memoryId: string }
-  | { kind: 'keep' }
+/** What a note became: for a todo or a memory, `ref` is its id; for a goal idea, `title` is the idea. */
+export interface NoteOutcome {
+  kind: NoteKind
+  ref?: string
+  title?: string
+}
+
+export interface NoteProposal {
+  as: NoteKind | 'ask'
+  /** The todo, goal or memory as the agent would write it; for `ask`, the question. */
+  title: string
+  /** For a question the user answered: the question, so taking the answer back asks it again. */
+  question?: string
+  /** The session that proposed it. */
+  session?: string
+  decision?: 'accepted' | 'rejected'
+}
 
 /** One note in the agent's proposal: what it thinks the note becomes, or a question when it can't tell. */
 export interface SortItem {
@@ -122,14 +142,12 @@ export interface CalendarEvent {
   source: string
 }
 
+/**
+ * What a conversation shows. Most kinds come from the agent's session
+ * (src/shared/session.ts); the rest are still drawn from mock data.
+ */
 export type Message =
-  | { kind: 'agent'; text: string }
-  | { kind: 'user'; text: string }
-  /** What the agent looked at or changed, folded away by default. */
-  | { kind: 'steps'; summary: string; lines: string[] }
-  /** A plan the agent proposed. Its todos are drafts until accepted. */
-  | { kind: 'plan'; title: string; todoIds: string[] }
-  | { kind: 'choices'; options: string[]; picked?: string }
+  | SessionMessage
   /** Something the agent saved to memory. */
   | { kind: 'memory'; text: string }
   /**
@@ -143,31 +161,10 @@ export type Message =
    * Inferences without enough evidence are listed as not written.
    */
   | { kind: 'memory-preview'; stated: string[]; skipped: { text: string; why: string }[]; plan: string[]; saved?: boolean }
-  /**
-   * A message of a kind a plugin brings, drawn by the view the plugin
-   * registered as "<plugin>.<type>". The core doesn't look inside `data`.
-   */
-  | { kind: 'plugin'; plugin: string; type: string; data: unknown }
 
 export type Energy = 'low' | 'some' | 'plenty'
 
-/** One line of a change to a file, as a diff shows it. */
-export interface DiffLine {
-  kind: 'add' | 'remove' | 'context'
-  text: string
-}
-
-/** What started a session, or made a change. */
-export type Trigger = 'morning' | 'evening' | 'weekly' | 'hotkey' | 'user' | 'notes'
-
-export interface Session {
-  id: string
-  /** Scheduled sessions are named after their trigger and have no title of their own. */
-  title?: string
-  trigger: Trigger
-  date: ISODate
-  /** Hours from midnight. */
-  time: number
+export interface Session extends Omit<SessionView, 'messages'> {
   messages: Message[]
 }
 
@@ -196,20 +193,6 @@ export interface Skill {
   proposal?: { why: string; evidence: string[]; diff: DiffLine[]; after: string }
   /** Set once the user has looked at and accepted the agent's change. */
   reviewed?: boolean
-}
-
-export interface HistoryEntry {
-  id: string
-  date: ISODate
-  time: number
-  /** Who made the change. Only the agent's own changes can be undone (docs/design/undo.md). */
-  source: Trigger | 'you'
-  summary: string
-  /** Set when a check caught a problem with this change. */
-  check?: { level: 'warn'; retries: number } | { level: 'error'; kind: 'claimed-without-change' }
-  /** The files the change touched, and how. */
-  files?: { path: string; lines: DiffLine[]; note?: string }[]
-  undone?: boolean
 }
 
 export interface Connection {

@@ -98,7 +98,9 @@
     "undo": "Undo",
     "undone": "Undone",
     "files_one": "Changed {{count}} file",
-    "files_other": "Changed {{count}} files"
+    "files_other": "Changed {{count}} files",
+    "kept_one": "Undone. You changed {{count}} file afterward, so it was left alone.",
+    "kept_other": "Undone. You changed {{count}} files afterward, so they were left alone."
   },
   "connections": {
     "intro": "Once connected, calendar events show up on the Calendar page, and runs and flashcard reviews count as done automatically.",

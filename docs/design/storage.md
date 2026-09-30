@@ -44,7 +44,7 @@ What files can't give you is real-time multi-device sync and collaboration, whic
 - Complete markdown round-tripping through mdast is not possible.
 - Home Assistant's UI dashboards lose comments because the frontend moves JSON around.
 - With the `yaml` package, a Document API edit kept comments but reformatted unrelated lines. A CST edit (`CST.setScalarValue`) changed exactly one line.
-- GUI edits patch frontmatter through the CST and replace only the affected slice of the body.
+- GUI edits replace only the top-level fields that changed, found by their position in the parsed frontmatter, and leave every other byte as it was; see [backend.md](backend.md), "Why key by key". The body is replaced only when it changed.
 
 **Identity.**
 - Every entity gets an immutable ID in frontmatter, and the filename is only a slug.

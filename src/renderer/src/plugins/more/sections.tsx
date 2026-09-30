@@ -133,7 +133,7 @@ export function SkillView({ id }: { id: string }) {
       <section className="flex flex-col gap-2">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           {t('skills.file')}
-          <code className="font-mono">skills/{skill.id}/SKILL.md</code>
+          <code className="font-mono">{skill.id}/SKILL.md</code>
           {skill.reviewed && <span className="text-ok">· {t('skills.reviewed')}</span>}
         </div>
         <Card className="py-0">

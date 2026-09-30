@@ -10,11 +10,8 @@ import type {
   Connection,
   Experiment,
   Goal,
-  HistoryEntry,
   Memory,
   Note,
-  Session,
-  Skill,
   Todo,
 } from './types'
 
@@ -158,13 +155,13 @@ const day = (offset: number) => {
 const at = (h: number, m = 0) => h + m / 60
 
 let n = 0
-const todo = (t: Omit<Todo, 'id'> & { id?: string }): Todo => ({ id: `todo-${n++}`, ...t })
+const todo = (t: Omit<Todo, 'id'> & { id?: string }): Todo => ({ id: `t-x${n++}`, ...t })
 
 export const todos: Todo[] = [
   // Today. The morning session proposed everything except the run, which was already done.
-  todo({ id: 't1', goalId: 'g2', title: '晨跑 5 km', cue: '起床喝完水', state: 'done', estimateMinutes: 35, slot: { date: day(1), start: at(7) } }),
+  todo({ id: 't-1', goalId: 'g2', title: '晨跑 5 km', cue: '起床喝完水', state: 'done', estimateMinutes: 35, slot: { date: day(1), start: at(7) } }),
   todo({
-    id: 't2',
+    id: 't-2',
     goalId: 'g1',
     title: '寫升等 doc 的「Impact」那段',
     cue: '到公司倒完咖啡',
@@ -178,9 +175,9 @@ export const todos: Todo[] = [
     ],
     why: '你自己估 45 分，但前 8 次寫這類段落平均用了 68 分，所以排 70 分。今天下午有兩場會，你昨晚說會議多的時候寫不下去，所以放早上。',
   }),
-  todo({ id: 't3', goalId: 'g1', title: '和 Anna 的 1:1', state: 'draft', estimateMinutes: 30, slot: { date: day(1), start: at(10, 30) }, fromCalendar: true, why: '來自你的行事曆。' }),
+  todo({ id: 't-3', goalId: 'g1', title: '和 Anna 的 1:1', state: 'draft', estimateMinutes: 30, slot: { date: day(1), start: at(10, 30) }, fromCalendar: true, why: '來自你的行事曆。' }),
   todo({
-    id: 't6',
+    id: 't-6',
     goalId: 'g2',
     title: '去健身房，只做 20 分鐘',
     cue: '下班走出大樓',
@@ -189,8 +186,8 @@ export const todos: Todo[] = [
     slot: { date: day(1), start: at(18, 30) },
     why: '只排 20 分鐘，因為短的比較容易開始。加上換衣服，我抓 30 分。這條規則過去 9 次你做到 7 次。',
   }),
-  todo({ id: 't5', goalId: 'g3', title: 'N3 聽力 1 回', cue: '搭上回家的捷運', state: 'draft', estimateMinutes: 15, slot: { date: day(1), start: at(19, 10) }, why: '綁在通勤上，不佔你在家的時間。' }),
-  todo({ id: 't7', goalId: 'g3', title: '背 15 張單字卡', cue: '刷完牙', state: 'draft', estimateMinutes: 12, slot: { date: day(1), start: at(22, 30) }, why: '這是你最穩的習慣：14 次做到 12 次。' }),
+  todo({ id: 't-5', goalId: 'g3', title: 'N3 聽力 1 回', cue: '搭上回家的捷運', state: 'draft', estimateMinutes: 15, slot: { date: day(1), start: at(19, 10) }, why: '綁在通勤上，不佔你在家的時間。' }),
+  todo({ id: 't-7', goalId: 'g3', title: '背 15 張單字卡', cue: '刷完牙', state: 'draft', estimateMinutes: 12, slot: { date: day(1), start: at(22, 30) }, why: '這是你最穩的習慣：14 次做到 12 次。' }),
 
   // Yesterday.
   todo({ goalId: 'g2', title: '晨跑 5 km', cue: '起床喝完水', state: 'done', estimateMinutes: 35, slot: { date: day(0), start: at(7) } }),
@@ -208,18 +205,18 @@ export const todos: Todo[] = [
   todo({ goalId: 'g2', title: '長跑 16 km', cue: '起床喝完水', state: 'open', estimateMinutes: 125, slot: { date: day(5), start: at(8) }, why: '你長跑常少估 35%，所以排 2 小時 5 分。' }),
 
   // Backlog: accepted, not scheduled yet.
-  todo({ id: 'u1', goalId: 'g1', title: '回 3 封卡住的信', cue: '午餐回座位', state: 'open', estimateMinutes: 25, slot: null }),
-  todo({ id: 'u2', goalId: 'g4', title: '打給媽', cue: '晚餐後', state: 'open', estimateMinutes: 25, slot: null }),
-  todo({ id: 'u3', goalId: 'g2', title: '訂 12 月比賽的住宿', state: 'open', estimateMinutes: 20, slot: null }),
-  todo({ id: 'u4', goalId: 'g3', title: '整理 N3 文法筆記', state: 'open', estimateMinutes: 45, slot: null }),
+  todo({ id: 't-u1', goalId: 'g1', title: '回 3 封卡住的信', cue: '午餐回座位', state: 'open', estimateMinutes: 25, slot: null }),
+  todo({ id: 't-u2', goalId: 'g4', title: '打給媽', cue: '晚餐後', state: 'open', estimateMinutes: 25, slot: null }),
+  todo({ id: 't-u3', goalId: 'g2', title: '訂 12 月比賽的住宿', state: 'open', estimateMinutes: 20, slot: null }),
+  todo({ id: 't-u4', goalId: 'g3', title: '整理 N3 文法筆記', state: 'open', estimateMinutes: 45, slot: null }),
 ]
 
 /** Where the agent would put backlog items if asked to find time, and why. */
 export const suggestedSlots: Record<string, { date: string; start: number; why: string }> = {
-  u1: { date: day(1), start: at(13), why: '午餐後 13:00 到 Design review 之前有一小時空檔。' },
-  u2: { date: day(2), start: at(20, 30), why: '週三晚上 19:00 後全空。你們通常聊 25 分，後面我不塞東西。' },
-  u3: { date: day(4), start: at(20), why: '週五晚上比較鬆，訂房要比價。' },
-  u4: { date: day(5), start: at(15), why: '週六下午沒排東西，這件需要一整段時間。' },
+  't-u1': { date: day(1), start: at(13), why: '午餐後 13:00 到 Design review 之前有一小時空檔。' },
+  't-u2': { date: day(2), start: at(20, 30), why: '週三晚上 19:00 後全空。你們通常聊 25 分，後面我不塞東西。' },
+  't-u3': { date: day(4), start: at(20), why: '週五晚上比較鬆，訂房要比價。' },
+  't-u4': { date: day(5), start: at(15), why: '週六下午沒排東西，這件需要一整段時間。' },
 }
 
 const weeklyEvents: (Omit<CalendarEvent, 'id' | 'date'> & { weekday: number })[] = [
@@ -244,67 +241,6 @@ export const events: CalendarEvent[] = [
   ...oneOffEvents,
 ]
 
-export const sessions: Session[] = [
-  {
-    id: 's1',
-    trigger: 'morning',
-    date: day(1),
-    time: at(8, 2),
-    messages: [
-      { kind: 'steps', summary: '看了你的行事曆和昨晚的紀錄', lines: ['讀 calendar 9/29', '讀 memory：昨晚 check-in', '讀 goals/*', '寫 todo/2026-09-29.md · 已驗證'] },
-      { kind: 'agent', text: '早安。今天下午 2 點到 4 點有兩場會，你昨晚說會議多的時候很難寫東西，所以我把寫 doc 放到早上咖啡之後。你看這樣可以嗎？' },
-      { kind: 'plan', title: '今天的安排', todoIds: ['t2', 't3', 't6', 't5', 't7'] },
-      { kind: 'agent', text: '另外有兩件我不確定要不要排：回那 3 封卡住的信，還有打給媽。要加哪個？' },
-      { kind: 'choices', options: ['都加', '只加打給媽', '今天先不要'] },
-    ],
-  },
-  {
-    id: 's2',
-    title: '這週哪天晚上空？',
-    trigger: 'hotkey',
-    date: day(1),
-    time: at(15, 20),
-    messages: [
-      { kind: 'user', text: '這週還有哪天晚上是空的？' },
-      { kind: 'steps', summary: '看了你的行事曆', lines: ['讀 calendar 9/29–10/5'] },
-      { kind: 'agent', text: '週三和週五。週四 19:00 有排球，週一被牙醫佔了。要不要把「打給媽」放到週三？' },
-    ],
-  },
-  {
-    id: 's3',
-    trigger: 'evening',
-    date: day(0),
-    time: at(21, 34),
-    messages: [
-      { kind: 'agent', text: '今天排了 5 件，做了 4 件。健身房那件沒去，是什麼卡住了？' },
-      { kind: 'user', text: '加班' },
-      { kind: 'agent', text: '了解，加班不是你的問題，我不會記成「沒自律」。要不要給加班的日子留一個更小的版本？例如回家伸展 10 分鐘，也算數。' },
-      { kind: 'user', text: '好' },
-      { kind: 'memory', text: '記住了：加班的日子 → 回家伸展 10 分鐘' },
-      { kind: 'agent', text: '最後一題：明天早上你最想先顧好哪一件？' },
-      { kind: 'user', text: '升等 doc' },
-      {
-        kind: 'memory-preview',
-        stated: ['9/28 沒去健身房，原因：加班（你說的）', '加班的日子 → 回家伸展 10 分鐘'],
-        skipped: [{ text: '週三晚上普遍比較難', why: '只有 1 次，不夠下結論' }],
-        plan: ['明天早上先排升等 doc'],
-        saved: true,
-      },
-      { kind: 'agent', text: '好，明早會先排它。晚安。' },
-    ],
-  },
-  {
-    id: 's4',
-    trigger: 'weekly',
-    date: day(-2),
-    time: at(20),
-    messages: [
-      { kind: 'agent', text: '這週 4 個目標裡，半馬跑了 31 km（計畫 34），單字卡 11 / 12 天，升等 doc 寫了 1 段，打給媽 0 次。' },
-      { kind: 'agent', text: '早上 6:40 的跑步這週又只成 1 次。我覺得是時段不對，不是你的問題。下週要不要試試午休跑？' },
-    ],
-  },
-]
-
 export const memories: Memory[] = [
   { id: 'm1', kind: 'stated', text: '加班的日子 → 回家伸展 10 分鐘', date: day(0), via: 'evening' },
   { id: 'm2', kind: 'stated', text: '週日不排工作', date: '2026-09-14' },
@@ -315,108 +251,11 @@ export const memories: Memory[] = [
 
 /** Things jotted down in 隨手記, one of each kind the agent sorts into. */
 export const notes: Note[] = [
-  { id: 'n1', text: '記得回房東訊息，問冷氣什麼時候修', date: day(0), time: at(22, 14), source: 'hotkey', state: 'new' },
-  { id: 'n2', text: '想學吉他，至少能彈幾首歌', date: day(0), time: at(23, 2), source: 'page', state: 'new' },
-  { id: 'n3', text: '我早上腦袋比較清楚，下午開會比較不累', date: day(1), time: at(7, 48), source: 'page', state: 'new' },
-  { id: 'n4', text: 'Ken 生日', date: day(1), time: at(8, 5), source: 'hotkey', state: 'new' },
-  { id: 'n5', text: '那本講習慣的書，書名好像叫 Tiny Habits', date: day(1), time: at(8, 31), source: 'page', state: 'new' },
-]
-
-const skill = (title: string, rules: string[], scope = '所有目標') => `---
-name: ${title}
-scope: ${scope}
----
-
-${rules.map((r) => `- ${r}`).join('\n')}
-`
-
-const estimateRules = [
-  '排時間用你過去實際花的時間，不用你估的',
-  '樣本少於 3 次時，使用你的估計',
-  '差太多的時候，在「為什麼這樣排」裡說明',
-]
-
-export const skills: Skill[] = [
-  {
-    id: 'k1',
-    title: '把目標拆成「什麼時候做什麼」',
-    description: '例如「下班走出大樓 → 去健身房」，比「這週運動 3 次」容易開始',
-    enabled: true,
-    instructions: skill('把目標拆成「什麼時候做什麼」', [
-      '每條待辦都寫成「情境 → 動作」',
-      '情境用時間、地點，或前一個動作',
-      '一條規則連續 5 次沒做到，提議改寫，不要自己改',
-    ]),
-  },
-  {
-    id: 'k2',
-    title: '用你的紀錄估時間',
-    description: '你常少估，它會照你過去實際花的時間排',
-    enabled: true,
-    instructions: skill('用你的紀錄估時間', estimateRules),
-    proposal: {
-      why: '長跑估時常漏掉換衣服和通勤，而且 3 次的樣本太少，估出來會跳。',
-      evidence: ['9/12 長跑', '9/19 長跑', '9/26 長跑'],
-      diff: [
-        { kind: 'context', text: '- 排時間用你過去實際花的時間，不用你估的' },
-        { kind: 'remove', text: '- 樣本少於 3 次時，使用你的估計' },
-        { kind: 'add', text: '- 樣本少於 5 次時，使用你的估計' },
-        { kind: 'add', text: '- 換衣服、通勤另計，不算在任務本身' },
-        { kind: 'context', text: '- 差太多的時候，在「為什麼這樣排」裡說明' },
-      ],
-      after: skill('用你的紀錄估時間', [
-        '排時間用你過去實際花的時間，不用你估的',
-        '樣本少於 5 次時，使用你的估計',
-        '換衣服、通勤另計，不算在任務本身',
-        '差太多的時候，在「為什麼這樣排」裡說明',
-      ]),
-    },
-  },
-  {
-    id: 'k3',
-    title: '追進度、寫週報',
-    description: '只算真的做了的，排了不算',
-    enabled: true,
-    instructions: skill('追進度、寫週報', ['只算有證據的完成：連接的紀錄，或你按了「做完了」', '排了但沒做的另外列，不算進度', '週報寫給你看，不寫給老闆看']),
-  },
-  {
-    id: 'k4',
-    title: '某天崩了幫你重排',
-    description: '先問你狀態，再給比較小的版本',
-    enabled: true,
-    instructions: skill('某天崩了幫你重排', ['先問狀態，不問原因', '給縮小版，不是全部取消', '重排記成「重排」，不記成「沒做」']),
-  },
-  {
-    id: 'k5',
-    title: '把習慣綁在固定的事情後面',
-    description: '時間、地點，或前一個動作',
-    enabled: true,
-    instructions: skill('把習慣綁在固定的事情後面', ['新習慣綁在一個每天都會發生的動作後面', '一次只綁一個', '綁不住就換線索，不是加鬧鐘']),
-  },
-  {
-    id: 'k6',
-    title: '小實驗',
-    description: '想知道某個做法對你有沒有用，它幫你排 A/B 週',
-    enabled: true,
-    instructions: skill('小實驗', ['A 週和 B 週輪流排，至少各兩週', '結果附上可能的干擾，例如會議數不同', '結論由你決定要不要照做']),
-  },
-  {
-    id: 'k7',
-    title: '整理隨手記',
-    description: '把你丟進隨手記的東西分成待辦、目標想法、要記住的事，看不懂的先問你',
-    enabled: true,
-    instructions: skill(
-      '整理隨手記',
-      [
-        '每一則分成：待辦、目標想法、要記住的事、先留著；看不懂就問，不要猜',
-        '待辦寫成草稿，標題用動詞開頭，原文放進「為什麼」',
-        '目標想法不直接建目標，留給用戶跟你聊過再說',
-        '要記住的事是用戶自己說的，記成 stated，不要加推論',
-        '同一件事寫了好幾次，合成一則，並告訴用戶',
-      ],
-      '隨手記',
-    ),
-  },
+  { id: 'n-1', text: '記得回房東訊息，問冷氣什麼時候修', date: day(0), time: at(22, 14), source: 'hotkey', state: 'new' },
+  { id: 'n-2', text: '想學吉他，至少能彈幾首歌', date: day(0), time: at(23, 2), source: 'page', state: 'new' },
+  { id: 'n-3', text: '我早上腦袋比較清楚，下午開會比較不累', date: day(1), time: at(7, 48), source: 'page', state: 'new' },
+  { id: 'n-4', text: 'Ken 生日', date: day(1), time: at(8, 5), source: 'hotkey', state: 'new' },
+  { id: 'n-5', text: '那本講習慣的書，書名好像叫 Tiny Habits', date: day(1), time: at(8, 31), source: 'page', state: 'new' },
 ]
 
 export const experiments: Experiment[] = [
@@ -432,82 +271,6 @@ export const experiments: Experiment[] = [
     conclusion: '看起來可能有用。不過「先做難的」那兩週剛好少了 3 場會議，差距有一部分可能是因為這個。',
   },
   { id: 'x2', title: '單字卡：睡前背 vs 早上背', weeks: 4, week: 2, finished: false },
-]
-
-export const history: HistoryEntry[] = [
-  {
-    id: 'h1',
-    date: day(1),
-    time: at(8, 2),
-    source: 'morning',
-    summary: '排了今天 5 件',
-    files: [
-      {
-        path: 'todo/2026-09-29/impact-段落.md',
-        lines: [
-          { kind: 'add', text: 'state: draft' },
-          { kind: 'add', text: 'cue: 到公司倒完咖啡' },
-          { kind: 'add', text: 'estimate: 70  # 你估 45，前 8 次平均 68' },
-        ],
-      },
-      { path: 'todo/2026-09-29/健身房.md', lines: [{ kind: 'add', text: 'state: draft' }, { kind: 'add', text: 'cue: 下班走出大樓' }] },
-    ],
-  },
-  {
-    id: 'h2',
-    date: day(0),
-    time: at(21, 34),
-    source: 'evening',
-    summary: '記住了：加班的日子 → 回家伸展 10 分鐘',
-    files: [
-      {
-        path: 'memory/2026-09-28-加班.md',
-        lines: [
-          { kind: 'add', text: 'kind: stated' },
-          { kind: 'add', text: 'source: 晚上 check-in' },
-          { kind: 'add', text: 'text: 加班的日子 → 回家伸展 10 分鐘' },
-        ],
-      },
-      {
-        path: 'memory/2026-09-28-推論.md',
-        lines: [
-          { kind: 'remove', text: 'kind: inferred' },
-          { kind: 'remove', text: 'text: 週三晚上普遍比較難' },
-        ],
-        note: '檢查擋下了這條推論：沒有附證據。',
-      },
-    ],
-  },
-  {
-    id: 'h3',
-    date: day(0),
-    time: at(15, 13),
-    source: 'hotkey',
-    summary: '把寫 doc 挪到今天早上',
-    check: { level: 'warn', retries: 2 },
-    files: [
-      {
-        path: 'todo/2026-09-29/impact-段落.md',
-        lines: [
-          { kind: 'remove', text: 'slot: 2026-09-29 14:00' },
-          { kind: 'add', text: 'slot: 2026-09-29 09:10' },
-        ],
-      },
-    ],
-  },
-  { id: 'h4', date: day(0), time: at(15, 12), source: 'hotkey', summary: '它說「挪好了」，但其實沒改到', check: { level: 'error', kind: 'claimed-without-change' } },
-  { id: 'h5', date: day(0), time: at(9, 40), source: 'you', summary: '刪掉「午餐後散步」這條' },
-  {
-    id: 'h6',
-    date: day(-2),
-    time: at(20),
-    source: 'weekly',
-    summary: '寫了 4 個目標的週報',
-    files: [
-      { path: 'goals/q4-升等/reports/2026-09-27.md', lines: [{ kind: 'add', text: '完成 3 / 5 次，比上週多 1 次' }] },
-      { path: 'goals/半馬/reports/2026-09-27.md', lines: [{ kind: 'add', text: '完成 4 / 5 次，比上週多 1 次' }] },
-    ],
-  },
 ]
 
 export const connections: Connection[] = [
@@ -530,33 +293,33 @@ export interface ReworkItem {
 /** What the agent would do with today, depending on how the user is doing. */
 export const reworkPlans: Record<Energy, { keep: ReworkItem[]; move: ReworkItem[]; drop: ReworkItem[] }> = {
   low: {
-    keep: [{ todoId: 't7', title: '背 5 張單字卡', note: '原本 15 張', change: { title: '背 5 張單字卡', estimateMinutes: 5 } }],
+    keep: [{ todoId: 't-7', title: '背 5 張單字卡', note: '原本 15 張', change: { title: '背 5 張單字卡', estimateMinutes: 5 } }],
     move: [
-      { todoId: 't2', title: '寫升等 doc 的「Impact」那段', note: '→ 明天 09:10 咖啡後', change: { slot: { date: day(2), start: at(9, 10) } } },
-      { todoId: 't6', title: '去健身房，只做 20 分鐘', note: '→ 週四 18:30', change: { slot: { date: day(3), start: at(18, 30) } } },
-      { todoId: 't5', title: 'N3 聽力 1 回', note: '→ 明天通勤', change: { slot: { date: day(2), start: at(19, 10) } } },
+      { todoId: 't-2', title: '寫升等 doc 的「Impact」那段', note: '→ 明天 09:10 咖啡後', change: { slot: { date: day(2), start: at(9, 10) } } },
+      { todoId: 't-6', title: '去健身房，只做 20 分鐘', note: '→ 週四 18:30', change: { slot: { date: day(3), start: at(18, 30) } } },
+      { todoId: 't-5', title: 'N3 聽力 1 回', note: '→ 明天通勤', change: { slot: { date: day(2), start: at(19, 10) } } },
     ],
-    drop: [{ todoId: 'u1', title: '回 3 封卡住的信', note: '不排，明天早上再問你', change: { slot: null } }],
+    drop: [{ todoId: 't-u1', title: '回 3 封卡住的信', note: '不排，明天早上再問你', change: { slot: null } }],
   },
   some: {
     keep: [
-      { todoId: 't2', title: '升等 doc：只寫 3 個重點', note: '15 分，原本 70 分', change: { title: '升等 doc：只寫 3 個重點', estimateMinutes: 15 } },
-      { todoId: 't7', title: '背 15 張單字卡', note: '照原本', change: {} },
+      { todoId: 't-2', title: '升等 doc：只寫 3 個重點', note: '15 分，原本 70 分', change: { title: '升等 doc：只寫 3 個重點', estimateMinutes: 15 } },
+      { todoId: 't-7', title: '背 15 張單字卡', note: '照原本', change: {} },
     ],
     move: [
-      { todoId: 't6', title: '去健身房，只做 20 分鐘', note: '→ 週四 18:30', change: { slot: { date: day(3), start: at(18, 30) } } },
-      { todoId: 't5', title: 'N3 聽力 1 回', note: '→ 明天通勤', change: { slot: { date: day(2), start: at(19, 10) } } },
+      { todoId: 't-6', title: '去健身房，只做 20 分鐘', note: '→ 週四 18:30', change: { slot: { date: day(3), start: at(18, 30) } } },
+      { todoId: 't-5', title: 'N3 聽力 1 回', note: '→ 明天通勤', change: { slot: { date: day(2), start: at(19, 10) } } },
     ],
-    drop: [{ todoId: 'u1', title: '回 3 封卡住的信', note: '不排', change: { slot: null } }],
+    drop: [{ todoId: 't-u1', title: '回 3 封卡住的信', note: '不排', change: { slot: null } }],
   },
   plenty: {
     keep: [
-      { todoId: 't2', title: '寫升等 doc 的「Impact」那段', note: '縮成 45 分', change: { estimateMinutes: 45 } },
-      { todoId: 't5', title: 'N3 聽力 1 回', note: '19:10 通勤', change: {} },
-      { todoId: 't7', title: '背 15 張單字卡', note: '22:30', change: {} },
+      { todoId: 't-2', title: '寫升等 doc 的「Impact」那段', note: '縮成 45 分', change: { estimateMinutes: 45 } },
+      { todoId: 't-5', title: 'N3 聽力 1 回', note: '19:10 通勤', change: {} },
+      { todoId: 't-7', title: '背 15 張單字卡', note: '22:30', change: {} },
     ],
-    move: [{ todoId: 't6', title: '去健身房，只做 20 分鐘', note: '→ 週四 18:30，今天來不及', change: { slot: { date: day(3), start: at(18, 30) } } }],
-    drop: [{ todoId: 'u1', title: '回 3 封卡住的信', note: '不排', change: { slot: null } }],
+    move: [{ todoId: 't-6', title: '去健身房，只做 20 分鐘', note: '→ 週四 18:30，今天來不及', change: { slot: { date: day(3), start: at(18, 30) } } }],
+    drop: [{ todoId: 't-u1', title: '回 3 封卡住的信', note: '不排', change: { slot: null } }],
   },
 }
 

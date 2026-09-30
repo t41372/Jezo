@@ -36,9 +36,12 @@ export function Agenda() {
   const done = accepted.filter((x) => x.state === 'done')
   const [current, ...later] = open
 
-  // 's1' is the mock morning session. With the real agent, these open the session that made today's plan.
+  // The conversation that proposed today's drafts, if there is one; otherwise a new one.
+  const planSession = useStore(
+    (s) => s.sessions.find((x) => x.messages.some((m) => m.kind === 'plan' && m.todoIds.some((id) => drafts.some((d) => d.id === id))))?.id ?? null,
+  )
   const rescue = () => {
-    openSession('s1')
+    openSession(planSession)
     send(t('badDayMessage'))
   }
 
@@ -63,7 +66,7 @@ export function Agenda() {
         <AnimatePresence initial={false}>
           {drafts.length > 0 && (
             <motion.section key="drafts" {...rowMotion}>
-              <PlanCard title={t('drafts')} todoIds={drafts.map((x) => x.id)} onTweak={() => openSession('s1')} />
+              <PlanCard title={t('drafts')} todoIds={drafts.map((x) => x.id)} onTweak={() => openSession(planSession)} />
             </motion.section>
           )}
         </AnimatePresence>

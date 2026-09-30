@@ -21,6 +21,19 @@ const KIND_STYLE: Record<SortItem['as'], string> = {
 const ANSWERS: NoteKind[] = ['todo', 'goal', 'memory', 'keep']
 
 /**
+ * The proposal's rows as they stand. A note keeps the latest proposal and the
+ * user's decision on it; a row whose note was sorted again later shows what
+ * this session proposed.
+ */
+export function liveItems(items: SortItem[], notes: Note[], sessionId: string): SortItem[] {
+  return items.map((item) => {
+    const proposal = notes.find((n) => n.id === item.noteId)?.proposal
+    if (proposal?.session !== sessionId) return item
+    return { noteId: item.noteId, as: proposal.as, title: proposal.title, question: proposal.question, decision: proposal.decision }
+  })
+}
+
+/**
  * The agent's proposal for a batch of notes: what each one becomes, or a
  * question when it can't tell. Every row is a draft until the user says yes,
  * and every decision can be taken back. The same card shows in the
@@ -30,7 +43,7 @@ export function SortCard({ data, sessionId, index, onPage }: { data: unknown; se
   const { t } = useTranslation('notes')
   const notes = useStore((s) => s.notes)
   const { decideNote, undoNoteDecision, openSession, closeNoteProposal } = useStore.getState()
-  const { items } = data as { items: SortItem[] }
+  const items = liveItems((data as { items: SortItem[] }).items, notes, sessionId)
   const open = items.filter((i) => !i.decision)
   // Questions need an answer, so "accept all" leaves them.
   const answerable = open.filter((i) => i.as !== 'ask')
@@ -66,7 +79,7 @@ export function SortCard({ data, sessionId, index, onPage }: { data: unknown; se
             </button>
           )}
           {onPage && !open.length && (
-            <Button size="sm" variant="secondary" className="bg-muted" onClick={() => closeNoteProposal(sessionId, index)}>
+            <Button size="sm" variant="secondary" className="bg-muted" onClick={() => closeNoteProposal(sessionId)}>
               {t('card.close')}
             </Button>
           )}

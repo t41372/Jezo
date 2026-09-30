@@ -9,7 +9,7 @@ import type { Note, Session, SortItem } from '@/data/types'
 import { easeOut } from '@/lib/motion'
 import { dayTime } from '@/lib/time'
 import { offerUndo } from '@/lib/undo'
-import { SortCard } from './SortCard'
+import { liveItems, SortCard } from './SortCard'
 
 /** Notes enter and leave the list like cards in the backlog. */
 const rowMotion = {
@@ -30,7 +30,8 @@ export function Notes() {
   // Newest first, right under the box they were typed in.
   const unsorted = notes.filter((n) => n.state === 'new').reverse()
   const sorted = notes.filter((n) => n.state === 'sorted').reverse()
-  const pending = pendingProposal(sessions)
+  const closed = useStore((s) => s.closedProposals)
+  const pending = pendingProposal(sessions, notes, closed)
 
   return (
     <div className="flex-1 overflow-auto px-10 py-9">
@@ -92,14 +93,14 @@ export function Notes() {
  * and after that until the user puts it away, so each decision can still be
  * taken back.
  */
-function pendingProposal(sessions: Session[]) {
+function pendingProposal(sessions: Session[], notes: Note[], closed: string[]) {
   for (const session of sessions) {
     if (session.trigger !== 'notes') continue
     const index = session.messages.findIndex((m) => m.kind === 'plugin' && m.plugin === 'notes' && m.type === 'sort')
     const message = session.messages[index]
     if (message?.kind !== 'plugin') continue
-    const data = message.data as { items: SortItem[]; closed?: boolean }
-    if (data.items.some((i) => !i.decision) || !data.closed) return { sessionId: session.id, index, data: message.data }
+    const data = message.data as { items: SortItem[] }
+    if (liveItems(data.items, notes, session.id).some((i) => !i.decision) || !closed.includes(session.id)) return { sessionId: session.id, index, data: message.data }
   }
   return null
 }
@@ -143,9 +144,8 @@ function NoteRow({ note }: { note: Note }) {
   const { editNote, deleteNote, restoreNote } = useStore.getState()
 
   const remove = () => {
-    const index = useStore.getState().notes.indexOf(note)
     deleteNote(note.id)
-    offerUndo(t('deleted', { text: note.text.length > 16 ? `${note.text.slice(0, 16)}…` : note.text }), () => restoreNote(note, index))
+    offerUndo(t('deleted', { text: note.text.length > 16 ? `${note.text.slice(0, 16)}…` : note.text }), () => restoreNote(note))
   }
   const save = (text: string) => {
     setEditing(false)
@@ -198,7 +198,7 @@ function NoteRow({ note }: { note: Note }) {
 /** A note the agent sorted: what the user wrote and what it became. A todo opens on the calendar. */
 function SortedRow({ note }: { note: Note }) {
   const { t } = useTranslation('notes')
-  const todo = useStore((s) => (note.became?.kind === 'todo' ? s.todos.find((x) => x.id === (note.became as { todoId: string }).todoId) : undefined))
+  const todo = useStore((s) => (note.became?.kind === 'todo' ? s.todos.find((x) => x.id === note.became?.ref) : undefined))
   const { navigate, setCalendarDetail } = useStore.getState()
   if (!note.became) return null
   return (

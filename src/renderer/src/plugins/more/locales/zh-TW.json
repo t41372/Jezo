@@ -91,7 +91,8 @@
     "claimedWithoutChange": "系統抓到了，下一次重試成功",
     "undo": "撤銷",
     "undone": "已撤銷",
-    "files_other": "改了 {{count}} 個檔案"
+    "files_other": "改了 {{count}} 個檔案",
+    "kept_other": "撤銷了。有 {{count}} 個檔案你後來改過，那些沒動。"
   },
   "connections": {
     "intro": "連上之後，行事曆上的事會出現在「行事曆」頁；運動、背卡的紀錄會自動算成「做了」。",

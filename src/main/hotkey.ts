@@ -3,7 +3,11 @@
 // needs the native module (native/hotkey). Where it can't load or register, a
 // press still opens the typing window.
 
+import { createRequire } from 'node:module'
 import { globalShortcut } from 'electron'
+
+// The addon is a CommonJS .node module.
+const require = createRequire(import.meta.url)
 
 /** Held longer than this, it's a hold instead of a press. */
 const HOLD_MS = 250

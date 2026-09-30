@@ -106,7 +106,8 @@
     "contextNote": "It comes along as context",
     "micDenied": "Can't use the microphone. Turn on Jezo in System Settings → Privacy & Security → Microphone.",
     "mockTranscript": "Move tomorrow's gym session to Thursday, then look at next week for me",
-    "thinking": "Thinking…"
+    "thinking": "Thinking…",
+    "noModel": "No model to use. Open LM Studio or Ollama, or switch to a cloud model in Settings."
   },
   "undo": {
     "action": "Undo",
@@ -118,5 +119,8 @@
     "running": "In progress · {{elapsed}}",
     "pause": "Stop",
     "done": "Done"
+  },
+  "workspace": {
+    "writeFailed": "Couldn't save that, so the files were read again."
   }
 }

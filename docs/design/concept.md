@@ -43,7 +43,7 @@ Open Source Personal Agent to help you manage your life, scientifically
 - Electron 桌面 app。同一個後端也能 headless 跑在 docker 裡配 web UI，那是包裝問題，先做桌面。
 - Harness 用 pi。理由：GUI 是我們自己的，harness 只需要 loop、檔案工具、skills 載入、session 級注入、串流事件、多 provider，pi 剛好只有這些，而且是 TS，直接在 Electron main process 裡跑，沒有跨進程邊界。Hermes 的電池（cron、approvals、dashboard plugin）我們用不到。dsh 還沒到能二次開發的程度。
 - 記憶：pi-hermes-memory（Hermes 記憶的移植版，本地 markdown + FTS5，不用額外服務）。記憶後端留一個插槽，Hindsight 之類的放後面當選項；要接就接 Vectorize 官方的 pi 擴充，社群版跟它有工具名衝突。
-- 內建的 pi 擴充由我們打包進 app、鎖版本，用戶不用自己裝 pi package。這是發佈方式，不是限制用戶跑自己的程式碼。native addon（better-sqlite3）要對著 Electron 的 Node rebuild，先排進去。
+- 內建的 pi 擴充由我們打包進 app、鎖版本，用戶不用自己裝 pi package。這是發佈方式，不是限制用戶跑自己的程式碼。SQLite 用 Electron 內建的 `node:sqlite`（有 FTS5，不用 rebuild native addon），見 backend.md。
 - Python 只剩 Standard ASR 一個 sidecar，uv 包，然後用戶安裝 standard asr compliant 的 asr 插件。
 - 100% GUI。用戶任何情況下不碰命令行和設定檔，最多複製貼上。
 - 用戶可能跑比較弱的本地模型，會犯錯。架構上用程序化的檢查去抓，類似 linter：agent 犯錯時，檢查器能一定程度上發現，不用等用戶自己發現東西炸了。這些檢查只抓錯，不限制模型能做什麼。

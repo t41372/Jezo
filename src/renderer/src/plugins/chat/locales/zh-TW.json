@@ -46,5 +46,29 @@
     "plan": "計畫",
     "save": "寫進去",
     "saved": "已寫進記憶"
-  }
+  },
+  "steps": {
+    "looked_other": "看了 {{count}} 個檔案",
+    "changed_other": "改了 {{count}} 個檔案",
+    "lookedAndChanged": "看了 {{looked}} 個檔案，改了 {{changed}} 個",
+    "did_other": "做了 {{count}} 件事",
+    "refused": "檢查沒過",
+    "tool": {
+      "read": "讀",
+      "ls": "看目錄",
+      "write": "寫",
+      "edit": "改",
+      "todos_propose": "提議待辦",
+      "todos_update": "改待辦",
+      "notes_propose": "提議怎麼整理",
+      "ask_user": "問你"
+    }
+  },
+  "working": "正在想…",
+  "stop": "停下來",
+  "error": {
+    "noModel": "找不到可以用的模型。打開 LM Studio 或 Ollama 並載入一個模型，或到設定換成雲端模型。",
+    "failed": "這次沒回答成功：{{text}}"
+  },
+  "send": "送出"
 }

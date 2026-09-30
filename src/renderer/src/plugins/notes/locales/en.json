@@ -54,5 +54,6 @@
     },
     "rejected": "Back in Notes",
     "close": "Put away"
-  }
+  },
+  "fromNote": "From Notes: \"{{text}}\""
 }

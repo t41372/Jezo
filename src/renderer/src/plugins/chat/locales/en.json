@@ -46,5 +46,32 @@
     "plan": "Plan",
     "save": "Save it",
     "saved": "Saved to memory"
-  }
+  },
+  "steps": {
+    "looked_one": "Looked at {{count}} file",
+    "looked_other": "Looked at {{count}} files",
+    "changed_one": "Changed {{count}} file",
+    "changed_other": "Changed {{count}} files",
+    "lookedAndChanged": "Looked at {{looked}} files, changed {{changed}}",
+    "did_one": "Did {{count}} thing",
+    "did_other": "Did {{count}} things",
+    "refused": "a check refused it",
+    "tool": {
+      "read": "read",
+      "ls": "list",
+      "write": "write",
+      "edit": "edit",
+      "todos_propose": "propose todos",
+      "todos_update": "update todo",
+      "notes_propose": "propose sorting",
+      "ask_user": "ask you"
+    }
+  },
+  "working": "Thinking…",
+  "stop": "Stop",
+  "error": {
+    "noModel": "No model to use. Open LM Studio or Ollama and load a model, or switch to a cloud model in Settings.",
+    "failed": "That didn't work: {{text}}"
+  },
+  "send": "Send"
 }

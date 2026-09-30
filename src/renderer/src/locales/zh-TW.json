@@ -103,7 +103,8 @@
     "contextNote": "會一起帶進對話",
     "micDenied": "沒辦法用麥克風。到「系統設定 → 隱私權與安全性 → 麥克風」打開 Jezo。",
     "mockTranscript": "把明天的健身挪到週四，然後幫我看一下下週",
-    "thinking": "想一下…"
+    "thinking": "想一下…",
+    "noModel": "找不到可以用的模型。打開 LM Studio 或 Ollama，或到設定換成雲端模型。"
   },
   "undo": {
     "action": "撤銷",
@@ -115,5 +116,8 @@
     "running": "進行中 · {{elapsed}}",
     "pause": "停下來",
     "done": "做完了"
+  },
+  "workspace": {
+    "writeFailed": "沒存到，已經重新讀一次檔案。"
   }
 }

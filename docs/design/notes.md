@@ -1,6 +1,6 @@
 # 隨手記 (Notes)
 
-Status: decided on 2026-09-29. The prototype has the page, the proposal card, and ⌥↵ in the ⌥X window; the agent is mocked.
+Status: decided on 2026-09-29. Built: notes are files in the workspace, and Jezo's agent sorts them with the `notes_propose` tool.
 
 ## What it's for
 
@@ -22,7 +22,7 @@ It's a first-party plugin, built the way a user's plugin would be: its own direc
 - **Goal ideas land on the Goals page** under 還在想的目標. A goal needs a direction, a measure, and rules, which come from talking it through, so clicking an idea opens a conversation to do that. The skill tells the agent not to create goals straight from notes.
 - **Kept notes stay under 已整理** with the rest, and are never sorted again.
 - **The page shows the newest proposal** until every note in it is decided, and after that until the user puts it away, so a decision can still be taken back. The same card is in the conversation.
-- **⌥↵ in the ⌥X window files the text in 隨手記** instead of asking the agent, and doesn't bring the main window forward. ↵ still asks. The window says 「記到隨手記了」 for a moment and closes, with no animation.
+- **⌥↵ in the ⌥X window files the text in 隨手記** instead of asking the agent, and doesn't bring the main window forward. ↵ still asks. The ⌥X window writes the note itself, so it's filed even when the main window is closed. It says 「記到隨手記了」 for a moment and closes, with no animation.
 - **How to sort is a skill,** 整理隨手記, on by default and editable like the others (AGENTS.md, principle 5). It sets the categories, the wording, and when to ask.
 
 ## On disk
@@ -52,7 +52,9 @@ became:               # set once sorted
 記得回房東訊息，問冷氣什麼時候修
 ```
 
-The validator checks that `became.ref` points at something that exists. Where the proposal is kept while it's open depends on where sessions are stored, which isn't decided yet.
+The validator checks that `became.ref` points at something that exists.
+
+**The proposal is kept on the note** (`proposal`: what the agent proposed, the session it came from, and the user's decision), not in the conversation. The 隨手記 page and the chat card then read the same file, and a decision made in one shows in the other. It stays after the user decides, so taking the decision back shows it again, and an answered question keeps the question. A card in an older conversation whose notes were sorted again later shows what that session proposed.
 
 ## Rejected
 
@@ -63,6 +65,5 @@ The validator checks that `became.ref` points at something that exists. Where th
 
 ## Not wired
 
-- The real agent. A keyword table in `data/mock-agent.ts` stands in for sorting.
 - Voice into 隨手記: holding ⌥X still talks to the agent.
 - The morning digest mentioning how many notes wait to be sorted.

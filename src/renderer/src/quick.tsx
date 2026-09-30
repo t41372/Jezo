@@ -17,16 +17,18 @@ import { createRoot } from 'react-dom/client'
 import { useTranslation } from 'react-i18next'
 import { Command, CommandGroup, CommandItem, CommandList } from '@/components/ui/command'
 import { Kbd } from '@/components/ui/kbd'
-import { replyTo } from '@/data/mock-agent'
 import type { QuickCommand } from '../../shared/bridge'
+import type { SessionView } from '../../shared/session'
 import { markPlatform, useDarkClass } from './app/theme'
+import { stamp } from './data/entities'
 import { useMicLevels } from './lib/mic'
 
 const SUGGESTIONS = ['quick.planTomorrow', 'quick.badDay', 'quick.freeEvenings'] as const
 
 type State =
   | { mode: 'type' }
-  | { mode: 'answer'; question: string; answer: string | null }
+  /** Asked; `session` is the conversation once the agent has one. */
+  | { mode: 'answer'; question: string; session: string | null }
   | { mode: 'voice'; context: string | null; startedAt: number }
   /** Just filed in 隨手記: says so for a moment, then closes. */
   | { mode: 'noted' }
@@ -40,10 +42,10 @@ function Quick() {
   }, [])
 
   const ask = (question: string) => {
-    setState({ mode: 'answer', question, answer: null })
-    // The mock agent answers after a beat, like the main window's does.
-    const reply = replyTo(question).find((m) => m.kind === 'agent')
-    window.setTimeout(() => setState((s) => (s.mode === 'answer' && s.question === question ? { ...s, answer: reply?.text ?? '' } : s)), 600)
+    setState({ mode: 'answer', question, session: null })
+    window.jezo.agent.send(null, question, 'hotkey').then((session) =>
+      setState((s) => (s.mode === 'answer' && s.question === question ? { ...s, session } : s)),
+    )
   }
 
   useEffect(
@@ -73,10 +75,11 @@ function Quick() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  // Long enough to read, short enough not to be in the way. The text is sent when the window closes.
+  // Filed at once; the confirmation stays long enough to read, short enough not to be in the way.
   const note = (text: string) => {
     setState({ mode: 'noted' })
-    window.setTimeout(() => window.jezo.quick.submit(text, 'note'), 600)
+    window.jezo.workspace.create('note', { created: stamp(), source: 'hotkey', state: 'new' }, `${text}\n`).catch(console.error)
+    window.setTimeout(() => window.jezo.quick.hide(), 600)
   }
 
   if (state.mode === 'voice') {
@@ -107,7 +110,12 @@ function Typing({
   }, [state.mode === 'answer' ? state.question : null])
 
   const question = text.trim()
-  const continueInMain = () => question && window.jezo.quick.submit(question)
+  const answer = useAnswer(state.mode === 'answer' ? state.session : null)
+  // The conversation goes on in the main window: the one already started, or a new one.
+  const continueInMain = () => {
+    if (state.mode === 'answer' && state.session) window.jezo.quick.continue(state.session)
+    else if (question) window.jezo.agent.send(null, question, 'hotkey').then((id) => window.jezo.quick.continue(id))
+  }
 
   return (
     <Command
@@ -146,7 +154,13 @@ function Typing({
       {state.mode === 'answer' ? (
         <div className="flex flex-1 flex-col gap-3 p-3">
           <div className="rounded-xl border border-card-border bg-card px-4 py-3.5 text-sm leading-relaxed text-pretty" data-selectable>
-            {state.answer ?? <span className="text-muted-foreground">{t('quick.thinking')}</span>}
+            {answer?.error ? (
+              <span className="text-destructive">{answer.error === 'no-model' ? t('quick.noModel') : answer.error}</span>
+            ) : answer?.text ? (
+              <span className="whitespace-pre-wrap">{answer.text.trim()}</span>
+            ) : (
+              <span className="text-muted-foreground">{t('quick.thinking')}</span>
+            )}
           </div>
           <div className="flex-1" />
           <Hints onContinue={continueInMain} />
@@ -175,6 +189,23 @@ function Typing({
       )}
     </Command>
   )
+}
+
+/** What the agent has said so far in a conversation, following it as it writes. */
+function useAnswer(session: string | null) {
+  const [view, setView] = useState<SessionView | null>(null)
+  useEffect(() => {
+    setView(null)
+    if (!session) return
+    return window.jezo.agent.onChange((v) => v.id === session && setView(v))
+  }, [session])
+  if (!view) return null
+  const agent = view.messages.filter((m) => m.kind === 'agent')
+  const error = view.messages.findLast((m) => m.kind === 'error')
+  return {
+    text: agent.map((m) => m.text).join('\n\n'),
+    error: error?.kind === 'error' ? (error.code ?? error.text ?? '') : null,
+  }
 }
 
 function Noted() {

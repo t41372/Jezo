@@ -1,8 +1,17 @@
+import './env'
 import { join } from 'node:path'
-import { app, BrowserWindow, ipcMain, nativeTheme, type BrowserWindowConstructorOptions } from 'electron'
-import type { QuickSubmission, ThemeSource } from '../shared/bridge'
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, type BrowserWindowConstructorOptions } from 'electron'
+import type { ThemeSource } from '../shared/bridge'
+import { AgentHost } from './agent/host'
+import { serveAgent } from './agent/ipc'
+import { historyFile, UndoLog } from './agent/undo'
+import { getConfig } from './config'
 import { registerQuickKey, unregisterQuickKey } from './hotkey'
 import { createQuickWindow, endVoice, hideQuick, startVoice, toggleTyping } from './quick'
+import { serveWorkspace } from './workspace/ipc'
+import { seedWorkspace } from './workspace/seed'
+import { Workspace } from './workspace/workspace'
+
 
 const QUICK_KEY = 'Alt+X'
 
@@ -12,7 +21,7 @@ let canHold = false
 let context: string | null = null
 
 const webPreferences: BrowserWindowConstructorOptions['webPreferences'] = {
-  preload: join(__dirname, '../preload/index.js'),
+  preload: join(import.meta.dirname, '../preload/index.cjs'),
 }
 
 // Glass on macOS and Windows, so the desktop shows through. Linux gets a solid window.
@@ -32,7 +41,7 @@ function load(window: BrowserWindow, page: 'index' | 'quick') {
   if (!app.isPackaged && devUrl) {
     window.loadURL(`${devUrl}/${page}.html`)
   } else {
-    window.loadFile(join(__dirname, `../renderer/${page}.html`))
+    window.loadFile(join(import.meta.dirname, `../renderer/${page}.html`))
   }
 }
 
@@ -66,23 +75,44 @@ ipcMain.on('context:set', (_, pageTitle: string) => {
 })
 ipcMain.handle('quick:can-hold', () => canHold)
 ipcMain.on('quick:hide', hideQuick)
-ipcMain.on('quick:submit', (_, submission: QuickSubmission) => {
+ipcMain.on('quick:continue', (_, session: string) => {
   hideQuick()
   const fresh = !mainWindow
   if (fresh) createMainWindow()
   const window = mainWindow!
-  // A note is filed quietly; the user stays in whatever they were doing.
-  if (submission.as === 'ask') {
-    window.show()
-    window.focus()
-  }
+  window.show()
+  window.focus()
   // A window that was closed has to load its page before it can take the text.
-  const deliver = () => window.webContents.send('quick:submitted', submission)
+  const deliver = () => window.webContents.send('quick:continued', session)
   if (fresh) window.webContents.once('did-finish-load', deliver)
   else deliver()
 })
 
-app.whenReady().then(() => {
+let workspace: Workspace | null = null
+
+/** Opens the workspace, creating it on first run. The seeded skills follow the OS language. */
+async function openWorkspace() {
+  const { workspace: root } = getConfig()
+  await seedWorkspace(root, app.getLocale().startsWith('zh') ? 'zh-TW' : 'en')
+  workspace = new Workspace(root)
+  await workspace.open()
+  serveWorkspace(workspace)
+  const undo = new UndoLog(workspace, historyFile(app.getPath('userData')))
+  const host = new AgentHost(workspace, undo, () => getConfig().model)
+  await host.open()
+  serveAgent(host, undo)
+  // File events can be missed; coming back to the app is a good moment to look again.
+  app.on('browser-window-focus', () => void workspace?.rescan())
+}
+
+app.whenReady().then(async () => {
+  try {
+    await openWorkspace()
+  } catch (error) {
+    dialog.showErrorBox("Jezo can't open its workspace", `${getConfig().workspace}\n\n${String(error)}`)
+    app.quit()
+    return
+  }
   createMainWindow()
   createQuickWindow(
     {
@@ -104,4 +134,7 @@ app.whenReady().then(() => {
   })
 })
 
-app.on('will-quit', unregisterQuickKey)
+app.on('will-quit', () => {
+  unregisterQuickKey()
+  workspace?.close()
+})

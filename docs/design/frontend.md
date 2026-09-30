@@ -24,7 +24,7 @@ Status: decided on 2026-09-29. The UI built from the Claude Design mockup (`Life
 
 ### Why, and what was rejected
 
-- **Bun, not Deno.** Electron's main process runs Electron's own Node, and pi is a Node package, so Deno could only have been a package manager. Bun fills that role and was tested on 2026-09-29: install, rebuilding `better-sqlite3` against Electron 44 with `@electron/rebuild`, and packaging with electron-builder all worked, and SQLite with FTS5 ran inside the packaged app. electron-builder has no bun command for reading the dependency tree, so it walks `node_modules` instead. That worked. Electron 44 no longer downloads its binary in a postinstall script; it fetches it on first run.
+- **Bun, not Deno.** Electron's main process runs Electron's own Node, and pi is a Node package, so Deno could only have been a package manager. Bun fills that role and was tested on 2026-09-29: install, rebuilding a native addon (`better-sqlite3`) against Electron 44 with `@electron/rebuild`, and packaging with electron-builder all worked. Jezo ended up using Electron's built-in `node:sqlite` instead ([backend.md](backend.md)). electron-builder has no bun command for reading the dependency tree, so it walks `node_modules` instead. That worked. Electron 44 no longer downloads its binary in a postinstall script; it fetches it on first run.
 - **pnpm** would also have worked. Bun was the user's preference and passed the test.
 - **Base UI, not Radix,** as the primitives under shadcn. The user's choice.
 - **electron-vite 5 with Vite 7.** electron-vite's stable release doesn't support Vite 8 yet. Move to Vite 8 when electron-vite 6 is stable.
@@ -75,19 +75,21 @@ Widgets on the same page don't know about each other. They share state through t
 
 How a user's plugin code gets loaded at runtime is not decided.
 
-## Data in the prototype
+## Data
 
-There is no backend yet. The store holds mock data shaped like the real entities in [storage.md](storage.md), so wiring the backend replaces the store's source without remodeling the UI:
+Todos and notes come from the workspace ([backend.md](backend.md)): the store applies a change at once, writes it through the main process, and takes the file as it comes back. Goals, sessions, memory, skills, experiments, history and connections are still the mockup's data in the store, shaped like the real entities so wiring them replaces the source without remodeling the UI. `bun scripts/fixture.ts <directory>` writes a workspace with the mockup's todos and notes, for development and tests. Its dates are moved so the mockup's "today" is the real today.
+
+- **Each window changes only the entities it's told about.** When a file comes back, the store replaces that entity and leaves the rest, which may have writes of their own on the way; re-reading the whole list would briefly undo a drag that hasn't reached the disk yet.
 
 - **A todo** has an ID, a title, a goal ID, a cue (the situation it's done in), an estimate, a schedule, and a `why` written by the agent.
 - **A todo has a state: `draft`, `open`, or `done`.** A draft is a todo the agent proposed. It only counts once the user accepts it, because a plan is not progress (see [concept.md](concept.md)). Draft is data, not a style.
 - **A time slot can be proposed.** When the agent suggests a time for a todo the user already accepted, only the time is a draft. The user confirms it, drags it somewhere else, or sends it back to the backlog.
 - **Drafts show up everywhere the todo does,** marked as drafts, and don't count toward "做了". The mockup only showed them in the chat; showing them on Today and the calendar too means the morning plan is visible wherever the user looks first.
 - **A calendar event** comes from a connected calendar and is read-only in Jezo. An all-day event starts at 0 and its hours are whole days.
-- **The backlog has an order,** the order of the todos in the store, and a todo dropped on it goes where it was dropped. Where that order is kept on disk isn't decided yet.
+- **The backlog has an order,** and a todo dropped on it goes where it was dropped. On disk the order is each todo's `rank`, a fractional index, so a move writes one file ([backend.md](backend.md)).
 - **Moving a todo on the calendar settles it:** a draft becomes a real todo and a proposed time becomes the user's. Resizing its block changes its estimate.
 - **The change history** is a list of agent actions with per-entry undo, following the semantics in [undo.md](undo.md). The mockup offered undo on the user's own edit too; that's removed, because undo only reverts what the agent did.
-- **The mock agent** answers from a table of canned replies after a short delay. It's in `data/mock-agent.ts` and goes away when pi is wired in.
+- **Conversations and the change history come from Jezo's agent** ([backend.md](backend.md)). The chat folds what the agent did into one line (「看了 3 個檔案，改了 1 個」) that opens to each step, shows a quiet 「正在想…」 until the first words arrive, and turns the send button into a stop button while the agent works. A message typed then waits in the box.
 
 ## Translation
 

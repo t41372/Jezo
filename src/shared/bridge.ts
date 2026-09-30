@@ -1,5 +1,8 @@
 // What the preload script exposes to the renderer as `window.jezo`.
 
+import type { HistoryEntry, SessionView, Trigger, UndoResult } from './session'
+import type { Fields, Item, ItemChanges } from './workspace'
+
 export type ThemeSource = 'system' | 'light' | 'dark'
 
 /** What the ⌥X window is asked to do. */
@@ -10,14 +13,80 @@ export type QuickCommand =
   /** ⌥X was released: stop listening and send what was said. */
   | { kind: 'voice-end' }
 
-export interface QuickSubmission {
-  text: string
-  as: 'ask' | 'note'
+/** What 設定 shows about the model Jezo's agent uses. */
+export interface ModelStatus {
+  use: 'local' | 'cloud'
+  /** The local server found, or null when neither LM Studio nor Ollama answered. */
+  local: { server: string; models: { id: string; loaded: boolean }[]; id: string } | null
+  cloud: {
+    providers: { id: string; name: string; hasKey: boolean }[]
+    provider: string
+    models: string[]
+    id: string | null
+  }
+}
+
+export interface ModelChoice {
+  use?: 'local' | 'cloud'
+  localId?: string
+  provider?: string
+  cloudId?: string
+}
+
+/** A skill as the 它用的方法 page shows it. `id` is its directory in the workspace. */
+export interface SkillInfo {
+  id: string
+  name: string
+  /** The title the user sees, from `metadata.title`, or its name. */
+  title: string
+  description: string
+  enabled: boolean
+  /** The body of SKILL.md. */
+  instructions: string
+  /** Its frontmatter doesn't parse. */
+  broken?: boolean
 }
 
 export interface JezoBridge {
   /** process.platform: "darwin", "win32", "linux", … */
   platform: string
+  /** The items in the workspace, and every change to them (docs/design/backend.md). */
+  workspace: {
+    list(): Promise<Item[]>
+    create(kind: string, data: Fields, body?: string): Promise<Item>
+    /** A field set to null is removed. */
+    update(id: string, fields: Fields, options?: { body?: string }): Promise<Item>
+    remove(id: string): Promise<void>
+    onChange(listener: (changes: ItemChanges) => void): () => void
+  }
+  /** Conversations with Jezo's agent. */
+  agent: {
+    list(): Promise<SessionView[]>
+    /** Sends the user's message, starting a conversation when `id` is null. Resolves to the conversation's id once it has one. */
+    send(id: string | null, text: string, trigger?: Trigger): Promise<string>
+    /** Starts a conversation Jezo asks for on the user's behalf, like sorting notes. */
+    start(trigger: Trigger): Promise<string>
+    abort(id: string): Promise<void>
+    /** Called with a conversation whenever it changes, while the agent writes too. */
+    onChange(listener: (view: SessionView) => void): () => void
+  }
+  /** The agent's methods, from the workspace. */
+  skills: {
+    list(): Promise<SkillInfo[]>
+    setEnabled(id: string, enabled: boolean): Promise<SkillInfo[]>
+  }
+  /** Which model the agent uses. Keys go to the OS keychain and never come back to the window. */
+  models: {
+    status(): Promise<ModelStatus>
+    choose(choice: ModelChoice): Promise<ModelStatus>
+    setKey(provider: string, key: string | null): Promise<ModelStatus>
+  }
+  /** What the agent changed, run by run, and taking it back. */
+  history: {
+    list(): Promise<HistoryEntry[]>
+    undo(id: string): Promise<UndoResult>
+    onChange(listener: () => void): () => void
+  }
   setTheme(source: ThemeSource): void
   /** Tells the ⌥X window which page the main window shows, so voice can bring it along as context. */
   setContext(pageTitle: string): void
@@ -25,14 +94,14 @@ export interface JezoBridge {
     /** Whether holding ⌥X to talk works on this machine. */
     canHold(): Promise<boolean>
     /**
-     * Sends text from the ⌥X window to the main window: `ask` continues the
-     * conversation there and brings the window forward; `note` files it in
-     * 隨手記 and leaves the user where they are.
+     * Continues a conversation from the ⌥X window in the main window, which
+     * opens it and comes forward. Notes don't come through here: the ⌥X
+     * window writes them to the workspace itself.
      */
-    submit(text: string, as?: QuickSubmission['as']): void
+    continue(session: string): void
     hide(): void
-    /** Called in the main window when the ⌥X window sends text. */
-    onSubmit(listener: (submission: QuickSubmission) => void): () => void
+    /** Called in the main window with the conversation to open. */
+    onContinue(listener: (session: string) => void): () => void
     /** Called in the ⌥X window. */
     onCommand(listener: (command: QuickCommand) => void): () => void
   }

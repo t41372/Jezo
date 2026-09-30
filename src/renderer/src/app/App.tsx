@@ -39,15 +39,12 @@ export function App() {
   )
 }
 
-/** Text from the ⌥X window: a question starts a new conversation here, a note goes into 隨手記. */
+/** A conversation from the ⌥X window continues here. */
 function useQuickWindow() {
   useEffect(
     () =>
-      window.jezo.quick.onSubmit(({ text, as }) => {
-        const { openSession, send, addNote } = useStore.getState()
-        if (as === 'note') return addNote(text, 'hotkey')
-        openSession(null)
-        send(text, 'hotkey')
+      window.jezo.quick.onContinue((session) => {
+        useStore.getState().openSession(session)
       }),
     [],
   )

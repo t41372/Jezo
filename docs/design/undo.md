@@ -40,7 +40,7 @@ Restoring to a point undoes everything after that point, including the user's ow
 
 ## Decision
 
-Follow Hermes' model, with storage outside the workspace:
+Follow Hermes' model, with storage outside the workspace. Built on 2026-09-29 (`src/main/agent/undo.ts`), at file level:
 
 1. **Record what the agent writes.** For every file Jezo's agent changes in a turn, store the file's content from before the change and the hash of what the agent wrote, in the app-data directory. Changes made through the shell are caught by comparing hashes of the workspace files before and after the turn.
 2. **Undo checks before it reverts.** A file is restored only if its current hash still matches what the agent wrote. If the user has changed it since, it's left alone, and the preview says so, for example: "3 changes undone, 1 kept because you edited it afterward".

@@ -4,3 +4,5 @@ dist/
 *.log
 .DS_Store
 native/hotkey/build/
+e2e/report/
+e2e/results/
