@@ -174,3 +174,43 @@ test('the agent remembers what the user says, replaces it when it changes, and a
   await expect(page.locator('main [data-selectable]').last()).not.toContainText('吉他')
   expect(jezo.errors).toEqual([])
 })
+
+test('the agent plans around the calendar, reading days it wasn’t shown', async ({ jezo }) => {
+  const { page, items } = jezo
+  // Next Wednesday, which the start of the run doesn't show, has volleyball 19:00–21:00.
+  const wednesday = (() => {
+    const d = new Date()
+    d.setDate(d.getDate() - ((d.getDay() + 6) % 7) + 9)
+    return d
+  })()
+  const date = `${wednesday.getFullYear()}-${String(wednesday.getMonth() + 1).padStart(2, '0')}-${String(wednesday.getDate()).padStart(2, '0')}`
+  const ics = [
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//e2e//EN', 'X-WR-CALNAME:Personal',
+    'BEGIN:VEVENT', 'UID:volleyball', 'SUMMARY:排球', `DTSTART:${date.replaceAll('-', '')}T190000`, `DTEND:${date.replaceAll('-', '')}T210000`, 'END:VEVENT',
+    'END:VCALENDAR',
+  ].join('\r\n')
+  const { createServer } = await import('node:http')
+  const server = createServer((_, res) => res.writeHead(200, { 'content-type': 'text/calendar' }).end(ics))
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const port = (server.address() as import('node:net').AddressInfo).port
+  try {
+    await page.evaluate((url) => window.jezo.calendar.subscribe(url), `http://127.0.0.1:${port}/personal.ics`)
+
+    const box = page.locator('main textarea').first()
+    await box.fill('下週三晚上幫我排 45 分鐘訂 12 月比賽的住宿，要避開我行事曆上的事。')
+    await box.press('Enter')
+    await settled(page)
+
+    const todo = items('todos').find((t) => String(t.data.title).includes('住宿'))!
+    const scheduled = String(todo.data.scheduled)
+    expect(scheduled.slice(0, 10)).toBe(date)
+    // 45 minutes that don't touch 19:00–21:00, in the evening.
+    const [h, m] = scheduled.slice(11).split(':').map(Number)
+    const start = h * 60 + m
+    expect(start >= 17 * 60).toBe(true)
+    expect(start + 45 <= 19 * 60 || start >= 21 * 60).toBe(true)
+  } finally {
+    server.close()
+  }
+  expect(jezo.errors).toEqual([])
+})

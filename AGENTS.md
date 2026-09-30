@@ -12,21 +12,23 @@ When nothing here settles a question, picture that person opening Jezo after two
 
 ## Principles
 
-1. **The directory is the truth.** The workspace directory is the single source of truth, and Jezo's agent works directly in it. Everything else, such as indexes and caches, either can be rebuilt from it or is safe to lose.
+1. **The user's data lives in one place they own.** Everything Jezo keeps about the user is in the workspace directory on their machine, where they can see it, back it up, take it elsewhere, and delete it. Anything outside it, such as indexes and caches, can be rebuilt from it or is safe to lose. Keys and passwords are the exception; they stay in the system keychain.
 
-2. **If the GUI can't show it, it doesn't exist.** Jezo is 100% GUI. Users are never forced to touch a file, a config, or a terminal; at most they copy and paste.
+2. **Jezo's agent works like a coding agent.** It reaches the user's data with files and tools it can find and run, so it can read the real records, check its work, and do things we didn't plan for. What we put into its context is a starting point, never its only way in.
 
-3. **Explicit over implicit.** Show all the information, but disclose it progressively: fold away excess detail so it's visible when needed and out of sight when not.
+3. **If the GUI can't show it, it doesn't exist.** Jezo is 100% GUI. Users are never forced to touch a file, a config, or a terminal; at most they copy and paste.
 
-4. **Easy beats powerful.** Software that looks too professional goes unused. The default setup should already be good, and users grow their Jezo into what they want over time.
+4. **Explicit over implicit.** Show all the information, but disclose it progressively: fold away excess detail so it's visible when needed and out of sight when not.
 
-5. **No methodology is hard-coded.** Theories about how to manage a life get overturned, and none fits everyone. Every methodology is a skill or prompt that can be installed, turned off, or edited, including by Jezo's agent. Only what can't be unbundled, such as the core UI and the todo data structure, is designed from current evidence.
+5. **Easy beats powerful.** Software that looks too professional goes unused. The default setup should already be good, and users grow their Jezo into what they want over time.
 
-6. **Everything is a plugin, built-ins included.** Every page is made of plugins, and the built-in pages are made the same way as the dashboards users build, so extending Jezo is never second-class.
+6. **No methodology is hard-coded.** Theories about how to manage a life get overturned, and none fits everyone. Every methodology is a skill or prompt that can be installed, turned off, or edited, including by Jezo's agent. Only what can't be unbundled, such as the core UI and the todo data structure, is designed from current evidence.
 
-7. **Catch mistakes, don't cap capability.** Weak models make mistakes, and Jezo should account for that. Catch their mistakes with checks, the way a linter does, so the user isn't the one who finds out something broke. Never do it by limiting what strong models can do. Local models are already strong and are getting stronger fast.
+7. **Everything is a plugin, built-ins included.** Every page is made of plugins, and the built-in pages are made the same way as the dashboards users build, so extending Jezo is never second-class.
 
-8. **Written for the people who maintain it.** Our code is read and maintained by people for years. Keep the architecture elegant, the code clean, and the whole system easy to maintain. Text, whether in docs, comments, or the UI, says things plainly, the way a person would. No AI slop.
+8. **Catch mistakes, don't cap capability.** Weak models make mistakes, and Jezo should account for that. Catch their mistakes with checks, the way a linter does, so the user isn't the one who finds out something broke. Never do it by limiting what strong models can do. Local models are already strong and are getting stronger fast.
+
+9. **Written for the people who maintain it.** Our code is read and maintained by people for years. Keep the architecture elegant, the code clean, and the whole system easy to maintain. Text, whether in docs, comments, or the UI, says things plainly, the way a person would. No AI slop.
 
 ## Trust model
 

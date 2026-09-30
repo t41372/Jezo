@@ -1,4 +1,4 @@
-// Every page is made of plugins, built-in pages included (AGENTS.md, principle 6).
+// Every page is made of plugins, built-in pages included (AGENTS.md, principle 7).
 // Built-in plugins register here exactly the way a user's plugin will.
 //
 // The contract is provisional: it's the minimum the current pages need, and it

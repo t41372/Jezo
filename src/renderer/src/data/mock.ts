@@ -5,7 +5,6 @@
 // to them), so it isn't translated. Labels the app derives from it are.
 
 import type {
-  CalendarEvent,
   Energy,
   Connection,
   Experiment,
@@ -88,28 +87,6 @@ export const suggestedSlots: Record<string, { date: string; start: number; why: 
   't-u4': { date: day(5), start: at(15), why: '週六下午沒排東西，這件需要一整段時間。' },
 }
 
-const weeklyEvents: (Omit<CalendarEvent, 'id' | 'date'> & { weekday: number })[] = [
-  ...[0, 1, 2, 3, 4].map((weekday) => ({ weekday, title: '站會', start: at(11, 30), hours: 0.25, source: 'Google Calendar' })),
-  { weekday: 1, title: 'Design review', start: at(14), hours: 1, source: 'Google Calendar' },
-  { weekday: 1, title: 'Weekly sync', start: at(15, 30), hours: 0.5, source: 'Google Calendar' },
-  { weekday: 3, title: '排球', start: at(19), hours: 1.5, source: 'Google Calendar' },
-  { weekday: 6, title: '家庭聚餐', start: at(18), hours: 2, source: 'Google Calendar' },
-]
-
-const oneOffEvents: CalendarEvent[] = [
-  { id: 'e-dentist', title: '牙醫', date: day(0), start: at(19), hours: 1, source: 'Google Calendar' },
-  { id: 'e-lunch', title: '午餐 · Ken', date: day(2), start: at(12), hours: 1, source: 'Google Calendar' },
-  { id: 'e-visit', title: 'Ken 來台北', date: day(3), start: 0, hours: 48, allDay: true, source: 'Google Calendar' },
-]
-
-/** Calendar events from last week through two weeks ahead. */
-export const events: CalendarEvent[] = [
-  ...[-7, 0, 7, 14].flatMap((weekOffset) =>
-    weeklyEvents.map(({ weekday, ...e }, i) => ({ ...e, id: `e-${weekOffset}-${i}`, date: day(weekOffset + weekday) })),
-  ),
-  ...oneOffEvents,
-]
-
 /** Things jotted down in 隨手記, one of each kind the agent sorts into. */
 export const notes: Note[] = [
   { id: 'n-1', text: '記得回房東訊息，問冷氣什麼時候修', date: day(0), time: at(22, 14), source: 'hotkey', state: 'new' },
@@ -135,11 +112,8 @@ export const experiments: Experiment[] = [
 ]
 
 export const connections: Connection[] = [
-  { id: 'c1', name: 'Google Calendar', connected: true, detail: '可讀可寫 · 2 分鐘前同步' },
   { id: 'c2', name: 'Strava', connected: true, detail: '跑步紀錄會自動算成「做了」' },
   { id: 'c3', name: 'Anki', connected: true, detail: '背卡紀錄會自動算成「做了」' },
-  { id: 'c4', name: 'Apple 行事曆', connected: false, access: { reads: '行事曆上的事件：標題、時間、地點', writes: '你確認過的待辦時段，放在獨立的「Jezo」行事曆' } },
-  { id: 'c5', name: 'Outlook', connected: false, access: { reads: '行事曆上的事件：標題、時間、地點', writes: '你確認過的待辦時段，放在獨立的「Jezo」行事曆' } },
   { id: 'c6', name: 'Gmail', connected: false, detail: '讓它知道哪些信卡住了', access: { reads: '信件的標題、寄件人和日期，用來找出你還沒回的信。不讀內文。' } },
 ]
 

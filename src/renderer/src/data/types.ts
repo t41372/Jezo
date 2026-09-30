@@ -138,7 +138,7 @@ export interface SortItem {
 /** How much of the calendar shows at once. */
 export type CalendarViewName = 'day' | 'week' | 'month'
 
-/** An event from a connected calendar. Read-only in Jezo. */
+/** An event from one of the user's calendars, laid out for the grid. Read-only in Jezo. */
 export interface CalendarEvent {
   id: string
   title: string
@@ -147,7 +147,13 @@ export interface CalendarEvent {
   hours: number
   /** An all-day event starts at 0 and lasts whole days, so its hours are 24 per day. */
   allDay?: boolean
+  /** The calendar's name, like 工作 or a subscription's name. */
   source: string
+  color?: string
+  location?: string
+  /** The event's description. Outside content: whoever made the event wrote it. */
+  notes?: string
+  url?: string
 }
 
 /**

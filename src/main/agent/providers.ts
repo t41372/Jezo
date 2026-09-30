@@ -10,10 +10,10 @@ import { join } from 'node:path'
 import type { Api, Model } from '@earendil-works/pi-ai'
 import { getSupportedThinkingLevels, InMemoryCredentialStore } from '@earendil-works/pi-ai'
 import { ModelRuntime } from '@earendil-works/pi-coding-agent'
-import { app, safeStorage } from 'electron'
+import { app } from 'electron'
 import type { CustomProviderInput, ModelChoices, ModelRef, PiImport, ProviderDetail, ProviderModel, ProviderSummary } from '../../shared/bridge'
 import { getConfig, setConfig } from '../config'
-import { writeAtomic } from '../workspace/files'
+import { getSecret, secretNames, storeSecret } from '../secrets'
 
 /** Servers that run models on this machine, found without setup. */
 const LOCAL = [
@@ -37,30 +37,6 @@ const KEY_URLS: Record<string, string> = {
   mistral: 'https://console.mistral.ai/api-keys',
   xai: 'https://console.x.ai',
   groq: 'https://console.groq.com/keys',
-}
-
-// ─── Keys ───
-
-const keysFile = () => join(app.getPath('userData'), 'keys.json')
-
-function readKeys(): Record<string, string> {
-  try {
-    return JSON.parse(readFileSync(keysFile(), 'utf8'))
-  } catch {
-    return {}
-  }
-}
-
-function getKey(provider: string) {
-  const stored = readKeys()[provider]
-  return stored ? safeStorage.decryptString(Buffer.from(stored, 'base64')) : undefined
-}
-
-async function storeKey(provider: string, key: string | null) {
-  const keys = readKeys()
-  if (key) keys[provider] = safeStorage.encryptString(key).toString('base64')
-  else delete keys[provider]
-  await writeAtomic(keysFile(), JSON.stringify(keys))
 }
 
 // ─── Servers that speak the OpenAI API ───
@@ -114,8 +90,8 @@ export class Providers {
 
   async open() {
     this.runtime = await ModelRuntime.create({ credentials: new InMemoryCredentialStore(), modelsPath: null })
-    for (const [provider] of Object.entries(readKeys())) {
-      const key = getKey(provider)
+    for (const provider of secretNames()) {
+      const key = getSecret(provider)
       if (key && this.runtime.getProvider(provider)) await this.runtime.setRuntimeApiKey(provider, key)
     }
     await this.refreshServers()
@@ -153,14 +129,14 @@ export class Providers {
       this.servedProviders()
         .filter((p) => !only || p.id === only)
         .map(async (p) => {
-          const models = await serverModels(p.baseUrl, getKey(p.id))
+          const models = await serverModels(p.baseUrl, getSecret(p.id))
           this.servers.set(p.id, models)
           if (!models?.length) return this.runtime.getProvider(p.id) && this.runtime.unregisterProvider(p.id)
           this.runtime.registerProvider(p.id, {
             name: p.name,
             baseUrl: p.baseUrl,
             api: 'openai-completions',
-            apiKey: getKey(p.id) ?? 'none',
+            apiKey: getSecret(p.id) ?? 'none',
             models: models.map((m) => ({
               id: m.id,
               name: m.id,
@@ -185,7 +161,7 @@ export class Providers {
     }
     const provider = this.runtime.getProvider(id)
     if (!provider || NEEDS_MORE.has(id) || !provider.auth.apiKey) return null
-    const key = getKey(id)
+    const key = getSecret(id)
     return {
       id,
       name: provider.name,
@@ -241,7 +217,7 @@ export class Providers {
   }
 
   async setKey(id: string, key: string | null) {
-    await storeKey(id, key)
+    await storeSecret(id, key)
     this.checks.delete(id)
     if (this.servedProviders().some((p) => p.id === id)) await this.refreshServers(id)
     else if (key) await this.runtime.setRuntimeApiKey(id, key)
@@ -303,7 +279,7 @@ export class Providers {
     let id = `custom-${slug(input.name)}`
     for (let n = 2; models.custom.some((p) => p.id === id) || this.runtime.getProvider(id); n++) id = `custom-${slug(input.name)}-${n}`
     await setConfig({ models: { ...models, custom: [...models.custom, { id, name: input.name.trim(), baseUrl: input.baseUrl.trim() }] } })
-    if (input.key) await storeKey(id, input.key)
+    if (input.key) await storeSecret(id, input.key)
     await this.refreshServers(id)
     return this.detail(id)
   }
@@ -313,7 +289,7 @@ export class Providers {
     if (!models.custom.some((p) => p.id === id)) throw new Error('Only providers you added can be removed.')
     const { [id]: _, ...providers } = models.providers
     await setConfig({ models: { ...models, custom: models.custom.filter((p) => p.id !== id), providers } })
-    await storeKey(id, null)
+    await storeSecret(id, null)
     this.servers.delete(id)
     if (this.runtime.getProvider(id)) this.runtime.unregisterProvider(id)
     this.changed()

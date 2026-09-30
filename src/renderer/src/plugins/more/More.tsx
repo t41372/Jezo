@@ -47,13 +47,13 @@ function Index() {
           <button
             key={id}
             onClick={() => s.navigate('more', id)}
-            className="flex items-center gap-3 px-4.5 py-3.5 text-left transition-colors duration-150 hover:bg-muted active:bg-foreground/8"
+            className="flex items-center gap-3 px-4 py-3.5 text-left outline-none transition-colors duration-150 hover:bg-muted active:bg-foreground/8 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
           >
             <div className="flex-1">
               <div className="text-[15px] font-medium">{t(`sections.${id}.title`)}</div>
               <div className="mt-0.5 text-[12.5px] text-muted-foreground">{t(`sections.${id}.description`)}</div>
             </div>
-            <span className="text-[12.5px] text-muted-foreground">{counts[id]}</span>
+            <span className="text-[12.5px] text-muted-foreground tabular-nums">{counts[id]}</span>
             <ChevronRight className="size-4 text-muted-foreground" />
           </button>
         ))}

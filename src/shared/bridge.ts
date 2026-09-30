@@ -1,5 +1,6 @@
 // What the preload script exposes to the renderer as `window.jezo`.
 
+import type { CalendarEvent, CalendarSource, CalendarStatus } from './calendar'
 import type { HistoryEntry, SessionView, Trigger, UndoResult } from './session'
 import type { Fields, Item, ItemChanges } from './workspace'
 
@@ -151,6 +152,24 @@ export interface JezoBridge {
     /** The audio is over; resolves to everything that was said. */
     end(): Promise<string>
     onText(listener: (text: string) => void): () => void
+  }
+  /** The user's calendars: the Mac's own and ICS subscriptions (docs/design/calendar.md). Events are read-only. */
+  calendar: {
+    status(): Promise<CalendarStatus>
+    /** Events between two local dates, `to` exclusive, from every calendar that isn't hidden. */
+    events(from: string, to: string): Promise<CalendarEvent[]>
+    /** Adds a subscription. Rejects with the reason when the address doesn't give a calendar. */
+    subscribe(url: string, name?: string): Promise<CalendarSource>
+    unsubscribe(id: string): Promise<void>
+    refresh(id?: string): Promise<void>
+    /** Turns on the Mac's calendars, asking macOS for access the first time. */
+    connectMac(): Promise<'full' | 'notDetermined' | 'denied' | 'restricted' | 'writeOnly' | 'unavailable'>
+    disconnectMac(): Promise<void>
+    /** Opens macOS's privacy settings for calendars, where access denied earlier is turned back on. */
+    openMacSettings(): Promise<void>
+    setHidden(calendar: string, hidden: boolean): Promise<void>
+    /** Called when anything changes: a calendar synced, one was added, an event moved on the Mac. */
+    onChange(listener: () => void): () => void
   }
   /** When Jezo starts the day's sessions on its own, as "08:00"; null is off. */
   schedule: {

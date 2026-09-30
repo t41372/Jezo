@@ -96,7 +96,7 @@
     "kept_other": "撤銷了。有 {{count}} 個檔案你後來改過，那些沒動。"
   },
   "connections": {
-    "intro": "連上之後，行事曆上的事會出現在「行事曆」頁；運動、背卡的紀錄會自動算成「做了」。",
+    "intro": "連上之後，行事曆上的事會出現在「行事曆」頁，agent 排事情時也看得到；運動、背卡的紀錄會自動算成「做了」。",
     "connected": "已連接",
     "notConnected": "還沒連接",
     "connect": "連接",
@@ -108,6 +108,33 @@
     "local": "讀到的內容只存在這台電腦的工作區，Jezo 不會傳到別的地方。",
     "browser": "接下來會打開瀏覽器讓你登入。",
     "cancel": "先不要",
-    "justNow": "剛剛連上"
+    "justNow": "剛剛連上",
+    "others": "其他"
+  },
+  "calendars": {
+    "title": "行事曆",
+    "mac": "這台 Mac 的行事曆",
+    "macDetail": "iCloud、Google、Exchange⋯⋯加在這台 Mac 上的帳號都會一起出現。",
+    "macDenied": "macOS 沒讓 Jezo 讀行事曆。到「系統設定 → 隱私權與安全性 → 行事曆」打開 Jezo。",
+    "openSettings": "打開系統設定",
+    "disconnect": "不用了",
+    "synced": "{{ago}}同步",
+    "syncing": "同步中⋯",
+    "failed": "讀不到，先顯示上次的：{{error}}",
+    "retry": "再試一次",
+    "remove": "移除",
+    "show": "顯示「{{name}}」",
+    "subscribe": "訂閱行事曆",
+    "subscribeHint": "貼上行事曆的網址，Jezo 會定時去讀。",
+    "url": "網址",
+    "name": "名稱",
+    "namePlaceholder": "不填就用行事曆自己的名字",
+    "google": "Google 行事曆的網址在：設定 → 點你的行事曆 → 整合日曆 →「iCal 格式的私人網址」。這個網址等於密碼，Jezo 會把它存在鑰匙圈裡。",
+    "subscribeFailed": "這個網址讀不到行事曆：{{error}}",
+    "checking": "讀取中⋯",
+    "add": "訂閱",
+    "none": "還沒有行事曆。",
+    "readOnly": "Jezo 只會讀，不會改你的行事曆。",
+    "macLive": "跟這台 Mac 即時同步"
   }
 }

@@ -9,6 +9,7 @@ import { enUS, zhTW } from 'date-fns/locale'
 import { Check, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import type { CalendarSource } from '../../../../shared/calendar'
 import { dropAtPoint, useDropTarget } from '@/app/Dnd'
 import {
   EventCalendar,
@@ -30,7 +31,7 @@ import { Input } from '@/components/ui/input'
 import { goalById, useStore } from '@/data/store'
 import type { CalendarEvent, CalendarViewName, Goal, ISODate, Todo } from '@/data/types'
 import { goalColor } from '@/lib/goal-color'
-import { addDays, atTime, clock, dayLabel, hoursOf, longDate, monthDay, mondayOf, parseDate, toISODate } from '@/lib/time'
+import { addDays, ago, atTime, clock, dayLabel, hoursOf, longDate, monthDay, mondayOf, parseDate, toISODate } from '@/lib/time'
 
 /** What each block on the grid stands for. */
 type Block = { kind: 'event' } | { kind: 'todo'; todo: Todo }
@@ -245,6 +246,30 @@ function DayHeader({ day, month, isToday }: { day: Date; month: boolean; isToday
   )
 }
 
+/**
+ * One line on where the events come from: the calendars that work and when
+ * they last synced, or which one can't be read. Null when none are connected.
+ */
+function useSyncLine() {
+  const { t, i18n } = useTranslation('calendar')
+  const status = useStore((s) => s.calendarStatus)
+  // Say "2 minutes ago" again as time passes.
+  useStore((s) => s.now)
+  const sources = status?.sources.filter((s) => s.state !== 'off' && s.state !== 'needs-access') ?? []
+  if (!sources.length) return null
+  const broken = sources.filter((s) => s.state === 'error' || s.state === 'denied')
+  if (broken.length) return { ok: false, text: t('syncFailed', { source: broken.map(nameOf).join('、') }) }
+  // The Mac's calendars are always current; only subscriptions have a time they were last read.
+  const latest = sources.filter((s) => s.kind !== 'mac').map((s) => s.syncedAt ?? '').sort().at(-1)
+  const names = sources.map(nameOf)
+  const source = names.length > 2 ? t('sourcesMore', { first: names[0], count: names.length - 1 }) : names.join('、')
+  return { ok: true, text: latest ? t('synced', { source, ago: ago(latest, i18n.language) }) : source }
+
+  function nameOf(s: CalendarSource) {
+    return s.kind === 'mac' ? t('mac') : s.name
+  }
+}
+
 /** The title, arrows, today, the day/week/month switch, and where the events come from. */
 function Header() {
   const { t, i18n } = useTranslation('calendar')
@@ -268,8 +293,7 @@ function Header() {
             ? t('week.later', { count: weeksAway })
             : t('week.earlier', { count: -weeksAway })
   const { title, range } = headerTitle(view, date, today, weekTitle, i18n.language)
-  // Mock: the connector will report when it last synced.
-  const syncedAgo = new Intl.RelativeTimeFormat(i18n.language, { numeric: 'auto' }).format(-2, 'minute')
+  const sync = useSyncLine()
   const weekHasTodos = todos.some((x) => x.slot && x.slot.date >= monday && x.slot.date <= addDays(monday, 6))
 
   const needsPlan = view === 'week' && weeksAway !== 0 && !weekHasTodos
@@ -279,12 +303,14 @@ function Header() {
       {/* The month view has no range line; the space stays so the title doesn't move between views. */}
       <div className="truncate text-[13px] text-muted-foreground">{range || '\u00a0'}</div>
       <div className="flex items-center justify-end gap-3 text-xs whitespace-nowrap text-muted-foreground">
-        <span className="flex items-center gap-1.5">
-          <span className="size-1.5 rounded-full bg-ok" />
-          {t('synced', { source: 'Google Calendar', ago: syncedAgo })}
-        </span>
+        {sync && (
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className={cn('size-1.5 shrink-0 rounded-full', sync.ok ? 'bg-ok' : 'bg-destructive')} />
+            <span className="truncate">{sync.text}</span>
+          </span>
+        )}
         <button onClick={() => navigate('more', 'connections')} className="transition-colors duration-150 hover:text-foreground">
-          {t('subscribe')}
+          {sync ? t('manage') : t('connect')}
         </button>
       </div>
 

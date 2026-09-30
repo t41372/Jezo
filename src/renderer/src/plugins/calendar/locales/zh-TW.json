@@ -36,7 +36,6 @@
     "month": "月"
   },
   "synced": "{{source}} · {{ago}}同步",
-  "subscribe": "＋ 訂閱行事曆",
   "noTodos": "還沒排待辦",
   "askToPlan": "請 agent 幫我排",
   "planNextWeek": "幫我安排下週",
@@ -49,5 +48,10 @@
     "continues": "跨日",
     "events_other": "{{count}} 件事",
     "newTodo": "要做什麼？Enter 加上"
-  }
+  },
+  "syncFailed": "{{source}} 讀不到",
+  "sourcesMore": "{{first}} 和另外 {{count}} 個",
+  "mac": "Mac 行事曆",
+  "manage": "管理行事曆",
+  "connect": "＋ 連接行事曆"
 }

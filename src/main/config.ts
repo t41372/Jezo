@@ -1,6 +1,6 @@
 // Settings that belong to this machine rather than to the workspace: where the
-// workspace is, and the model providers. Kept as JSON in the app's data
-// directory; keys are elsewhere, encrypted (agent/providers.ts).
+// workspace is, the model providers, and the Mac's own calendars. Kept as JSON
+// in the app's data directory; keys are elsewhere, encrypted (secrets.ts).
 
 import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -22,11 +22,18 @@ export interface Config {
     /** OpenAI-compatible servers the user added. */
     custom: { id: string; name: string; baseUrl: string }[]
   }
+  /** The Mac's own calendars belong to this machine, so whether they show is set here, not in the workspace. */
+  calendar: {
+    mac: boolean
+    /** Calendars on the Mac the user hid. */
+    hidden: string[]
+  }
 }
 
 const defaults = (): Config => ({
   workspace: join(homedir(), 'Jezo'),
   models: { main: null, background: null, thinking: 'medium', providers: {}, custom: [] },
+  calendar: { mac: false, hidden: [] },
 })
 
 const file = () => join(app.getPath('userData'), 'config.json')
@@ -43,7 +50,7 @@ export function getConfig(): Config {
   }
   const base = defaults()
   const { model: _older, ...rest } = stored as Partial<Config> & { model?: unknown }
-  config = { ...base, ...rest, models: { ...base.models, ...rest.models } }
+  config = { ...base, ...rest, models: { ...base.models, ...rest.models }, calendar: { ...base.calendar, ...rest.calendar } }
   // Tests and development point at a workspace of their own.
   if (process.env.JEZO_WORKSPACE) config.workspace = process.env.JEZO_WORKSPACE
   return config

@@ -11,7 +11,8 @@
     "src/main/**/*.test.ts",
     "e2e/**/*.ts",
     "playwright.config.ts",
-    "packages/*/src/**/*.test.ts"
+    "packages/*/src/**/*.test.ts",
+    "src/preload/index.d.ts"
   ],
   "exclude": []
 }

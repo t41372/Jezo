@@ -23,7 +23,7 @@ It's a first-party plugin, built the way a user's plugin would be: its own direc
 - **Kept notes stay under 已整理** with the rest, and are never sorted again.
 - **The page shows the newest proposal** until every note in it is decided, and after that until the user puts it away, so a decision can still be taken back. The same card is in the conversation.
 - **⌥↵ in the ⌥X window files the text in 隨手記** instead of asking the agent, and doesn't bring the main window forward. ↵ still asks. The ⌥X window writes the note itself, so it's filed even when the main window is closed. It says 「記到隨手記了」 for a moment and closes, with no animation.
-- **How to sort is a skill,** 整理隨手記, on by default and editable like the others (AGENTS.md, principle 5). It sets the categories, the wording, and when to ask.
+- **How to sort is a skill,** 整理隨手記, on by default and editable like the others (AGENTS.md, principle 6). It sets the categories, the wording, and when to ask.
 
 ## On disk
 

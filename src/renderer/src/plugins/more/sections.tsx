@@ -12,6 +12,7 @@ import type { Connection, Experiment, Memory } from '@/data/types'
 import { dayLabel, dayTime } from '@/lib/time'
 import { offerUndo } from '@/lib/undo'
 import { ListCard, Row } from '@/components/ListCard'
+import { CalendarConnections } from './CalendarConnections'
 import { SectionHeader } from './parts'
 
 export function Memories() {
@@ -102,7 +103,7 @@ export function SkillView({ id }: { id: string }) {
       </button>
       <div className="flex items-start gap-3">
         <div className="flex-1">
-          <h1 className="text-[26px] font-semibold">{skill.title}</h1>
+          <h1 className="text-[26px] font-semibold tracking-tight">{skill.title}</h1>
           <p className="mt-1 text-sm text-muted-foreground">{skill.description}</p>
         </div>
         <Switch checked={skill.enabled} onCheckedChange={() => toggleSkill(skill.id)} aria-label={skill.title} className="mt-2.5" />
@@ -175,7 +176,7 @@ function FinishedExperiment({ experiment: x }: { experiment: Experiment }) {
       </div>
       <div className="grid grid-cols-2 gap-3">
         {x.arms?.map((arm) => (
-          <div key={arm.label} className={cn('rounded-[10px] px-3.5 py-3', arm.highlight ? 'bg-[oklch(0.68_0.16_255/0.14)]' : 'bg-muted')}>
+          <div key={arm.label} className={cn('rounded-lg px-3.5 py-3', arm.highlight ? 'bg-brand/14' : 'bg-muted')}>
             <div className="text-xs text-muted-foreground">{arm.label}</div>
             <div className="mt-0.5 text-[26px] font-medium tabular-nums">{arm.value}</div>
             <div className="text-xs text-muted-foreground">{arm.metric}</div>
@@ -302,6 +303,8 @@ export function Connections() {
   return (
     <>
       <SectionHeader title={t('sections.connections.title')}>{t('connections.intro')}</SectionHeader>
+      <CalendarConnections />
+      <h2 className="px-1 text-sm font-medium">{t('connections.others')}</h2>
       <ListCard>
         {connections.map((c) => (
           <div key={c.id} className="flex items-center gap-3 px-4 py-3.5">

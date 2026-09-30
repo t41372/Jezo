@@ -16,6 +16,8 @@ import {
 } from '@earendil-works/pi-coding-agent'
 import type { ThinkingLevel } from '@earendil-works/pi-agent-core'
 import type { SessionMessage, SessionView, Step, Trigger } from '../../shared/session'
+import { calendarExtension } from '../calendar/agent'
+import type { Calendars } from '../calendar/calendars'
 import { skillRoots } from '../workspace/skills'
 import type { Workspace } from '../workspace/workspace'
 import { type Memory, memoryExtension } from '../../../packages/pi-memory/src/index.ts'
@@ -61,6 +63,7 @@ export class AgentHost {
     private undo: UndoLog,
     private providers: Providers,
     private memory: Memory,
+    private calendars: Calendars,
   ) {}
 
   private get dir() {
@@ -249,6 +252,7 @@ export class AgentHost {
       extensionFactories: [
         { name: 'jezo-checks', factory: (pi) => this.checks(pi, c) },
         { name: 'jezo-memory', factory: memoryExtension(this.memory) },
+        { name: 'jezo-calendar', factory: calendarExtension(this.calendars) },
       ],
     })
     await loader.reload()
@@ -261,7 +265,12 @@ export class AgentHost {
       model,
       thinkingLevel: this.providers.thinking(model) as ThinkingLevel,
       tools: TOOL_NAMES,
-      customTools: createTools(this.workspace, () => c.context, (path) => this.blocked(path)),
+      customTools: createTools(
+        this.workspace,
+        () => c.context,
+        (path) => this.blocked(path),
+        async (scheduled, minutes) => (await this.calendars.overlapping(scheduled, minutes)).map((e) => `"${e.title}" ${e.start.slice(11)}–${e.end.slice(11)}`),
+      ),
       sessionManager: c.manager,
     })
     await session.bindExtensions({ mode: 'json', onError: (e) => console.error('pi extension error', e) })

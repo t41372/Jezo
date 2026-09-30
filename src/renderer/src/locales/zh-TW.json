@@ -16,6 +16,10 @@
     "tomorrow": "明天",
     "dayTime": "{{day}} {{time}}"
   },
+  "timeField": {
+    "hours": "小時",
+    "minutes": "分鐘"
+  },
   "trigger": {
     "morning": {
       "title": "早上排程",
@@ -79,7 +83,8 @@
     "readOnly": "來自 {{source}}，時間要在那邊改。",
     "whatNext": "結束之後想接著做點什麼？",
     "whatNextPrefill": "開完「{{title}}」之後，我想",
-    "allDay": "{{days}} · 全天"
+    "allDay": "{{days}} · 全天",
+    "notes": "說明"
   },
   "plan": {
     "pending_other": "{{count}} 件 · 草稿，你說好才算",

@@ -78,3 +78,13 @@ export function mondayOf(date: ISODate): ISODate {
   const d = parseDate(date)
   return addDays(date, -((d.getDay() + 6) % 7))
 }
+
+/** How long ago an ISO instant was, in words: "2 minutes ago", "剛剛". */
+export function ago(instant: string, language: string, now = Date.now()) {
+  const seconds = (Date.parse(instant) - now) / 1000
+  const format = new Intl.RelativeTimeFormat(language, { numeric: 'auto' })
+  if (seconds > -60) return format.format(0, 'second')
+  if (seconds > -3600) return format.format(Math.round(seconds / 60), 'minute')
+  if (seconds > -86_400) return format.format(Math.round(seconds / 3600), 'hour')
+  return format.format(Math.round(seconds / 86_400), 'day')
+}

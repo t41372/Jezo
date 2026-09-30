@@ -64,8 +64,14 @@ export function digest(items: Item[], now = new Date()) {
   }
   const problems = items.filter((i) => i.problems?.length)
 
+  // Working out "next Wednesday" is where models most often slip, so the dates are spelled out.
+  const days = Array.from({ length: 14 }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i + 1)
+    return `${i === 0 ? 'tomorrow ' : ''}${d.toLocaleDateString('en-US', { weekday: 'short' })} ${localDate(d)}`
+  })
   return [
     `Now: ${weekday} ${today} ${pad(now.getHours())}:${pad(now.getMinutes())} (local time).`,
+    `The days after today: ${days.join(', ')}.`,
     '',
     todayTodos.length ? `Today's todos:\n${todayTodos.map(line).join('\n')}` : 'Nothing is scheduled today.',
     '',

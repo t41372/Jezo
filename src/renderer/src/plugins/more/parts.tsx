@@ -10,7 +10,7 @@ export function SectionHeader({ title, children }: { title: string; children?: R
         {t('back')}
       </button>
       <div>
-        <h1 className="text-[26px] font-semibold">{title}</h1>
+        <h1 className="text-[26px] font-semibold tracking-tight">{title}</h1>
         {children && <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{children}</p>}
       </div>
     </>

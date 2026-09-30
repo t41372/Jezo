@@ -134,8 +134,8 @@ function GoalView({ goal }: { goal: Goal }) {
         {t('back')}
       </button>
       <div>
-        <h1 className="flex items-center gap-2.5 text-[28px] font-semibold">
-          <span className="size-3 rounded-[4px] bg-goal" />
+        <h1 className="flex items-center gap-2.5 text-[26px] font-semibold tracking-tight">
+          <span className="size-3 shrink-0 rounded-[4px] bg-goal" />
           {goal.name}
         </h1>
         {dueLabel && <p className="mt-0.5 text-sm text-muted-foreground">{dueLabel}</p>}

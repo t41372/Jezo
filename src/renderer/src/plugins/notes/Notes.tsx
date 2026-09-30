@@ -116,7 +116,7 @@ function Composer() {
     setText('')
   }
   return (
-    <div className="rounded-2xl border border-card-border bg-card px-4 pt-3 pb-2 shadow-[0_1px_2px_rgb(10_14_40/0.04)] transition-shadow duration-150 focus-within:ring-3 focus-within:ring-ring/25">
+    <div className="rounded-2xl border border-card-border bg-card px-4 pt-3 pb-2 shadow-[0_1px_2px_var(--card-border)] focus-within:ring-3 focus-within:ring-ring/25">
       <textarea
         value={text}
         rows={1}

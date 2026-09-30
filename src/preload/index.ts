@@ -36,6 +36,18 @@ const bridge: JezoBridge = {
     end: () => ipcRenderer.invoke('speech:end'),
     onText: (listener) => listen<string>('speech:text', listener),
   },
+  calendar: {
+    status: () => ipcRenderer.invoke('calendar:status'),
+    events: (from, to) => ipcRenderer.invoke('calendar:events', from, to),
+    subscribe: (url, name) => ipcRenderer.invoke('calendar:subscribe', url, name),
+    unsubscribe: (id) => ipcRenderer.invoke('calendar:unsubscribe', id),
+    refresh: (id) => ipcRenderer.invoke('calendar:refresh', id),
+    connectMac: () => ipcRenderer.invoke('calendar:connect-mac'),
+    disconnectMac: () => ipcRenderer.invoke('calendar:disconnect-mac'),
+    openMacSettings: () => ipcRenderer.invoke('calendar:open-mac-settings'),
+    setHidden: (id, hidden) => ipcRenderer.invoke('calendar:set-hidden', id, hidden),
+    onChange: (listener) => listen<void>('calendar:changed', () => listener()),
+  },
   schedule: {
     get: () => ipcRenderer.invoke('schedule:get'),
     set: (change) => ipcRenderer.invoke('schedule:set', change),

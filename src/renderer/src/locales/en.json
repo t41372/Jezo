@@ -17,6 +17,10 @@
     "tomorrow": "Tomorrow",
     "dayTime": "{{day}} {{time}}"
   },
+  "timeField": {
+    "hours": "Hours",
+    "minutes": "Minutes"
+  },
   "trigger": {
     "morning": {
       "title": "Morning plan",
@@ -80,7 +84,8 @@
     "readOnly": "From {{source}}. Change the time there.",
     "whatNext": "Want to do something right after?",
     "whatNextPrefill": "After “{{title}}”, I want to ",
-    "allDay": "{{days}} · all day"
+    "allDay": "{{days}} · all day",
+    "notes": "Description"
   },
   "plan": {
     "pending_one": "{{count}} item · draft until you say OK",

@@ -116,6 +116,33 @@
     "local": "What it reads stays in the workspace on this computer. Jezo doesn't send it anywhere else.",
     "browser": "Your browser opens next so you can sign in.",
     "cancel": "Not now",
-    "justNow": "Just connected"
+    "justNow": "Just connected",
+    "others": "Other"
+  },
+  "calendars": {
+    "title": "Calendars",
+    "mac": "This Mac's calendars",
+    "macDetail": "Every account added to this Mac shows up: iCloud, Google, Exchange…",
+    "macDenied": "macOS hasn't let Jezo read your calendars. Turn Jezo on in System Settings → Privacy & Security → Calendars.",
+    "openSettings": "Open System Settings",
+    "disconnect": "Turn off",
+    "synced": "synced {{ago}}",
+    "syncing": "Syncing…",
+    "failed": "Can't read it, showing the last copy: {{error}}",
+    "retry": "Try again",
+    "remove": "Remove",
+    "show": "Show “{{name}}”",
+    "subscribe": "Subscribe to a calendar",
+    "subscribeHint": "Paste the calendar's address, and Jezo will read it every so often.",
+    "url": "Address",
+    "name": "Name",
+    "namePlaceholder": "Leave empty to use the calendar's own name",
+    "google": "For Google Calendar, it's in Settings → your calendar → Integrate calendar → “Secret address in iCal format”. That address works like a password, so Jezo keeps it in the keychain.",
+    "subscribeFailed": "No calendar at this address: {{error}}",
+    "checking": "Reading…",
+    "add": "Subscribe",
+    "none": "No calendars yet.",
+    "readOnly": "Jezo only reads your calendars; it never changes them.",
+    "macLive": "Always up to date with this Mac"
   }
 }

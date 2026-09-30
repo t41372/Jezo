@@ -3,7 +3,7 @@ import { cn } from 'cn'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 
 /**
- * Detail folded away until asked for (AGENTS.md, principle 3): a quiet trigger
+ * Detail folded away until asked for (AGENTS.md, principle 4): a quiet trigger
  * with a chevron, and content that opens below it.
  */
 export function Disclosure({

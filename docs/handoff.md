@@ -1,4 +1,4 @@
-# Handoff: where the work stands (2026-09-29)
+# Handoff: where the work stands (2026-09-30, evening)
 
 This is a working note, not a design doc. It holds what the agent building
 Jezo was in the middle of, and the decisions waiting on Tim. Delete it once
@@ -6,115 +6,50 @@ it's empty.
 
 ## Decisions waiting on Tim
 
-### 1. Should memory stay as markdown files?
+### Offline sync (designing ahead)
 
-Tim's view (2026-09-29): the files-first rule exists so Jezo's agent can edit
-things the way coding agents like best, with files and bash-like tools. The
-agent doesn't work on memory that way, so memory doesn't have to be files.
-Deleting a memory is fine too, as long as it's no longer treated as fact.
-Writing our own is OK, but it has to be swappable like any pi extension.
+Tim, 2026-09-30: no phone app soon, but likely later, working offline and merging with the desktop, peer to peer with something like iroh. Design the architecture for it now. Codex's report is in `.claude/research/2026-09-30/sync-astra.md`; its last section has eight questions for Tim (can devices sync without being online together, may user-owned storage hold encrypted data, what exactly "forget" promises, does the phone run its own agent, and more). Hazards already known:
+- Times are written as local time with no zone (backend.md). That's fine on one Mac, but ambiguous once a phone in another zone writes.
+- Some config is per device (EventKit sources, hidden calendars), some per user (ICS subscriptions). calendar.md marks which is which. A subscription's address is in each device's keychain, so a phone would ask for it again.
 
-What's built now (`packages/pi-memory`, uncommitted, tests pass):
+### Connectors
 
-- Each memory is `memory/items/m-*.md`. An FTS5 trigram index in memory is
-  rebuilt from the files on load.
-- The files go through a `MemoryStore` interface (`load`/`write`/`remove`).
-  Jezo's store writes through `Workspace`, so agent writes land in the undo
-  log. Standalone pi uses `fileStore(./memory)`.
-- Forget deletes the file and writes a hash of the normalized text to
-  `memory/forgotten.yaml`, so the same words aren't saved again unless the
-  user asks (`again: true` only works when the words came from the user).
-- Sessions a deleted memory cited as evidence can't be read by the agent.
-  Otherwise it would learn the deleted memory again from the old conversation.
+`docs/design/connectors.md`. Tim, 2026-09-30:
+- ICS and EventKit first.
+- Google still has to be built, because many people won't add Google to the Mac's calendar, and Gmail needs it anyway.
+- For Google, do b (bring your own client) before a (Jezo's verified client): review is a hassle, and b falls under the personal-use exception, which covers Gmail too.
+- Use pi's MCP for connectors the agent uses.
 
-**Recommendation: keep the files for now.** The store is already an
-interface, so a SQLite store is one class away if we want it. Files still
-buy us three things: undo works through the same path as everything else,
-the memory page reads it like any plugin, and a person can open memory in
-Typora. Nothing makes files painful for memory yet. If Tim drops rule 1 for
-memory, that's a change to AGENTS.md (principle 1), so it's his call.
-
-Tim also asked whether Hindsight and pi-hermes-memory were ruled out for
-good reasons. If files-first is dropped for memory, "the data isn't in the
-workspace" stops counting against them. What's left against Hindsight:
-- It runs as a Python service and worker, with an embedded Postgres and
-  pgvector. That's local and doesn't need Docker, but the full install pulls
-  in torch and downloads models on first run.
-- Every save calls an LLM.
-- A single memory can't really be deleted: PATCH only marks it invalid, and
-  that can be undone. DELETE removes a whole document.
-
-That last point is the blocker, because Tim's rule is "no longer treated as
-fact".
-
-For pi-hermes-memory, re-check the Codex report before deciding. Its
-consolidation now runs in-process by default.
-
-### 2. Google Calendar OAuth client (deferred, Tim's leaning: a + b)
-
-(a) Jezo ships its own Desktop OAuth client, with (b) "use your own client"
-as a fallback. Tim asked whether publishing it leaks private info or bills his
-account. The answers:
-
-- **Is the client ID public info?** Yes. For Desktop ("installed") apps,
-  Google says the client secret can't be kept secret and isn't treated as one.
-  Open-source apps like rclone ship theirs. We use PKCE and a loopback
-  redirect, so a copied client ID can't get anyone's tokens.
-- **Privacy:** the consent screen shows the project's app name, support
-  email, and developer contact. Create the project under a separate
-  Google account (or a Jezo org) with a non-personal email, not
-  Tim's own account.
-- **Billing:** the Calendar API has no charges, only quotas. Don't attach
-  a billing account to the project, and turn on only the Calendar API. The
-  worst someone can do by abusing the published ID is use up the quota or get
-  the project suspended. That's why (b) is worth having.
-- **Verification:** `calendar.readonly` / `calendar.events` are *sensitive*
-  scopes, not *restricted* ones. An unverified app shows a warning and caps
-  at 100 users. Verification needs a privacy policy page and a homepage on a
-  domain we own, but not the paid security assessment (that's for Gmail
-  scopes).
-
-What Tim needs to do before Google can be built: create the Google Cloud
-project and the consent screen. The ICS and EventKit sources don't need it.
+To verify Google through EventKit, Tim needs to add his Google account in System Settings. On 2026-09-30 the Mac had only iCloud, US Holidays and Birthdays.
 
 ## Work in progress, in order
 
-1. **Memory: finish and commit.** Everything is uncommitted: the
-   `packages/pi-memory` package, `src/main/agent/{acting,memory}.ts`, host
-   and tools changes, `Workspace.removeFile`, the renderer store, the
-   templates in `resources/workspace{,.en}/memory`, fixture memories, and the
-   tsconfig includes. Checks:
-   - `node --test packages/pi-memory/src/memory.test.ts` (12 pass; Bun has
-     no node:sqlite)
-   - E2E: `memories are files…` (workspace.spec) passes, and `the agent
-     remembers…` (agent.spec, needs LM Studio) passes.
-   - Still to do: run the whole E2E suite, write `docs/design/memory.md`
-     (the Codex research, the decision, and what was rejected and why), take
-     pi-hermes-memory out of `concept.md`, and update the Memory section of
-     `backend.md`.
-2. **Codex UI polish patches.** Copied from /private/tmp (which gets wiped
-   on reboot) to `.claude/polish/patches/`:
-   `01-time-picker`, `02-provider-controls`, `03-page-polish`. Before/after
-   screenshots are next to them. Next steps:
-   - `git apply` them on this branch and review the diff yourself.
-   - Run `bun run typecheck`, the screenshot script
-     (`scratchpad/shots/pages.mjs`, in the old session's scratchpad; rewrite
-     it if it's gone), and `npx playwright test e2e/workspace.spec.ts`.
-   - Commit with `Co-Authored-By: Codex <noreply@openai.com>`.
-   - Remove the worktree `.claude/worktrees/agent-af13bd0bd9a198a34`.
-   - Known gap from Codex: the connection icon tiles are blank.
-3. **Calendar.** ICS first, then macOS EventKit, then Google (after
-   decision 2). Several sources and accounts at once, shown together, and any
-   single calendar can be hidden.
-4. **Slash commands.** A "/" menu in the composer for skills, prompt
-   templates, and extension commands. `/model`, `/new` and similar map to
-   UI actions.
-5. **更多 → 自動化 list UI.** Waits for the polish patches.
-6. Later:
+1. **Google Calendar, bring-your-own client first.** A wizard in 連接 that walks the user through creating a Google Cloud project, a Desktop client and the consent screen, with the traps:
+   - publish to "In production", or refresh tokens expire every 7 days;
+   - the "unverified app" warning is expected.
+   Then PKCE with a loopback redirect, tokens in `secrets.ts`, incremental sync with sync tokens, and the calendars merged like the others. Gmail later reuses the same client. Jezo's own verified client comes after.
+   Still to verify: Google through EventKit, once Tim adds his Google account to the Mac.
+2. **Sync design doc.** Write `docs/design/sync.md` from `.claude/research/2026-09-30/sync-astra.md`:
+   - the recommendation: one replication document per item, Automerge 3 as the first candidate, iroh as transport;
+   - the cheap changes to make now: stronger ids, a committed-change feed, undo through the write service, a workspace id and format version, and one device that runs automations;
+   - eight questions only Tim can answer (see the report's last section). Ask him.
+3. **Observability for memory.** `.claude/research/2026-09-30/observability.md` recommends, in order:
+   - read one failed run from pi's JSONL, which already keeps the prompt sections;
+   - add memory decision events (held back, refused, committed, unresolved);
+   - six hard eval stories run through the real app;
+   - a developer view;
+   - optional OpenTelemetry export to otel-desktop-viewer, or Phoenix / Langfuse locally.
+   Nothing to install for users. Needs Tim's go-ahead.
+4. **Prompt: act, don't ask.** In the calendar planning test the model once asked "18:15 or after 21:00?" instead of scheduling. todos_update already marks the time as a proposal the user can drag, so the system prompt should say to pick one and let the user move it. Also check once, by logging, that pi doesn't fire `before_agent_start` again on a `continue: true` from `agent_before_settle`; the memory extension resets its held-back list there.
+5. **Slash commands.** A "/" menu in the composer for skills, prompt templates and extension commands. `/model`, `/new` and similar become UI actions.
+6. **更多 → 自動化 list UI.**
+7. Later:
    - memory cards in the check-in, and a memory preview
    - the rework card
-   - experiments and connections, which are still mock
+   - experiments and the non-calendar connections, which are still mock
    - bundling uv for the packaged app
+   - the connection icon tiles are blank (noted by Codex in the polish pass)
+   - trying the packaged app's EventKit permission
 
 ## Things that bit us (keep in mind)
 

@@ -126,11 +126,31 @@ export function EventDetail({ event, onClose }: { event: CalendarEvent; onClose:
       <h2 className="text-[19px] leading-snug font-semibold" data-selectable>
         {event.title}
       </h2>
-      <p className="text-[13.5px]">
-        {event.allDay
-          ? t('event.allDay', { days: event.hours > 24 ? `${monthDay(event.date)} – ${monthDay(addDays(event.date, event.hours / 24 - 1))}` : longDate(event.date) })
-          : `${weekday(event.date)} ${clock(event.start)} – ${clock(event.start + event.hours)}`}
-      </p>
+      <div className="flex flex-col gap-1">
+        <p className="text-[13.5px]">
+          {event.allDay
+            ? t('event.allDay', { days: event.hours > 24 ? `${monthDay(event.date)} – ${monthDay(addDays(event.date, event.hours / 24 - 1))}` : longDate(event.date) })
+            : `${weekday(event.date)} ${clock(event.start)} – ${clock(event.start + event.hours)}`}
+        </p>
+        {event.location && (
+          <p className="text-[13.5px] text-muted-foreground" data-selectable>
+            {event.location}
+          </p>
+        )}
+        {event.url && (
+          <a href={event.url} target="_blank" rel="noreferrer" className="truncate text-[13px] text-muted-foreground underline underline-offset-2 hover:text-foreground">
+            {event.url}
+          </a>
+        )}
+      </div>
+      {event.notes && (
+        // Written by whoever made the event, and often long (a meeting link, an agenda), so folded away.
+        <Disclosure label={t('event.notes')} className="border-t pt-3">
+          <p className="pt-2.5 text-[13px] leading-relaxed whitespace-pre-wrap text-muted-foreground" data-selectable>
+            {event.notes}
+          </p>
+        </Disclosure>
+      )}
       <p className="text-[13px] leading-relaxed text-muted-foreground">{t('event.readOnly', { source: event.source })}</p>
       <Button variant="outline" onClick={() => openSession(null, t('event.whatNextPrefill', { title: event.title }))}>
         {t('event.whatNext')}

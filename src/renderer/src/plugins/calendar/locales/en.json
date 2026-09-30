@@ -38,7 +38,6 @@
     "month": "Month"
   },
   "synced": "{{source}} · synced {{ago}}",
-  "subscribe": "+ Subscribe to a calendar",
   "noTodos": "No todos yet",
   "askToPlan": "Ask the agent to plan it",
   "planNextWeek": "Plan next week for me",
@@ -53,5 +52,10 @@
     "events_one": "{{count}} event",
     "events_other": "{{count}} events",
     "newTodo": "What is it? Enter to add"
-  }
+  },
+  "syncFailed": "Can't read {{source}}",
+  "sourcesMore": "{{first}} and {{count}} more",
+  "mac": "Mac calendars",
+  "manage": "Manage calendars",
+  "connect": "+ Connect a calendar"
 }

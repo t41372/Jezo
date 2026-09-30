@@ -49,7 +49,10 @@ function describe(data: Record<string, unknown>) {
   return `${data.id} "${data.title}": ${data.state}, ${when}, ${data.estimate ?? '?'} min`
 }
 
-export function createTools(workspace: Workspace, context: () => RunContext, blocked: (path: string) => boolean): ToolDefinition[] {
+/** Calendar events that overlap a todo's slot, described for the agent. */
+export type Clashes = (scheduled: string, minutes: number) => Promise<string[]>
+
+export function createTools(workspace: Workspace, context: () => RunContext, blocked: (path: string) => boolean, clashes: Clashes = async () => []): ToolDefinition[] {
   const root = workspace.root
   const actor = () => ({ by: 'agent' as const, run: context().run })
 
@@ -93,6 +96,30 @@ export function createTools(workspace: Workspace, context: () => RunContext, blo
     access: (absolute: string) => access(absolute),
   }
 
+  /**
+   * A field name the model garbled ("estimate /") would otherwise be dropped
+   * without a word, and the change it meant would silently not happen. It's
+   * said in the result rather than refused: refusing made a local model send
+   * the same garbled name again and again.
+   */
+  const unknownFields = (params: object, known: string[]) => {
+    const unknown = Object.keys(params).filter((k) => !known.includes(k))
+    return unknown.length
+      ? `\n  Ignored ${unknown.map((k) => JSON.stringify(k)).join(', ')}: not a field. The fields are ${known.join(', ')}; call again if you meant one of them.`
+      : ''
+  }
+
+  /**
+   * Says when a todo's slot runs into something on the user's calendar, so a
+   * slip in the arithmetic is caught (AGENTS.md, principle 8). It doesn't refuse:
+   * sometimes overlapping is what the user wants.
+   */
+  const overlaps = async (data: Record<string, unknown>) => {
+    if (typeof data.scheduled !== 'string' || !data.scheduled) return ''
+    const found = await clashes(data.scheduled, Number(data.estimate) || 30).catch(() => [])
+    return found.length ? `\n  It overlaps ${found.join('; ')} on the user's calendar. Move it unless they want that.` : ''
+  }
+
   const todoInput = Type.Object({
     title: Type.String({ description: 'What to do, starting with a verb.' }),
     estimate: Type.Integer({ minimum: 1, description: 'Minutes, based on how long similar todos actually took.' }),
@@ -127,11 +154,24 @@ export function createTools(workspace: Workspace, context: () => RunContext, blo
         for (const key of ['goal', 'cue', 'why'] as const) if (todo[key]) fields[key] = todo[key]
         const item = await workspace.create('todo', fields, '', actor())
         ids.push(item.id)
-        lines.push(`- ${describe(item.data)}`)
+        lines.push(`- ${describe(item.data)}${await overlaps(item.data)}${unknownFields(todo, Object.keys(todoInput.properties))}`)
       }
       const details: CardDetails = { card: { kind: 'plan', title: params.title, todoIds: ids } }
       return { content: text(`Proposed ${ids.length} drafts. The user sees them as one plan and decides:\n${lines.join('\n')}`), details }
     },
+  })
+
+  const todosUpdateParams = Type.Object({
+    id: Type.String(),
+    title: Type.Optional(Type.String()),
+    estimate: Type.Optional(Type.Integer({ minimum: 1 })),
+    scheduled: Type.Optional(Type.String({ description: 'Local time, like 2026-09-29T09:30, or "" for the backlog.' })),
+    userAskedForThisTime: Type.Optional(
+      Type.Boolean({ description: 'Set true when the user told you this exact time, like "排到明天晚上八點". Then the time is theirs, not your proposal.' }),
+    ),
+    goal: Type.Optional(Type.String({ description: 'A goal id, or "" for none.' })),
+    cue: Type.Optional(Type.String({ description: 'The situation it gets done in, or "" for none.' })),
+    why: Type.Optional(Type.String()),
   })
 
   const todosUpdate = defineTool({
@@ -139,20 +179,12 @@ export function createTools(workspace: Workspace, context: () => RunContext, blo
     label: 'Update a todo',
     description:
       "Changes an existing todo. Give only the fields to change. Scheduling or moving it marks the time as your proposal until the user confirms it, unless they asked for that exact time. Set scheduled to an empty string to put it back in the backlog. You can't accept a draft for the user or mark something done that they didn't do.",
-    parameters: Type.Object({
-      id: Type.String(),
-      title: Type.Optional(Type.String()),
-      estimate: Type.Optional(Type.Integer({ minimum: 1 })),
-      scheduled: Type.Optional(Type.String({ description: 'Local time, like 2026-09-29T09:30, or "" for the backlog.' })),
-      userAskedForThisTime: Type.Optional(
-        Type.Boolean({ description: 'Set true when the user told you this exact time, like "排到明天晚上八點". Then the time is theirs, not your proposal.' }),
-      ),
-      goal: Type.Optional(Type.String({ description: 'A goal id, or "" for none.' })),
-      cue: Type.Optional(Type.String({ description: 'The situation it gets done in, or "" for none.' })),
-      why: Type.Optional(Type.String()),
-    }),
+    parameters: todosUpdateParams,
     async execute(_id, params) {
-      const { id, userAskedForThisTime, ...change } = params
+      const ignored = unknownFields(params, Object.keys(todosUpdateParams.properties))
+      const { id, userAskedForThisTime, ...change } = Object.fromEntries(
+        Object.entries(params).filter(([k]) => k in todosUpdateParams.properties),
+      ) as typeof params
       const item = workspace.get(id)
       if (item?.kind !== 'todo') throw new Error(`There is no todo ${id}.`)
       checkTime(change.scheduled)
@@ -160,7 +192,7 @@ export function createTools(workspace: Workspace, context: () => RunContext, blo
       const fields: Fields = Object.fromEntries(Object.entries(change).map(([k, v]) => [k, v === '' ? null : v]))
       if (change.scheduled !== undefined) fields.proposed = change.scheduled && !userAskedForThisTime ? true : null
       const updated = await workspace.update(id, fields, actor())
-      return { content: text(`Now: ${describe(updated.data)}`), details: undefined }
+      return { content: text(`Now: ${describe(updated.data)}${change.scheduled || change.estimate ? await overlaps(updated.data) : ''}${ignored}`), details: undefined }
     },
   })
 
@@ -270,7 +302,7 @@ export function createTools(workspace: Workspace, context: () => RunContext, blo
   ] as ToolDefinition[]
 }
 
-export const TOOL_NAMES = ['read', 'ls', 'write', 'edit', 'todos_list', 'todos_propose', 'todos_update', 'notes_propose', 'item_links', 'ask_user', 'memory_remember', 'memory_recall', 'memory_forget']
+export const TOOL_NAMES = ['read', 'ls', 'write', 'edit', 'todos_list', 'todos_propose', 'todos_update', 'notes_propose', 'item_links', 'ask_user', 'memory_remember', 'memory_recall', 'memory_forget', 'calendar_events']
 
 function nowLocal(at = new Date()) {
   const pad = (n: number) => String(n).padStart(2, '0')

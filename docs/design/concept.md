@@ -42,7 +42,7 @@ Open Source Personal Agent to help you manage your life, scientifically
 型態
 - Electron 桌面 app。同一個後端也能 headless 跑在 docker 裡配 web UI，那是包裝問題，先做桌面。
 - Harness 用 pi。理由：GUI 是我們自己的，harness 只需要 loop、檔案工具、skills 載入、session 級注入、串流事件、多 provider，pi 剛好只有這些，而且是 TS，直接在 Electron main process 裡跑，沒有跨進程邊界。Hermes 的電池（cron、approvals、dashboard plugin）我們用不到。dsh 還沒到能二次開發的程度。
-- 記憶：pi-hermes-memory（Hermes 記憶的移植版，本地 markdown + FTS5，不用額外服務）。記憶後端留一個插槽，Hindsight 之類的放後面當選項；要接就接 Vectorize 官方的 pi 擴充，社群版跟它有工具名衝突。
+- 記憶：我們自己寫的 pi 擴充 `@jezo/pi-memory`，別的 pi 用戶也能用，之後有更好的方案可以整個換掉。記憶插件分到 workspace 裡的一個目錄，資料怎麼存由它決定。選擇和被否決的方案見 memory.md。
 - 內建的 pi 擴充由我們打包進 app、鎖版本，用戶不用自己裝 pi package。這是發佈方式，不是限制用戶跑自己的程式碼。SQLite 用 Electron 內建的 `node:sqlite`（有 FTS5，不用 rebuild native addon），見 backend.md。
 - Python 只剩 Standard ASR 一個 sidecar，uv 包，然後用戶安裝 standard asr compliant 的 asr 插件。
 - 100% GUI。用戶任何情況下不碰命令行和設定檔，最多複製貼上。
@@ -56,7 +56,7 @@ Open Source Personal Agent to help you manage your life, scientifically
     - validator：agent 寫壞格式就過不了
     - UI layout：宣告式，引用預建 widget，讓 agent 建 UI 更方便。但不禁止 agent 有更多控制，包括自己寫 UI code。
 - 目錄是 single source of truth，agent 直接在裡面工作。另外有一個從目錄衍生的索引（watcher + 快取），給跨插件查詢（「這週到期的全部東西」）和 GUI 用。索引隨時能從目錄重建。
-- 檔案格式見 storage.md：散文用 markdown，要查詢的結構化資料放欄位（frontmatter、JSONL、YAML）。
+- 檔案格式見 storage.md：用 agent 能直接編輯的格式，散文用 markdown，要查詢的結構化資料放欄位（frontmatter、JSONL、YAML）。有自己機制的插件（例如長期記憶）自己決定格式。
 - Undo（詳見 undo.md）：在 workspace 外面記錄 agent 每一輪改了哪些檔案、改之前的內容、寫入後的 hash。只撤銷 agent 的改動，用戶之後改過的檔案不動。紀錄只留短期，丟了也無妨。
 - Validator 掛在寫入之後。驗證失敗不是靜默拒絕，把錯誤丟回給 agent 讓它修。這是讓小模型乖乖產出結構化資料最有效的辦法。驗證和建索引是同一個 pass。
 - 每一輪結束 diff 目錄。Agent 說「排好了」但檔案沒動，標出來。任務只有在有工具結果或用戶確認時才能標完成。計畫不等於做完。

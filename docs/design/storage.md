@@ -1,6 +1,6 @@
 # Storage
 
-Status: decided on 2026-09-29, based on research done that day. Markdown for prose, fields for structure.
+Status: decided on 2026-09-29, based on research done that day. Markdown for prose, fields for structure. Revised on 2026-09-30: formats are defaults, not principles (see below).
 
 ## Question
 
@@ -13,9 +13,15 @@ Yes, for data at human scale that people and the agent write: todos, goals, chec
 1. **"Markdown wherever possible" becomes "markdown for prose, fields for structure."**
 2. **The GUI never re-serializes a whole file.** Edits are surgical and normally go through one write service. Writes that bypass it, such as the agent's shell commands, are detected rather than forbidden.
 3. **"Undo = git revert" is not safe in general.** See the measurements below. Resolved: the workspace is no longer a git repo, see [undo.md](undo.md).
-4. **One commit per turn conflicts with real deletion.** Resolved the same way: with no git in the workspace and undo history kept only briefly, deleting a file really deletes it.
+4. **One commit per turn conflicts with real deletion.** Resolved the same way: with no git in the workspace, deleting a file removes it from the workspace. Copies remain in the undo record (the last 100 runs, in the app's data directory) until they age out, and forgetting a memory keeps a hash of its words so it isn't saved again.
 
-What files can't give you is real-time multi-device sync and collaboration, which is the main reason Logseq left files. Jezo is single-user, so that's acceptable.
+**Revised 2026-09-30.** AGENTS.md now keeps two principles from this: the user's data lives in the workspace (principle 1), and the agent reaches it with files and tools it can find, with anything we put into its context as a starting point only (principle 2). Formats are defaults that serve those, decided here:
+
+- **The default is a format the agent can edit directly:** markdown for prose, frontmatter fields for what's queried, JSONL for logs, YAML for layouts and configuration. Opening the workspace in Typora or Obsidian is a side benefit of this, not a promise.
+- **A plugin may pick its own format** (SQLite, say) inside its own directory when the agent never needs to read or fix a record by hand, because it works through the plugin's tools. Todos, goals and notes don't qualify. Memory does, though it stays as files for now ([memory.md](memory.md)). Dense logs like health data would. A plugin that does this still owes what files give for free: the GUI shows its data, the agent can search and change it through tools, and it supports backup, export, deletion and undo for the agent's changes.
+- **Every stored thing has one role:** Jezo's own records (the truth), a copy of something an outside service owns (a mirror: the service is the truth), derived data (indexes), or temporary state. A mirror of an outside calendar isn't user data in the workspace; local notes about it and changes not yet sent are.
+
+Files don't make sync between devices impossible (SilverBullet merges outside and concurrent edits), but they don't provide it either: identity, conflicts and deletions need their own design. Logseq left files largely over sync. A phone that works offline is likely later, so sync is being designed ahead of time (see the handoff; the design will get its own doc).
 
 ## Precedents
 
@@ -87,7 +93,7 @@ What files can't give you is real-time multi-device sync and collaboration, whic
 
 **Privacy and deletion.**
 - In a git repo, history keeps everything, and reverting a turn that deleted something brings it back. A real purge would mean rewriting history (`git filter-repo`).
-- Without git in the workspace, deleting a file is real deletion, apart from the short-lived undo history and any backups the user runs.
+- Without git in the workspace, deleting a file removes it, apart from the undo record (the last 100 runs), session transcripts that mentioned it, and any backups the user runs. A way to remove every copy Jezo controls is still to be built.
 
 ## Page and dashboard layouts
 
@@ -104,7 +110,7 @@ What files can't give you is real-time multi-device sync and collaboration, whic
 |---|---|---|---|
 | Todos, goals, projects | MD + frontmatter | 1 file per entity | yes |
 | Check-ins, journal | MD + frontmatter | 1 file per day | yes |
-| Memory and observations | MD + frontmatter | per observation or per topic | yes |
+| Memory | the memory plugin's own choice (now MD + frontmatter) | its own directory | yes |
 | Local events | MD + frontmatter with `rrule` | 1 file per series | yes |
 | Habit, completion, and time logs | JSONL, append-only | 1 file per plugin per month | yes |
 | Manifests and schemas | YAML / JSON Schema | per plugin | yes |

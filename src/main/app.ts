@@ -9,6 +9,8 @@ import { createMemory, serveMemory } from './agent/memory'
 import { Providers } from './agent/providers'
 import { Schedule, setLanguage } from './agent/schedule'
 import { historyFile, UndoLog } from './agent/undo'
+import { Calendars } from './calendar/calendars'
+import { serveCalendars } from './calendar/ipc'
 import { getConfig } from './config'
 import { registerQuickKey, unregisterQuickKey } from './hotkey'
 import { createQuickWindow, endVoice, hideQuick, resizeQuick, startVoice, toggleTyping } from './quick'
@@ -108,6 +110,7 @@ ipcMain.on('language:set', (_, language: string) => setLanguage(language))
 
 let workspace: Workspace | null = null
 let schedule: Schedule | null = null
+let calendars: Calendars | null = null
 const speech = new Speech()
 
 /** Opens the workspace, creating it on first run. The seeded skills follow the OS language. */
@@ -123,7 +126,10 @@ async function openWorkspace() {
   const memory = createMemory(workspace)
   await memory.load()
   serveMemory(memory)
-  const host = new AgentHost(workspace, undo, providers, memory)
+  calendars = new Calendars(workspace)
+  await calendars.open()
+  serveCalendars(calendars)
+  const host = new AgentHost(workspace, undo, providers, memory, calendars)
   await host.open()
   schedule = new Schedule(workspace, host, providers, openSession)
   serveAgent(host, undo, providers, schedule)
@@ -132,7 +138,10 @@ async function openWorkspace() {
   // Start the speech server early, so the first hold of ⌥X doesn't wait for Python to start.
   setTimeout(() => void speech.start(), 3000)
   // File events can be missed; coming back to the app is a good moment to look again.
-  app.on('browser-window-focus', () => void workspace?.rescan())
+  app.on('browser-window-focus', () => {
+    void workspace?.rescan()
+    calendars?.refreshIfStale()
+  })
 }
 
 app.whenReady().then(async () => {
@@ -168,5 +177,6 @@ app.on('will-quit', () => {
   unregisterQuickKey()
   speech.stop()
   schedule?.stop()
+  calendars?.close()
   workspace?.close()
 })

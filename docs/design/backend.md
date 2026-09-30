@@ -26,7 +26,7 @@ A directory the user picks, `~/Jezo` by default. It isn't under `~/Documents`, w
 
 **Skills** are the methods concept.md lists as built in (plan in "when X, do Y", estimate from records, track progress, rework a bad day, anchor habits, small experiments), plus each plugin's own, like 隨手記's sort-notes. Their directory names follow the Agent Skills naming rule (lowercase ASCII, which pi checks); the title the user sees is `metadata.title`. Turning a skill off in 它用的方法 sets pi's own `disable-model-invocation: true` in its SKILL.md, so pi leaves it out of the agent's prompt and no list of switched-off skills lives anywhere else.
 
-Each built-in plugin that stores data owns a directory like the ones above. The files Jezo ships (AGENTS.md, manifest, skills) are copied in when the workspace is created. They're the user's from then on, and the agent may edit them (AGENTS.md, principle 5). What happens to them when a new version of Jezo changes its copy isn't decided yet.
+Each built-in plugin that stores data owns a directory like the ones above. The files Jezo ships (AGENTS.md, manifest, skills) are copied in when the workspace is created. They're the user's from then on, and the agent may edit them (AGENTS.md, principle 6). What happens to them when a new version of Jezo changes its copy isn't decided yet.
 
 ### Reading
 
@@ -106,15 +106,17 @@ The user may use pi on their own. Jezo's agent must not read their settings, key
 
 Each session is a pi session saved as JSONL in `<workspace>/sessions/`. Conversations are the user's, so they're in the workspace, not the app's data. The index lists them; the watcher and the undo record skip that directory, because only pi appends to it.
 
-- **A session starts** with Jezo's system prompt and the digest (today's date and todos, active goals, the last check-in, a map of the workspace), in pi's appended system prompt.
+- **A session starts** with Jezo's system prompt and the digest in pi's appended system prompt. The digest has today's date, the next fourteen days with their weekdays, today's todos, active goals, the last check-in and a map of the workspace. The memory and calendar extensions add their own sections at the start of each run.
 - **What started it** (the morning, the evening, ⌥X, the user, 隨手記) is saved in the session as a custom entry, so the chat list can show it.
-- **After a crash,** the session file has everything up to the last finished message. Opening it again restores the conversation, and the agent continues from there. That makes a half-done turn recoverable, which is why the workspace doesn't need transactions across files ([storage.md](storage.md)).
+- **After a crash,** the session file has everything up to the last finished message. Opening it again restores the conversation, and the agent continues from there. That makes a half-done turn recoverable, but it isn't a transaction: related files can disagree after a crash, and it can't tell whether an outside action (an email sent) happened. Each file is written atomically; changes that must agree across files need their own recovery when one comes up.
 
 ### Tools
 
 - **Files:** `read`, `ls`, `write` and `edit`. `write` and `edit` are pi's own tools with Jezo's file functions plugged in, so every agent write goes through the write service and is recorded for undo.
 - **`todos_list`** shows every todo in one compact table. Without it, a local model read each todo file one at a time; a morning plan took four minutes, most of it reading.
-- **Typed tools** for what the GUI shows as a card: proposing todos (a plan), proposing what notes become, and saving to memory. The result names the entities, and the chat draws the card from it. Typed tools make structured writes easier for any model, but the agent can still edit the files directly; the checks catch mistakes either way (AGENTS.md, principle 7).
+- **`calendar_events`** lists the user's calendar events for any range ([calendar.md](calendar.md)). Scheduling a todo with `todos_propose` or `todos_update` reports any timed event the slot overlaps.
+- **Garbled field names are reported, not refused.** A local model sometimes sends a key like `"estimate /"`. `todos_update` and `todos_propose` apply the fields they know and say in the result which ones they ignored and what the fields are called. Refusing the whole call made the same model send the same garbled name 149 times.
+- **Typed tools** for what the GUI shows as a card: proposing todos (a plan), proposing what notes become, and saving to memory. The result names the entities, and the chat draws the card from it. Typed tools make structured writes easier for any model, but the agent can still edit the files directly; the checks catch mistakes either way (AGENTS.md, principle 8).
 - **`bash` is off for now.** It's the exit a steered agent would use to send data out (AGENTS.md, trust model). The plan is to turn it on inside an OS sandbox that allows writing in the workspace and blocks the network (`sandbox-exec` on macOS, a network namespace on Linux), so a steered agent can still work but can't send anything out. Until that exists, it stays off.
 - **`grep` and `find`** call `rg` and `fd`, which a packaged app can't count on finding. They're off until Jezo ships the binaries or plugs in its own search.
 
@@ -131,7 +133,7 @@ Tool parameters are plain: strings, numbers, booleans and objects, with no regex
 
 ### Automations
 
-Sessions Jezo starts on its own are automations: files in the workspace's `automations/items/`, one per automation. The frontmatter has a name, a cron schedule in local time, on or off, how many minutes late it may still start (120 unless it says), and for the built-in ones which kind it is. **The body is what the agent is asked when it runs**, so what the morning plan does is editable like a skill (AGENTS.md, principle 5), and the agent can add, change or turn off automations when the user asks, with undo like any other change.
+Sessions Jezo starts on its own are automations: files in the workspace's `automations/items/`, one per automation. The frontmatter has a name, a cron schedule in local time, on or off, how many minutes late it may still start (120 unless it says), and for the built-in ones which kind it is. **The body is what the agent is asked when it runs**, so what the morning plan does is editable like a skill (AGENTS.md, principle 6), and the agent can add, change or turn off automations when the user asks, with undo like any other change.
 
 - **Built in:** the morning plan (08:00, may start until 14:00), the evening check-in (21:30), and the weekly review (Sundays 20:00, may start a day late). The rows in 設定 set the first two's times and turn them on or off by editing their files.
 - **Running them:** Jezo's own timer looks every 30 seconds, and ten seconds after launch. For each automation that's on, it takes the most recent time its schedule was due (croner); if that was no longer ago than it may be late, and no session of that automation has started since, it starts one. It doesn't start without a usable model, which would only record a failure every time. pi has no scheduler of its own; Hermes has one, but Jezo doesn't use Hermes.
@@ -176,12 +178,16 @@ Speech recognition runs through [Standard ASR](https://github.com/standard-voice
 ## Not built yet
 
 - The conversation cards the check-in and a bad day use (reworking a bad day, what a check-in will write to memory) are still drawn only from mock data, which no conversation produces now.
-- Memory, experiments and connections still come from mock data in the store.
+- Experiments and connections still come from mock data in the store.
 - A skill change the agent proposes for the user to review (the 它用的方法 page can show one); for now the agent edits a skill directly, and the change shows in 修改紀錄 like any other.
 
 ## Memory
 
-Not decided. [concept.md](concept.md) names pi-hermes-memory and also asks for a record format it can't store (one file per memory, with where it came from and whether the user said it or the agent inferred it). The options and the trade-off went to the user on 2026-09-29.
+See [memory.md](memory.md). The extension is `packages/pi-memory`. Jezo's side is `src/main/agent/memory.ts`:
+- Its store writes through the workspace as whoever is acting. The run's actor, source and session file are in an AsyncLocalStorage (`acting.ts`).
+- The IPC lets the windows remember, forget, restore and discard, always as the user.
+
+The read tool refuses the conversation files a deleted memory cited.
 
 ## Tests
 

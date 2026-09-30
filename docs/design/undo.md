@@ -11,7 +11,7 @@ The original concept made the whole workspace a git repo, with one commit per ag
 Undo exists so that when Jezo's agent makes a mistake, the user can roll it back right away.
 
 - **Only the agent's changes are undone.** Undo never reverts something the user did.
-- **History is short-lived.** Keeping it long-term isn't needed. Losing it, or being unable to rebuild it, is acceptable.
+- **History is bounded.** It keeps the last 100 runs (`src/main/agent/undo.ts`), with each file's content before and after, so it holds private copies until they age out. Losing it, or being unable to rebuild it, is acceptable.
 - **Users never see git or a CLI.**
 
 ## How agent products do it

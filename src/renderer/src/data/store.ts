@@ -1,15 +1,18 @@
 // The renderer's state. Todos and notes come from the workspace, and
 // conversations and the change history from Jezo's agent (docs/design/backend.md).
 // The store applies the user's changes at once and writes them, and what comes
-// back replaces them. Goals, memory, skills and the rest are still mock data.
+// back replaces them. Calendar events come from the user's calendars
+// (calendar.ts). Experiments and connections other than calendars are still mock data.
 
 import { generateKeyBetween } from 'fractional-indexing'
 import { toast } from 'sonner'
 import { create } from 'zustand'
 import type { ThemeSource } from '../../../shared/bridge'
+import type { CalendarStatus } from '../../../shared/calendar'
 import type { Fields, Item, ItemChanges } from '../../../shared/workspace'
 import i18n, { applyLanguage, storedLanguage, type LanguageSetting } from '@/i18n'
 import { entities, localDate, stamp, toGoal, toMemory, toNote, toTodo, todoFields } from './entities'
+import { connectCalendar } from './calendar'
 import * as mock from './mock'
 import type { CalendarEvent, CalendarViewName, Connection, Energy, Experiment, Goal, HistoryEntry, ISODate, Memory, Message, Note, NoteKind, NoteOutcome, NoteProposal, Session, Skill, Todo, Trigger } from './types'
 
@@ -32,6 +35,8 @@ interface State {
   goals: Goal[]
   todos: Todo[]
   events: CalendarEvent[]
+  /** Where the calendars come from and whether each is working; null until the main process answers. */
+  calendarStatus: CalendarStatus | null
   sessions: Session[]
   memories: Memory[]
   skills: Skill[]
@@ -246,6 +251,7 @@ export async function connectWorkspace() {
     loadHistory(),
     window.jezo.agent.list().then((sessions) => useStore.setState({ sessions })),
     useStore.getState().loadSkills(),
+    connectCalendar(),
   ])
   // The clock moves on; the day changes at midnight.
   window.setInterval(() => useStore.setState({ now: clock() }), 30_000)
@@ -294,7 +300,8 @@ export const useStore = create<State>()((set, get) => ({
   now: clock(),
   goals: [],
   todos: [],
-  events: mock.events,
+  events: [],
+  calendarStatus: null,
   sessions: [],
   memories: [],
   notes: [],

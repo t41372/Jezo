@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Row } from '@/components/ListCard'
+import { TimeField } from '@/components/TimeField'
 import { Switch } from '@/components/ui/switch'
 import type { Schedule } from '../../../../shared/bridge'
 
@@ -19,12 +20,10 @@ export function ScheduleRows() {
   return (['morning', 'evening'] as const).map((kind) => (
     <Row key={kind} title={t(kind)} description={schedule[kind] ? t(`${kind}Hint`) : t('scheduleOff')}>
       {schedule[kind] && (
-        <input
-          type="time"
+        <TimeField
           value={schedule[kind]!}
           aria-label={t(kind)}
-          onChange={(e) => e.target.value && change({ [kind]: e.target.value })}
-          className="h-7 rounded-md bg-muted px-2 font-mono text-[13px] tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+          onChange={(value) => change({ [kind]: value })}
         />
       )}
       <Switch checked={schedule[kind] !== null} onCheckedChange={(on) => change({ [kind]: on ? DEFAULTS[kind] : null })} aria-label={t(kind)} />

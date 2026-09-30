@@ -10,6 +10,11 @@ mac:
   extendInfo:
     # Shown when macOS asks for the microphone, the first time ⌥X is held to talk.
     NSMicrophoneUsageDescription: Jezo listens while you hold ⌥X, so you can talk to it instead of typing.
+    # Shown when the user connects the Mac's calendars in 連接.
+    NSCalendarsFullAccessUsageDescription: Jezo shows your calendars next to your todos, so it can plan around what's already on them.
+  extraResources:
+    - from: native/eventkit/build/jezo-eventkit
+      to: bin/jezo-eventkit
 # What a new workspace starts with (src/main/workspace/seed.ts).
 extraResources:
   - from: resources/workspace

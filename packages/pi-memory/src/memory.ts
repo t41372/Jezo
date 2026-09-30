@@ -69,6 +69,8 @@ export interface RememberInput {
   replaces?: string
   /** The user asked to remember this again after deleting it. */
   again?: boolean
+  /** It's a separate fact from the related memories the last attempt listed, so they all stay. */
+  separate?: boolean
 }
 
 interface Forgotten {
@@ -193,6 +195,21 @@ export class Memory {
       await this.saveForgotten()
     }
 
+    // A changed preference saved next to the old one would leave two that contradict
+    // each other. The agent decides which it is; this only makes sure it decided.
+    if (!input.replaces && !input.separate) {
+      const related = this.related(text)
+      if (related.length) {
+        throw new MemoryError(
+          [
+            'Not saved yet. These memories look related:',
+            ...related.map((r) => `- [${r.id}] ${r.text}`),
+            'If the new one replaces one of them, call again with replaces set to its id. If they are separate facts, call again with separate: true.',
+          ].join('\n'),
+        )
+      }
+    }
+
     let replaced: MemoryRecord | undefined
     if (input.replaces) {
       replaced = this.records.get(input.replaces)
@@ -263,6 +280,31 @@ export class Memory {
   }
 
   /** Current memories matching a query, best first. Queries shorter than three characters match by substring. */
+  /**
+   * Current memories whose wording is close to this text: at least a quarter of
+   * their character pairs in common (Dice). Pairs work for Chinese, which has
+   * no spaces, as well as for English.
+   */
+  private related(text: string, limit = 3): MemoryRecord[] {
+    const pairs = (t: string) => {
+      const chars = [...t.toLowerCase().replace(/[\s\p{P}]/gu, '')]
+      return new Set(chars.slice(1).map((c, i) => chars[i] + c))
+    }
+    const mine = pairs(text)
+    if (!mine.size) return []
+    return [...this.records.values()]
+      .filter((r) => this.current(r))
+      .map((r) => {
+        const theirs = pairs(r.text)
+        const shared = [...mine].filter((p) => theirs.has(p)).length
+        return { r, score: (2 * shared) / (mine.size + theirs.size) }
+      })
+      .filter((x) => x.score >= 0.25)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit)
+      .map((x) => x.r)
+  }
+
   recall(query: string, limit = 8): MemoryRecord[] {
     const q = query.trim()
     if (!q) return []

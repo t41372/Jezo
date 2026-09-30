@@ -15,6 +15,9 @@
 // 12. A short Chinese query ("健身") finds nothing.
 // 13. The model claims where a memory came from; the host should say.
 // 14. "Stated" is claimed when nothing the user said backs it.
+// 15. A changed preference is saved next to the old one instead of replacing it,
+//     so both are used and they contradict each other. Found with a real model
+//     on 2026-09-30: it left out `replaces` two runs in three.
 
 import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -131,6 +134,35 @@ describe('replace', () => {
   })
 })
 
+describe('related memories', () => {
+  test('a new memory close to one already kept waits until the agent says whether it replaces it', async () => {
+    const { dir, memory } = setup()
+    await memory.load()
+    const old = await memory.remember({ text: '我每週三晚上 7 點上吉他課', epistemic: 'stated' })
+    await expect(memory.remember({ text: '吉他課改到週四晚上 8 點', epistemic: 'stated' })).rejects.toThrow(new RegExp(old.id)) // 15
+    expect(files(dir)).toEqual([`${old.id}.md`])
+    const next = await memory.remember({ text: '吉他課改到週四晚上 8 點', epistemic: 'stated', replaces: old.id })
+    expect(memory.recall('吉他').map((r) => r.id)).toEqual([next.id])
+  })
+
+  test('both stay when the agent says they are separate', async () => {
+    const { memory } = setup()
+    await memory.load()
+    await memory.remember({ text: '週三晚上上吉他課', epistemic: 'stated' })
+    await memory.remember({ text: '週三晚上要接小孩', epistemic: 'stated', separate: true })
+    expect(memory.recall('週三').length).toBe(2)
+  })
+
+  test('something unrelated is saved at once', async () => {
+    const { memory } = setup()
+    await memory.load()
+    await memory.remember({ text: '我每週三晚上 7 點上吉他課', epistemic: 'stated' })
+    await memory.remember({ text: '對花生過敏', epistemic: 'stated' })
+    await memory.remember({ text: 'Prefers meetings after lunch', epistemic: 'stated' })
+    expect(memory.context().text).toContain('花生')
+  })
+})
+
 describe('provenance', () => {
   test('the host adds where the turn happened; an inference still needs its own evidence', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'pi-memory-'))
@@ -175,7 +207,8 @@ describe('reading and context', () => {
     const { memory } = setup()
     await memory.load()
     await memory.remember({ text: '推測：晚上比較有空', epistemic: 'inferred', confidence: 'low', evidence: ['todos/items/t-1.md'] })
-    for (let i = 0; i < 40; i++) await memory.remember({ text: `你說過的第 ${i} 件事，寫長一點讓它佔空間`, epistemic: 'stated' })
+    // Near-identical filler, so each is marked separate.
+    for (let i = 0; i < 40; i++) await memory.remember({ text: `你說過的第 ${i} 件事，寫長一點讓它佔空間`, epistemic: 'stated', separate: true })
     const small = new Memory({ store: memory.store, source: () => 'user', evidenceExists: () => true, budget: 400 })
     await small.load()
     const { text } = small.context()
