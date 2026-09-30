@@ -6,6 +6,7 @@ import { Kbd } from '@/components/ui/kbd'
 import { useStore } from '@/data/store'
 import { LANGUAGE_NAMES, LANGUAGES } from '@/i18n'
 import { ModelRows } from './ModelRows'
+import { SpeechRow } from './SpeechRow'
 
 export function Settings() {
   const { t } = useTranslation('settings')
@@ -44,6 +45,7 @@ export function Settings() {
         <Row title={t('hotkey')} description={canHold ? t('hotkeyHint') : t('hotkeyHintPressOnly')}>
           <Kbd className="h-7 px-2.5 font-mono text-[13px] text-foreground">⌥ X</Kbd>
         </Row>
+        <SpeechRow />
         <Row title={t('morning')} description={t('morningHint')}>
           <Kbd className="h-7 px-2.5 font-mono text-[13px] text-foreground">08:00</Kbd>
         </Row>

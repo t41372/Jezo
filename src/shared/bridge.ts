@@ -47,6 +47,18 @@ export interface SkillInfo {
   broken?: boolean
 }
 
+/** Speech recognition: whether it's installed, and where an install is. */
+export interface SpeechStatus {
+  installed: boolean
+  /** The engine and model this machine uses, like "Qwen3-ASR 0.6B". */
+  engine: string
+  /** The install step running now. */
+  step: 'environment' | 'packages' | 'model' | null
+  /** Why the last install failed; "uv" when uv isn't installed. */
+  error: string | null
+  uv: boolean
+}
+
 export interface JezoBridge {
   /** process.platform: "darwin", "win32", "linux", … */
   platform: string
@@ -69,6 +81,18 @@ export interface JezoBridge {
     abort(id: string): Promise<void>
     /** Called with a conversation whenever it changes, while the agent writes too. */
     onChange(listener: (view: SessionView) => void): () => void
+  }
+  /** Hold-to-talk. The ⌥X window sends 16 kHz 16-bit audio and hears the text back as it's recognized. */
+  speech: {
+    status(): Promise<SpeechStatus>
+    install(): Promise<void>
+    onStatus(listener: (status: SpeechStatus) => void): () => void
+    /** Starts listening. False when speech isn't installed. */
+    start(): Promise<boolean>
+    audio(chunk: ArrayBuffer): void
+    /** The audio is over; resolves to everything that was said. */
+    end(): Promise<string>
+    onText(listener: (text: string) => void): () => void
   }
   /** The agent's methods, from the workspace. */
   skills: {

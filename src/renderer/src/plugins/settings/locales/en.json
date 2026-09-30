@@ -32,5 +32,17 @@
   "keySaved": "Saved",
   "keyRemove": "Remove",
   "keyPlaceholder": "Paste the key",
-  "keySave": "Save"
+  "keySave": "Save",
+  "speech": "Speech recognition",
+  "speechHint": "For holding ⌥X to talk. Runs {{engine}} on this computer; your voice never leaves it.",
+  "speechReady": "{{engine}}, running on this computer",
+  "speechInstall": "Install",
+  "speechRetry": "Try again",
+  "speechFailed": "The install failed: {{error}}",
+  "speechNeedsUv": "Needs uv (Python's package tool) installed first.",
+  "speechStep": {
+    "environment": "Setting up Python…",
+    "packages": "Installing Standard ASR…",
+    "model": "Downloading the speech model; this can take a few minutes…"
+  }
 }

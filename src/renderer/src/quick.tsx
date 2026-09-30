@@ -12,7 +12,7 @@ import { applyLanguage, storedLanguage } from './i18n'
 import { Command as CommandPrimitive } from 'cmdk'
 import { cn } from 'cn'
 import { Check, MessageCircle, Mic } from 'lucide-react'
-import { StrictMode, useCallback, useEffect, useRef, useState } from 'react'
+import { StrictMode, useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { useTranslation } from 'react-i18next'
 import { Command, CommandGroup, CommandItem, CommandList } from '@/components/ui/command'
@@ -21,7 +21,8 @@ import type { QuickCommand } from '../../shared/bridge'
 import type { SessionView } from '../../shared/session'
 import { markPlatform, useDarkClass } from './app/theme'
 import { stamp } from './data/entities'
-import { useMicLevels } from './lib/mic'
+import { useDictation } from './lib/mic'
+import { traditional } from './lib/chinese'
 
 const SUGGESTIONS = ['quick.planTomorrow', 'quick.badDay', 'quick.freeEvenings'] as const
 
@@ -36,10 +37,15 @@ type State =
 function Quick() {
   useDarkClass()
   const [state, setState] = useState<State>({ mode: 'type' })
+  // What was heard so far while ⌥X is held.
   const transcript = useRef('')
-  const setTranscript = useCallback((text: string) => {
-    transcript.current = text
-  }, [])
+  useEffect(
+    () =>
+      window.jezo.speech.onText((text) => {
+        transcript.current = text
+      }),
+    [],
+  )
 
   const ask = (question: string) => {
     setState({ mode: 'answer', question, session: null })
@@ -59,9 +65,14 @@ function Quick() {
           setState({ mode: 'voice', context: command.context, startedAt: Date.now() })
         }
         if (command.kind === 'voice-end') {
-          const said = transcript.current.trim()
-          if (said) ask(said)
-          else window.jezo.quick.hide()
+          // The engine finishes the last words after the audio ends, which takes a moment.
+          const heard = traditional(transcript.current.trim())
+          setState({ mode: 'answer', question: heard, session: null })
+          window.jezo.speech.end().then((final) => {
+            const said = traditional(final.trim()) || heard
+            if (said) ask(said)
+            else window.jezo.quick.hide()
+          })
         }
       }),
     [],
@@ -83,7 +94,7 @@ function Quick() {
   }
 
   if (state.mode === 'voice') {
-    return <Voice context={state.context} startedAt={state.startedAt} onTranscript={setTranscript} />
+    return <Voice context={state.context} startedAt={state.startedAt} />
   }
   if (state.mode === 'noted') return <Noted />
   return <Typing state={state} onAsk={ask} onNote={note} onReset={() => setState({ mode: 'type' })} />
@@ -238,25 +249,18 @@ function Hints({ onContinue }: { onContinue: () => void }) {
 /** Levels shown in the waveform, newest on the right. */
 const BARS = 28
 
-function Voice({ context, startedAt, onTranscript }: { context: string | null; startedAt: number; onTranscript: (text: string) => void }) {
+function Voice({ context, startedAt }: { context: string | null; startedAt: number }) {
   const { t } = useTranslation()
-  const mic = useMicLevels(BARS)
+  const mic = useDictation(BARS)
+  const [heard, setHeard] = useState('')
+  useEffect(() => window.jezo.speech.onText((text) => setHeard(traditional(text))), [])
   const [now, setNow] = useState(Date.now())
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 100)
     return () => window.clearInterval(timer)
   }, [])
 
-  // Mock transcription: the sentence appears as if being recognized. The last
-  // few characters are still tentative, so they're shown faded.
-  const sentence = t('quick.mockTranscript')
   const elapsed = now - startedAt
-  const heard = sentence.slice(0, Math.max(0, Math.floor((elapsed - 300) / 90)))
-  const settled = heard.slice(0, Math.max(0, heard.length - 6))
-  useEffect(() => {
-    onTranscript(heard)
-  }, [heard, onTranscript])
-
   const seconds = Math.floor(elapsed / 1000)
   return (
     <div className="dark flex h-screen flex-col gap-3 bg-[rgb(28_24_48/0.55)] px-4.5 py-4 text-white">
@@ -278,11 +282,10 @@ function Voice({ context, startedAt, onTranscript }: { context: string | null; s
       <p className="min-h-[1.55em] text-[17px] leading-[1.55]">
         {mic.error ? (
           <span className="text-sm text-white/80">{t('quick.micDenied')}</span>
+        ) : !mic.ready ? (
+          <span className="text-sm text-white/80">{t('quick.speechMissing')}</span>
         ) : (
-          <>
-            {settled}
-            <span className="text-white/50">{heard.slice(settled.length)}</span>
-          </>
+          heard || <span className="text-white/50">{t('quick.listening')}</span>
         )}
       </p>
       <div className="flex items-center gap-2 text-xs text-white/65">

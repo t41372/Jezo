@@ -106,7 +106,7 @@ Todos and notes come from the workspace ([backend.md](backend.md)): the store ap
 - **Dragging the window.** On macOS the top 40 px of the window, across its full width, is the title bar you drag it by, and so is the empty part of the icon rail. Buttons, links, inputs and other controls inside that strip opt out through one rule in `globals.css`, so a new control doesn't need to remember to. A plain `div` with a click handler isn't covered: put one in that strip and it drags the window instead.
 - **The ⌥X window** is a separate frameless window. It's hidden, not closed, between uses, and it has no open or close animation because it opens many times a day.
   - **A press** opens it for typing. The answer shows in the window itself, like Spotlight; ⌘↵ continues the conversation in the main window, and ⌥↵ files the text in 隨手記 without bringing the main window forward. This follows the older mockup (`Life Agent.dc.html`, 1c); v2 didn't show the window.
-  - **Holding ⌥X** shows a dark capsule without taking focus from the app the user is in. It shows the microphone level, a live transcript (the mock types out a fixed sentence), and which page of the main window comes along as context. Releasing sends what was said, and the answer shows in the window.
+  - **Holding ⌥X** shows a dark capsule without taking focus from the app the user is in. It shows the microphone level, what Standard ASR has heard so far, and which page of the main window comes along as context. Releasing sends what was said, and the answer shows in the window.
   - The microphone is only opened while ⌥X is held. That's the only permission Jezo asks for here.
 
 ## The ⌥X key
@@ -175,6 +175,6 @@ v2 left some screens and states undrawn. These follow the older mockups (`Life A
 
 ## Not wired yet
 
-Buttons that are in the mockup but do nothing yet: the attachment and microphone buttons in the chat box. Voice transcription is a fixed sentence; the Standard ASR sidecar isn't connected.
+Buttons that are in the mockup but do nothing yet: the attachment and microphone buttons in the chat box.
 
 The mock data is fixed at 2026-09-29 08:40, but the calendar's now-line and its idea of today follow the real clock.

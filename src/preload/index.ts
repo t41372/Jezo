@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
-import type { JezoBridge, QuickCommand } from '../shared/bridge'
+import type { JezoBridge, QuickCommand, SpeechStatus } from '../shared/bridge'
 import type { SessionView } from '../shared/session'
 import type { ItemChanges } from '../shared/workspace'
 
@@ -26,6 +26,15 @@ const bridge: JezoBridge = {
     start: (trigger) => ipcRenderer.invoke('agent:start', trigger),
     abort: (id) => ipcRenderer.invoke('agent:abort', id),
     onChange: (listener) => listen<SessionView>('agent:changed', listener),
+  },
+  speech: {
+    status: () => ipcRenderer.invoke('speech:status'),
+    install: () => ipcRenderer.invoke('speech:install'),
+    onStatus: (listener) => listen<SpeechStatus>('speech:status', listener),
+    start: () => ipcRenderer.invoke('speech:start'),
+    audio: (chunk) => ipcRenderer.send('speech:audio', chunk),
+    end: () => ipcRenderer.invoke('speech:end'),
+    onText: (listener) => listen<string>('speech:text', listener),
   },
   skills: {
     list: () => ipcRenderer.invoke('skills:list'),

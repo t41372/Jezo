@@ -31,5 +31,17 @@
   "keySaved": "已存",
   "keyRemove": "移除",
   "keyPlaceholder": "貼上金鑰",
-  "keySave": "存"
+  "keySave": "存",
+  "speech": "語音辨識",
+  "speechHint": "長按 ⌥X 說話要用。會在這台電腦上跑 {{engine}}，聲音不離開電腦。",
+  "speechReady": "{{engine}}，在這台電腦上跑",
+  "speechInstall": "安裝",
+  "speechRetry": "再試一次",
+  "speechFailed": "沒裝成功：{{error}}",
+  "speechNeedsUv": "需要先裝 uv（Python 的套件工具）。",
+  "speechStep": {
+    "environment": "正在準備 Python 環境…",
+    "packages": "正在安裝 Standard ASR…",
+    "model": "正在下載語音模型，可能要幾分鐘…"
+  }
 }

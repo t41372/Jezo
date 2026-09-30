@@ -105,9 +105,10 @@
     "context": "Looking at: {{page}}",
     "contextNote": "It comes along as context",
     "micDenied": "Can't use the microphone. Turn on Jezo in System Settings → Privacy & Security → Microphone.",
-    "mockTranscript": "Move tomorrow's gym session to Thursday, then look at next week for me",
     "thinking": "Thinking…",
-    "noModel": "No model to use. Open LM Studio or Ollama, or switch to a cloud model in Settings."
+    "noModel": "No model to use. Open LM Studio or Ollama, or switch to a cloud model in Settings.",
+    "speechMissing": "Speech recognition isn't installed yet. Install it in Settings to talk instead of typing.",
+    "listening": "Listening…"
   },
   "undo": {
     "action": "Undo",

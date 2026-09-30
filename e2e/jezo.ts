@@ -26,17 +26,23 @@ export interface Jezo {
 }
 
 // Playwright takes a function option for a fixture, so the hook is wrapped in an object.
-export const test = base.extend<{ jezo: Jezo; prepare: { workspace(root: string): void } }>({
+interface Prepare {
   /** Changes the workspace before the app opens it. */
-  prepare: [{ workspace: () => {} }, { option: true }],
+  workspace?(root: string): void
+  /** Extra Chromium switches, like a fake microphone. */
+  args?: string[]
+}
+
+export const test = base.extend<{ jezo: Jezo; prepare: Prepare }>({
+  prepare: [{}, { option: true }],
   jezo: async ({ prepare }, use, info) => {
     const dir = mkdtempSync(join(tmpdir(), 'jezo-e2e-'))
     const root = join(dir, 'workspace')
     execFileSync('bun', ['scripts/fixture.ts', root], { cwd: repo })
-    prepare.workspace(root)
+    prepare.workspace?.(root)
     const app = await electron.launch({
       executablePath: electronPath,
-      args: [join(repo, 'out/main/index.js')],
+      args: [join(repo, 'out/main/index.js'), ...(prepare.args ?? [])],
       env: { ...process.env, JEZO_WORKSPACE: root, JEZO_USER_DATA: join(dir, 'data') },
     })
     // The ⌥X window is created too; the main window is the one showing index.html.

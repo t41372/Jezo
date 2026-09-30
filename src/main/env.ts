@@ -1,5 +1,7 @@
-// Runs before anything else in the main process (it's index.ts's first import),
-// because pi reads some of these when it loads (docs/design/backend.md, "Isolation").
+// Runs before anything else in the main process, because pi reads some of these
+// when it loads (docs/design/backend.md, "Isolation"). index.ts imports it and
+// only then loads the app, with a dynamic import: a bundle runs every static
+// import of an outside package before any of its own code.
 
 import { join } from 'node:path'
 import { app } from 'electron'

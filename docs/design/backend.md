@@ -87,7 +87,7 @@ Jezo's agent is pi (`@earendil-works/pi-coding-agent`), run in the main process 
 
 The user may use pi on their own. Jezo's agent must not read their settings, keys, skills or `AGENTS.md`, and must not make network requests the user didn't ask for ([frontend.md](frontend.md), fonts). So Jezo:
 
-- sets `PI_CODING_AGENT_DIR` to a directory in the app's data before loading pi, because some of pi's paths come from it however it's called;
+- sets `PI_CODING_AGENT_DIR` to a directory in the app's data before loading pi, because some of pi's paths come from it however it's called. The main process's entry (`index.ts`) sets the environment and then loads the rest with a dynamic `import()`. A static import wouldn't do: the bundle runs every import of an outside package before any of its own code, so pi loaded with the user's `~/.pi/agent` as its directory until this was caught on 2026-09-29. Nothing had read the user's keys or models (Jezo's are held in memory and `models.json` is off), and nothing under `~/.pi/agent` had been written;
 - sets `PI_OFFLINE=1`, so pi doesn't refresh its model catalog or download `rg` and `fd` from GitHub, and `PI_TELEMETRY=0`;
 - keeps settings in memory, with project trust off, so the workspace's `.pi/` and the `AGENTS.md` files above it aren't loaded;
 - loads no extensions, skills, prompt templates or context files from the default places, and passes its own: the skill directories in the workspace, and an inline extension with Jezo's hooks;
@@ -132,6 +132,9 @@ Speech recognition runs through [Standard ASR](https://github.com/standard-voice
 
 - **Audio.** While ⌥X is held, the window records with `AudioContext({ sampleRate: 16000 })`, so Chromium does the resampling, converts to 16-bit PCM and sends it on. The standard layer resamples uploaded files but not streamed audio yet; the spec says streamed audio will be resampled too, and until then engines reject rates they don't take.
 - **Engines** are Python packages installed into the same environment (they're found by entry point). The core and the engines come from git for now, since the PyPI release predates protocol 0.2.
+- **Installing** is one button in 設定. Jezo makes a Python 3.12 environment in the app's data with uv, installs the core and the engine for this machine (MLX's Qwen3-ASR 0.6B on Apple Silicon, faster-whisper's small model elsewhere), and has the engine fetch its model. Models go where the engine keeps them by default (the Hugging Face cache), so a model the user already has isn't downloaded again. uv has to be installed; a packaged Jezo will need to bring its own.
+- **The server** starts a few seconds after Jezo does, so the first hold of ⌥X doesn't wait for Python, and runs with downloads turned off: nothing downloads while the user talks.
+- **Traditional Chinese.** Qwen3-ASR often writes Simplified Chinese or a mix. When the app is in Traditional Chinese, the ⌥X window converts what it heard with OpenCC (`cn` → `tw`) before showing it or sending it.
 - **Known upstream bug:** the reference server loads the model again for every connection, so each hold of ⌥X pays the load time. It's being fixed upstream; Jezo doesn't work around it.
 
 ## Not built yet
@@ -139,7 +142,6 @@ Speech recognition runs through [Standard ASR](https://github.com/standard-voice
 - Scheduled sessions: the morning plan, the evening check-in, the weekly review. The conversation cards they use (reworking a bad day, what a check-in will write to memory) are still drawn only from mock data, which no conversation produces now.
 - Goals, memory, experiments and connections still come from mock data in the store.
 - A skill change the agent proposes for the user to review (the 它用的方法 page can show one); for now the agent edits a skill directly, and the change shows in 修改紀錄 like any other.
-- Standard ASR.
 
 ## Memory
 
