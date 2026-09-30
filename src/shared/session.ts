@@ -5,7 +5,7 @@
 export type ISODate = string
 
 /** What started a session, or made a change. */
-export type Trigger = 'morning' | 'evening' | 'weekly' | 'hotkey' | 'user' | 'notes'
+export type Trigger = 'morning' | 'evening' | 'weekly' | 'hotkey' | 'user' | 'notes' | 'automation'
 
 /** One thing the agent did with a tool: the tool's name and the file or item it touched. */
 export interface Step {

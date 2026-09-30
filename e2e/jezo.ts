@@ -2,7 +2,7 @@
 // own: the mockup's sample data, dated to today (scripts/fixture.ts).
 
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -41,6 +41,11 @@ export const test = base.extend<{ jezo: Jezo; prepare: Prepare }>({
     const dir = mkdtempSync(join(tmpdir(), 'jezo-e2e-'))
     const root = join(dir, 'workspace')
     execFileSync('bun', ['scripts/fixture.ts', root], { cwd: repo })
+    // Automations are off unless a test turns one on, so nothing starts on its own mid-test.
+    for (const file of readdirSync(join(root, 'automations/items'))) {
+      const path = join(root, 'automations/items', file)
+      writeFileSync(path, readFileSync(path, 'utf8').replace(/^state: on$/m, 'state: off'))
+    }
     prepare.workspace?.(root)
     mkdirSync(join(dir, 'data'), { recursive: true })
     prepare.data?.(join(dir, 'data'))
@@ -69,7 +74,14 @@ export const test = base.extend<{ jezo: Jezo; prepare: Prepare }>({
     const items = (plugin: string) =>
       readdirSync(join(root, plugin, 'items'))
         .filter((file) => file.endsWith('.md'))
-        .map((file) => ({ file, ...read(`${plugin}/items/${file}`) }))
+        .flatMap((file) => {
+          // The app may remove a file between listing and reading it.
+          try {
+            return [{ file, ...read(`${plugin}/items/${file}`) }]
+          } catch {
+            return []
+          }
+        })
     await use({ app, page, root, read, items, errors })
 
     // The workspace as the test left it is part of the result.

@@ -8,14 +8,16 @@
     "types": [
       "node"
     ],
-    "noEmit": true
+    "noEmit": true,
+    "allowImportingTsExtensions": true
   },
   "include": [
     "electron.vite.config.ts",
     "src/main/**/*",
     "src/preload/**/*",
     "src/shared/**/*",
-    "native/hotkey/index.d.ts"
+    "native/hotkey/index.d.ts",
+    "packages/*/src/**/*"
   ],
   "exclude": [
     "**/*.test.ts"

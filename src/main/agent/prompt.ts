@@ -26,19 +26,13 @@ export const CLAIMS_ACTION = /(排好|排到|排進|排在|排了|加好|加進|
 export const CLAIMED_WITHOUT_CHANGE =
   "Your reply says you changed something, but nothing in the workspace changed in this turn. If you meant to make the change, make it now with the tools. If you didn't, tell the user plainly that nothing was changed yet."
 
-/** The request a session Jezo starts sends to the agent. The user doesn't see it. */
+/**
+ * The request a session Jezo starts sends to the agent. The user doesn't see
+ * it. Scheduled sessions are automations, whose requests are their files'
+ * bodies (automations/items/*.md).
+ */
 export const REQUESTS: Partial<Record<Trigger, string>> = {
   notes: 'The user handed you their unsorted notes (隨手記). Sort them with the sort-notes skill, then propose what each becomes with notes_propose.',
-  morning: `It's the start of the user's day. Plan today with them.
-- Look at what's already scheduled today, the backlog, and the active goals and their rules.
-- Propose what to do today and when: new todos with todos_propose, times for existing ones with todos_update. Follow the skills that apply (when X do Y, estimating from records). Leave room; a full day that falls apart helps nobody.
-- If something needs the user's call (two things compete for the same slot, a deadline is at risk), ask with ask_user.
-- Then tell them in two or three sentences what you proposed and why. If there's nothing worth planning, say so in one sentence and stop.`,
-  evening: `It's the end of the user's day. Check in with them, briefly and kindly.
-- Look at what was planned today and what's done.
-- Ask how the day went with ask_user and a few short answers.
-- Don't mark anything done that they didn't say they did, and don't count planned things as progress.
-- If tomorrow needs a change because of today, propose it; otherwise don't.`,
 }
 
 const pad = (n: number) => String(n).padStart(2, '0')

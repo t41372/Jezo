@@ -5,6 +5,7 @@ import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell, type BrowserWi
 import type { ThemeSource } from '../shared/bridge'
 import { AgentHost } from './agent/host'
 import { serveAgent } from './agent/ipc'
+import { createMemory, serveMemory } from './agent/memory'
 import { Providers } from './agent/providers'
 import { Schedule, setLanguage } from './agent/schedule'
 import { historyFile, UndoLog } from './agent/undo'
@@ -119,10 +120,13 @@ async function openWorkspace() {
   const undo = new UndoLog(workspace, historyFile(app.getPath('userData')))
   const providers = new Providers()
   await providers.open()
-  const host = new AgentHost(workspace, undo, providers)
+  const memory = createMemory(workspace)
+  await memory.load()
+  serveMemory(memory)
+  const host = new AgentHost(workspace, undo, providers, memory)
   await host.open()
-  serveAgent(host, undo, providers)
-  schedule = new Schedule(host, providers, openSession)
+  schedule = new Schedule(workspace, host, providers, openSession)
+  serveAgent(host, undo, providers, schedule)
   schedule.start()
   serveSpeech(speech)
   // Start the speech server early, so the first hold of ⌥X doesn't wait for Python to start.

@@ -65,7 +65,8 @@
       "todos_update": "update todo",
       "notes_propose": "propose sorting",
       "ask_user": "ask you",
-      "todos_list": "list todos"
+      "todos_list": "list todos",
+      "item_links": "look at links"
     }
   },
   "working": "Thinking…",

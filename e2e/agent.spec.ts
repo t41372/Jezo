@@ -111,13 +111,14 @@ test('a server added by hand is tested, and its model can be picked for the agen
 
 test.describe('the morning plan', () => {
   test.describe.configure({ timeout: 600_000 })
-  // Due a minute ago, so it starts as soon as Jezo opens.
+  // The morning automation, due a minute ago, so it starts as soon as Jezo opens.
   test.use({
     prepare: {
-      data: (dir) => {
+      workspace: (root) => {
         const d = new Date(Date.now() - 60_000)
-        const at = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-        writeFileSync(join(dir, 'config.json'), JSON.stringify({ schedule: { morning: at, evening: null } }))
+        const path = join(root, 'automations/items/a-morning.md')
+        const text = readFileSync(path, 'utf8')
+        writeFileSync(path, text.replace(/^schedule: .*$/m, `schedule: ${d.getMinutes()} ${d.getHours()} * * *`).replace(/^state: off$/m, 'state: on'))
       },
     },
   })
@@ -138,7 +139,38 @@ test.describe('the morning plan', () => {
     }
     // It ran once; opening the app again today doesn't plan the day twice.
     const sessions = readdirSync(join(jezo.root, 'sessions'))
-    expect(sessions.filter((f) => readFileSync(join(jezo.root, 'sessions', f), 'utf8').includes('"trigger":"morning"'))).toHaveLength(1)
+    expect(sessions.filter((f) => readFileSync(join(jezo.root, 'sessions', f), 'utf8').includes('"id":"a-morning"'))).toHaveLength(1)
     expect(jezo.errors).toEqual([])
   })
+})
+
+test('the agent remembers what the user says, replaces it when it changes, and a deleted memory stays gone', async ({ jezo }) => {
+  const { page, items } = jezo
+  const guitar = () => items('memory').filter((m) => m.body.includes('吉他'))
+  const say = async (text: string) => {
+    const box = page.locator('main textarea').first()
+    await box.fill(text)
+    await box.press('Enter')
+    await settled(page)
+  }
+  await say('記住：我每週三晚上 7 點上吉他課。')
+  await expect.poll(() => guitar().map((m) => m.data)).toEqual([expect.objectContaining({ epistemic: 'stated', source: 'user', status: 'active' })])
+  expect((guitar()[0].data.evidence as string[])[0]).toMatch(/^sessions\//)
+
+  await say('吉他課改到週四晚上 8 點了。')
+  await expect.poll(() => guitar().filter((m) => m.data.status === 'active').length).toBe(1)
+  const current = guitar().find((m) => m.data.status === 'active')!
+  expect(current.body).toContain('週四')
+  expect(guitar().find((m) => m.data.status === 'superseded')?.data.superseded_by).toBe(current.data.id)
+
+  // Deleted in the GUI: a new conversation doesn't know it, and can't read it back from the old one.
+  await open(page, '更多')
+  await page.getByText('它記住的事').click()
+  await page.locator('main').getByText(current.body.trim()).locator('xpath=ancestor::div[.//button][1]').getByRole('button', { name: '刪掉' }).click()
+  await expect.poll(() => guitar().some((m) => m.data.status === 'active')).toBe(false)
+  await open(page, '聊天')
+  await page.getByRole('button', { name: /新對話/ }).click()
+  await say('我週四晚上有什麼固定的事？')
+  await expect(page.locator('main [data-selectable]').last()).not.toContainText('吉他')
+  expect(jezo.errors).toEqual([])
 })

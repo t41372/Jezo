@@ -49,7 +49,7 @@ function describe(data: Record<string, unknown>) {
   return `${data.id} "${data.title}": ${data.state}, ${when}, ${data.estimate ?? '?'} min`
 }
 
-export function createTools(workspace: Workspace, context: () => RunContext): ToolDefinition[] {
+export function createTools(workspace: Workspace, context: () => RunContext, blocked: (path: string) => boolean): ToolDefinition[] {
   const root = workspace.root
   const actor = () => ({ by: 'agent' as const, run: context().run })
 
@@ -217,6 +217,23 @@ export function createTools(workspace: Workspace, context: () => RunContext): To
     },
   })
 
+  const itemLinks = defineTool({
+    name: 'item_links',
+    label: 'Links',
+    description: 'Shows what an item links to and what links to it: todos, goals, notes and the rest, with their titles.',
+    parameters: Type.Object({ id: Type.String() }),
+    async execute(_id, params) {
+      const item = workspace.get(params.id)
+      if (!item) throw new Error(`There is no item ${params.id}.`)
+      const line = (i: { id: string; kind: string; path: string; data: Record<string, unknown> }) =>
+        `- ${i.kind} ${i.id} "${i.data.title ?? i.data.name ?? ''}" (${i.path})`
+      const out = (item.links ?? []).flatMap((id) => workspace.get(id) ?? [])
+      const back = workspace.backlinks(item.id)
+      const text = [`Links from ${item.id}:`, ...(out.length ? out.map(line) : ['- none']), `Links to ${item.id}:`, ...(back.length ? back.map(line) : ['- none'])]
+      return { content: [{ type: 'text' as const, text: text.join('\n') }], details: undefined }
+    },
+  })
+
   const askUser = defineTool({
     name: 'ask_user',
     label: 'Ask the user',
@@ -229,8 +246,18 @@ export function createTools(workspace: Workspace, context: () => RunContext): To
     },
   })
 
+  // A conversation the user deleted a memory from isn't there to read.
+  const readOps = {
+    readFile: async (absolute: string) => {
+      const path = insideWorkspace(root, absolute)
+      if (path && blocked(path)) throw new Error('This conversation is closed to you: the user deleted a memory that came from it.')
+      return readFile(absolute)
+    },
+    access: (absolute: string) => access(absolute),
+  }
+
   return [
-    createReadToolDefinition(root),
+    createReadToolDefinition(root, { operations: readOps }),
     createLsToolDefinition(root),
     createWriteToolDefinition(root, { operations: writeOps }),
     createEditToolDefinition(root, { operations: editOps }),
@@ -238,11 +265,12 @@ export function createTools(workspace: Workspace, context: () => RunContext): To
     todosPropose,
     todosUpdate,
     notesPropose,
+    itemLinks,
     askUser,
   ] as ToolDefinition[]
 }
 
-export const TOOL_NAMES = ['read', 'ls', 'write', 'edit', 'todos_list', 'todos_propose', 'todos_update', 'notes_propose', 'ask_user']
+export const TOOL_NAMES = ['read', 'ls', 'write', 'edit', 'todos_list', 'todos_propose', 'todos_update', 'notes_propose', 'item_links', 'ask_user', 'memory_remember', 'memory_recall', 'memory_forget']
 
 function nowLocal(at = new Date()) {
   const pad = (n: number) => String(n).padStart(2, '0')

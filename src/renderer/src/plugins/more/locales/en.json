@@ -90,7 +90,8 @@
       "hotkey": "⌥X",
       "user": "Chat",
       "you": "You",
-      "notes": "Sorting notes"
+      "notes": "Sorting notes",
+      "automation": "Automation"
     },
     "retried_one": "Took {{count}} retry to get the format right",
     "retried_other": "Took {{count}} retries to get the format right",

@@ -9,7 +9,6 @@ import type {
   Energy,
   Connection,
   Experiment,
-  Memory,
   Note,
   Todo,
 } from './types'
@@ -109,14 +108,6 @@ export const events: CalendarEvent[] = [
     weeklyEvents.map(({ weekday, ...e }, i) => ({ ...e, id: `e-${weekOffset}-${i}`, date: day(weekOffset + weekday) })),
   ),
   ...oneOffEvents,
-]
-
-export const memories: Memory[] = [
-  { id: 'm1', kind: 'stated', text: '加班的日子 → 回家伸展 10 分鐘', date: day(0), via: 'evening' },
-  { id: 'm2', kind: 'stated', text: '週日不排工作', date: '2026-09-14' },
-  { id: 'm3', kind: 'stated', text: '週四晚上固定打排球', date: '2026-09-02' },
-  { id: 'm4', kind: 'inferred', text: '下午會議多的日子，你寫東西比較難', date: day(0), evidence: 5, confidence: 'medium' },
-  { id: 'm5', kind: 'inferred', text: '長跑你常少估 35% 的時間', date: day(-2), evidence: 6, confidence: 'high' },
 ]
 
 /** Things jotted down in 隨手記, one of each kind the agent sorts into. */

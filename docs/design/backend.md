@@ -79,6 +79,15 @@ Anything else about it, in prose.
 
 **A note** (`notes/items/<id>.md`) is as [notes.md](notes.md) describes, plus where the agent's proposal waits while the user decides: `proposal: { as: todo, title: … }`, or `{ as: ask, question: … }`. The proposal stays on the note after the user decides, so taking a decision back shows it again. Keeping it on the note rather than in the conversation means the 隨手記 page and the chat card read the same file.
 
+### Links
+
+Items link to each other the way any markdown does, so the workspace opens in Typora, VS Code, Obsidian or on GitHub with its links working:
+
+- **In a body,** a standard markdown link to the other item's file, relative to this one: `[寫第五段](../../todos/items/t-01j8z4.md)`. File names are ids and directories don't move, so relative links stay good.
+- **In frontmatter,** a plain id is a link: `goal: g-01j8z1`, `blocked_by: [t-01j8z4]`, a note's `became.ref`. Frontmatter links aren't clickable in most editors anyway, and an id is harder to get wrong than a path.
+- **The app works links out, deterministically,** each time an item is read: every body link that resolves to an item file, and every frontmatter value that is another item's id. Each item carries the items it links to; what links to an item is worked out from those. The agent gets both with `item_links`, and a todo's panel lists them under 相關, each opening the other item.
+- **Rejected: Obsidian's `[[wikilinks]]`.** They'd be resolved by file name, which works, but only Obsidian and a few editors understand them; everywhere else they're plain text. Also rejected: writing the link index into the workspace as a file, which would change with every edit, and could fall out of date against the files it's derived from.
+
 ## Jezo's agent
 
 Jezo's agent is pi (`@earendil-works/pi-coding-agent`), run in the main process through pi's SDK. A spike on 2026-09-29 ran it inside Electron with a local model through LM Studio: skills and the digest reached the prompt, the session-start and turn-end hooks fired, the agent's edits went through our file functions, and the session was saved and reopened.
@@ -120,9 +129,16 @@ Each session is a pi session saved as JSONL in `<workspace>/sessions/`. Conversa
 
 Tool parameters are plain: strings, numbers, booleans and objects, with no regex patterns and no nullable unions. Local model servers turn tool schemas into grammars for sampling, and on 2026-09-29 a time field declared as "a string matching a pattern, or null" left LM Studio able to send only null: the agent called the tool sixteen times, was told "Updated" each time, and finally edited the file by hand. Formats are checked when the tool runs, with a message the model can act on, an empty string clears a field, and every result says what the item looks like now, so a call that didn't do what the model meant is visible to it.
 
-### Scheduled sessions
+### Automations
 
-Jezo starts two sessions a day on its own, at times set in 設定 (08:00 and 21:30 unless changed, or off): planning the day in the morning, and a check-in in the evening. Each runs once a day. If Jezo wasn't running at the time, the session starts when it opens, up to two hours late, and the morning plan until 2 p.m. It doesn't start without a usable model, which would only record a failure every day. When it's done, a system notification says so, and clicking it opens the conversation. The morning plan only proposes: todos it adds are drafts and times it suggests are proposals, which the E2E test checks. The weekly review isn't built yet. The times are per machine, in the app's data.
+Sessions Jezo starts on its own are automations: files in the workspace's `automations/items/`, one per automation. The frontmatter has a name, a cron schedule in local time, on or off, how many minutes late it may still start (120 unless it says), and for the built-in ones which kind it is. **The body is what the agent is asked when it runs**, so what the morning plan does is editable like a skill (AGENTS.md, principle 5), and the agent can add, change or turn off automations when the user asks, with undo like any other change.
+
+- **Built in:** the morning plan (08:00, may start until 14:00), the evening check-in (21:30), and the weekly review (Sundays 20:00, may start a day late). The rows in 設定 set the first two's times and turn them on or off by editing their files.
+- **Running them:** Jezo's own timer looks every 30 seconds, and ten seconds after launch. For each automation that's on, it takes the most recent time its schedule was due (croner); if that was no longer ago than it may be late, and no session of that automation has started since, it starts one. It doesn't start without a usable model, which would only record a failure every time. pi has no scheduler of its own; Hermes has one, but Jezo doesn't use Hermes.
+- **When it's done,** a system notification names it, and clicking it opens the conversation.
+- **What it may do:** the morning plan only proposes; todos it adds are drafts and times it suggests are proposals, which the E2E test checks.
+- **Seeding:** a plugin's directory is copied into the workspace only when the workspace doesn't have it yet, so a built-in automation the user deleted stays deleted.
+- **Not built yet:** a list of every automation in 更多, with its schedule in words.
 
 ### Requests Jezo makes
 
@@ -159,7 +175,7 @@ Speech recognition runs through [Standard ASR](https://github.com/standard-voice
 
 ## Not built yet
 
-- The weekly review. The conversation cards the check-in and a bad day use (reworking a bad day, what a check-in will write to memory) are still drawn only from mock data, which no conversation produces now.
+- The conversation cards the check-in and a bad day use (reworking a bad day, what a check-in will write to memory) are still drawn only from mock data, which no conversation produces now.
 - Memory, experiments and connections still come from mock data in the store.
 - A skill change the agent proposes for the user to review (the 它用的方法 page can show one); for now the agent edits a skill directly, and the change shows in 修改紀錄 like any other.
 

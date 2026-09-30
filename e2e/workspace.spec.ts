@@ -199,3 +199,52 @@ test("a goal's progress is counted from its todos, and a rule change is decided 
 
   expect(jezo.errors).toEqual([])
 })
+
+test('automations are files, and the settings rows edit the built-in ones', async ({ jezo }) => {
+  const { page, read } = jezo
+  await open(page, '設定')
+  // The fixture turned them off; turning the morning plan on writes its file.
+  const morning = page.getByRole('switch', { name: '早上排程' })
+  await morning.click()
+  await expect.poll(() => read('automations/items/a-morning.md').data).toMatchObject({ state: 'on', schedule: '0 8 * * *' })
+  await morning.click()
+  await expect.poll(() => read('automations/items/a-morning.md').data.state).toBe('off')
+  // The body, what the agent is asked, is untouched.
+  expect(read('automations/items/a-morning.md').body).toContain('跟用戶一起排今天')
+  expect(jezo.errors).toEqual([])
+})
+
+test('a markdown link between two todos shows on both, and opens the other', async ({ jezo }) => {
+  const { page, root } = jezo
+  // Written in another editor: a standard markdown link from 打給媽 to 回 3 封卡住的信.
+  const path = join(root, 'todos/items/t-u2.md')
+  writeFileSync(path, `${readFileSync(path, 'utf8')}先[回完信](../../todos/items/t-u1.md)再打。\n`)
+  await open(page, '行事曆')
+  await page.locator('[data-backlog-id="t-u2"]').click()
+  const related = page.locator('section').filter({ hasText: '相關' })
+  await expect(related.getByRole('button', { name: /回 3 封卡住的信/ })).toBeVisible()
+
+  // The other todo shows it's linked from here, and the link opens it.
+  await related.getByRole('button', { name: /回 3 封卡住的信/ }).click()
+  await expect(page.locator('h2', { hasText: '回 3 封卡住的信' })).toBeVisible()
+  await expect(page.locator('section').filter({ hasText: '相關' }).getByRole('button', { name: /打給媽/ })).toBeVisible()
+  expect(jezo.errors).toEqual([])
+})
+
+test('memories are files; deleting one keeps it deleted, and undo brings it back', async ({ jezo }) => {
+  const { page, root, items } = jezo
+  await open(page, '更多')
+  await page.getByText('它記住的事').click()
+  const row = page.locator('main').getByText('週日不排工作').locator('xpath=ancestor::div[.//button][1]')
+  await expect(page.locator('main').getByText('週日不排工作')).toBeVisible()
+  await expect(page.locator('main').getByText('長跑你常少估 35% 的時間')).toBeVisible()
+
+  await row.getByRole('button', { name: '刪掉' }).click()
+  await expect.poll(() => items('memory').some((m) => m.data.id === 'm-2')).toBe(false)
+  expect(readFileSync(join(root, 'memory/forgotten.yaml'), 'utf8')).toContain('m-2')
+
+  await page.getByRole('button', { name: '撤銷' }).click()
+  await expect.poll(() => items('memory').find((m) => m.data.id === 'm-2')?.body).toContain('週日不排工作')
+  expect(readFileSync(join(root, 'memory/forgotten.yaml'), 'utf8')).not.toContain('m-2')
+  expect(jezo.errors).toEqual([])
+})

@@ -15,6 +15,12 @@ export interface Item {
   hash: string
   /** What the check found wrong with it. An item with problems is still shown. */
   problems?: string[]
+  /**
+   * The items it links to: markdown links in the body that point at another
+   * item's file, and frontmatter values that are another item's id. Worked out
+   * by the app; links that point nowhere aren't listed.
+   */
+  links?: string[]
 }
 
 export interface ItemChanges {

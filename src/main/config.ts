@@ -22,14 +22,11 @@ export interface Config {
     /** OpenAI-compatible servers the user added. */
     custom: { id: string; name: string; baseUrl: string }[]
   }
-  /** When Jezo starts the day's sessions on its own, as "08:00"; null is off. */
-  schedule: { morning: string | null; evening: string | null }
 }
 
 const defaults = (): Config => ({
   workspace: join(homedir(), 'Jezo'),
   models: { main: null, background: null, thinking: 'medium', providers: {}, custom: [] },
-  schedule: { morning: '08:00', evening: '21:30' },
 })
 
 const file = () => join(app.getPath('userData'), 'config.json')
@@ -46,7 +43,7 @@ export function getConfig(): Config {
   }
   const base = defaults()
   const { model: _older, ...rest } = stored as Partial<Config> & { model?: unknown }
-  config = { ...base, ...rest, models: { ...base.models, ...rest.models }, schedule: { ...base.schedule, ...rest.schedule } }
+  config = { ...base, ...rest, models: { ...base.models, ...rest.models } }
   // Tests and development point at a workspace of their own.
   if (process.env.JEZO_WORKSPACE) config.workspace = process.env.JEZO_WORKSPACE
   return config

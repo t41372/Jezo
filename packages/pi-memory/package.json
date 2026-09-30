@@ -1,0 +1,15 @@
+{
+  "name": "@jezo/pi-memory",
+  "version": "0.1.0",
+  "description": "Long-term memory for pi, kept as markdown files: what the user said apart from what the agent inferred, with evidence, replacement, and deletion that sticks.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": { ".": "./src/index.ts" },
+  "pi": { "extensions": ["./src/index.ts"] },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": ">=0.99.0",
+    "typebox": "^1.3.0",
+    "yaml": "^2.8.0"
+  }
+}

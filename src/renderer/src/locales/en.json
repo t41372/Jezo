@@ -47,6 +47,11 @@
       "title": "Sorting notes",
       "short": "Notes",
       "started": "handed over from Notes"
+    },
+    "automation": {
+      "title": "Automation",
+      "short": "Automatic",
+      "started": "Started automatically"
     }
   },
   "todo": {
@@ -147,5 +152,10 @@
     "stop": "Stop",
     "micDenied": "Jezo can't use the microphone. Allow it in System Settings, Privacy & Security.",
     "speechMissing": "Speech recognition isn't installed yet. Install it in Settings to talk instead of typing."
+  },
+  "related": {
+    "title": "Related",
+    "linksTo": "Links to",
+    "linkedFrom": "Linked from"
   }
 }

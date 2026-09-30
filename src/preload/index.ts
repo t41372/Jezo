@@ -44,6 +44,12 @@ const bridge: JezoBridge = {
     list: () => ipcRenderer.invoke('skills:list'),
     setEnabled: (id, enabled) => ipcRenderer.invoke('skills:set-enabled', id, enabled),
   },
+  memory: {
+    remember: (input) => ipcRenderer.invoke('memory:remember', input),
+    forget: (id) => ipcRenderer.invoke('memory:forget', id),
+    restore: (record) => ipcRenderer.invoke('memory:restore', record),
+    discard: (id) => ipcRenderer.invoke('memory:discard', id),
+  },
   providers: {
     list: () => ipcRenderer.invoke('providers:list'),
     get: (id) => ipcRenderer.invoke('providers:get', id),

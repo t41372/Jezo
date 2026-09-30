@@ -1,10 +1,10 @@
 // The windows' view of the agent: conversations, and the history of what it changed.
 
 import { BrowserWindow, ipcMain } from 'electron'
-import type { CustomProviderInput, ModelRef, Schedule } from '../../shared/bridge'
-import { getConfig, setConfig } from '../config'
+import type { CustomProviderInput, ModelRef, Schedule as ScheduleTimes } from '../../shared/bridge'
 import type { Trigger } from '../../shared/session'
 import type { Providers } from './providers'
+import type { Schedule } from './schedule'
 import type { AgentHost } from './host'
 import type { UndoLog } from './undo'
 
@@ -12,7 +12,10 @@ const broadcast = (channel: string, value?: unknown) => {
   for (const window of BrowserWindow.getAllWindows()) window.webContents.send(channel, value)
 }
 
-export function serveAgent(host: AgentHost, undo: UndoLog, providers: Providers) {
+export function serveAgent(host: AgentHost, undo: UndoLog, providers: Providers, schedule: Schedule) {
+  ipcMain.handle('schedule:get', () => schedule.times())
+  ipcMain.handle('schedule:set', (_, change: Partial<ScheduleTimes>) => schedule.setTimes(change))
+
   ipcMain.handle('agent:list', () => host.list())
   ipcMain.handle('agent:send', (_, id: string | null, text: string, trigger?: Trigger) => host.send(id, text, trigger))
   ipcMain.handle('agent:start', (_, trigger: Trigger) => host.start(trigger))
@@ -35,11 +38,6 @@ export function serveAgent(host: AgentHost, undo: UndoLog, providers: Providers)
   ipcMain.handle('providers:import-pi', () => providers.importFromPi())
   providers.onChange(() => broadcast('providers:changed'))
 
-  ipcMain.handle('schedule:get', () => getConfig().schedule)
-  ipcMain.handle('schedule:set', async (_, change: Partial<Schedule>) => {
-    await setConfig({ schedule: { ...getConfig().schedule, ...change } })
-    return getConfig().schedule
-  })
 
   ipcMain.handle('history:list', () => undo.list())
   ipcMain.handle('history:undo', (_, id: string) => undo.undo(id))

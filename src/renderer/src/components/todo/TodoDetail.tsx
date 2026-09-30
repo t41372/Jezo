@@ -11,6 +11,7 @@ import { easeOut } from '@/lib/motion'
 import { addDays, clock, duration, longDate, monthDay, weekday } from '@/lib/time'
 import { offerUndo } from '@/lib/undo'
 import { slotLabel, whenLabel } from './format'
+import { Related } from './Related'
 
 /** Everything about one todo, and what you can do with it. */
 export function TodoDetail({ todo, onClose }: { todo: Todo; onClose: () => void }) {
@@ -87,6 +88,8 @@ export function TodoDetail({ todo, onClose }: { todo: Todo; onClose: () => void 
       )}
 
       {!draftTodo && !proposedSlot && todo.why && <Why text={todo.why} />}
+
+      <Related id={todo.id} links={todo.links} exclude={todo.goalId ? [todo.goalId] : []} />
 
       <div className="flex-1" />
 

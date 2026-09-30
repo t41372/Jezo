@@ -122,7 +122,7 @@ function MessageView({ message: m, sessionId, index }: { message: Message; sessi
   }
 }
 
-const LOOKING = new Set(['read', 'ls', 'todos_list'])
+const LOOKING = new Set(['read', 'ls', 'todos_list', 'item_links'])
 const CHANGING = new Set(['write', 'edit', 'todos_propose', 'todos_update', 'notes_propose'])
 
 /** What the agent did, folded: "看了 3 個檔案，改了 1 個", and each step inside. */

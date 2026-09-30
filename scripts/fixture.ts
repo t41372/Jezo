@@ -91,4 +91,17 @@ const goals = [
 await mkdir(join(dir, 'goals/items'), { recursive: true })
 for (const goal of goals) await writeFile(join(dir, 'goals/items', `${goal.fields.id}.md`), patch(goal.body, goal.fields))
 
-console.log(`Wrote ${todos.length} todos, ${goals.length} goals and ${notes.length} notes to ${dir}`)
+// The mockup's memories. Inferences carry the todos they rest on.
+const memories = [
+  { id: 'm-1', epistemic: 'stated', about: 'preference', recorded: `${shift(NOW.date)}T21:40`, text: '加班的日子 → 回家伸展 10 分鐘' },
+  { id: 'm-2', epistemic: 'stated', about: 'preference', recorded: '2026-09-14T20:10', text: '週日不排工作' },
+  { id: 'm-3', epistemic: 'stated', about: 'fact', recorded: '2026-09-02T19:30', text: '週四晚上固定打排球' },
+  { id: 'm-4', epistemic: 'inferred', about: 'pattern', recorded: `${shift(NOW.date)}T08:00`, confidence: 'medium', evidence: ['todos/items/t-x7.md', 'todos/items/t-2.md'], text: '下午會議多的日子，你寫東西比較難' },
+  { id: 'm-5', epistemic: 'inferred', about: 'pattern', recorded: `${shift(NOW.date)}T08:00`, confidence: 'high', evidence: ['todos/items/t-x16.md'], text: '長跑你常少估 35% 的時間' },
+]
+await mkdir(join(dir, 'memory/items'), { recursive: true })
+for (const { text, ...fields } of memories) {
+  await writeFile(join(dir, 'memory/items', `${fields.id}.md`), patch(`${text}\n`, { ...fields, status: 'active', source: fields.epistemic === 'inferred' ? 'agent' : 'user' }))
+}
+
+console.log(`Wrote ${todos.length} todos, ${goals.length} goals, ${notes.length} notes and ${memories.length} memories to ${dir}`)

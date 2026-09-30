@@ -4,12 +4,14 @@
     "types": [
       "bun",
       "node"
-    ]
+    ],
+    "allowImportingTsExtensions": true
   },
   "include": [
     "src/main/**/*.test.ts",
     "e2e/**/*.ts",
-    "playwright.config.ts"
+    "playwright.config.ts",
+    "packages/*/src/**/*.test.ts"
   ],
   "exclude": []
 }

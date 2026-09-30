@@ -4,7 +4,7 @@
 // user can undo.
 
 import { mkdir, readdir, stat } from 'node:fs/promises'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import {
   type AgentSession,
   type AgentSessionEvent,
@@ -18,6 +18,8 @@ import type { ThinkingLevel } from '@earendil-works/pi-agent-core'
 import type { SessionMessage, SessionView, Step, Trigger } from '../../shared/session'
 import { skillRoots } from '../workspace/skills'
 import type { Workspace } from '../workspace/workspace'
+import { type Memory, memoryExtension } from '../../../packages/pi-memory/src/index.ts'
+import { acting } from './acting'
 import type { Providers } from './providers'
 import { CLAIMED_WITHOUT_CHANGE, CLAIMS_ACTION, digest, REQUESTS, SYSTEM_PROMPT } from './prompt'
 import { type CardDetails, createTools, type RunContext, TOOL_NAMES } from './tools'
@@ -26,6 +28,8 @@ import type { UndoLog } from './undo'
 interface Conversation {
   id: string
   trigger: Trigger
+  /** The automation that started it, and its name, for sessions Jezo starts on its own. */
+  automation?: { id: string; name: string }
   /** When it started, as a Date. */
   started: Date
   manager: SessionManager
@@ -45,7 +49,7 @@ const REQUEST_MESSAGE = 'jezo.request'
 export class AgentHost {
   private conversations = new Map<string, Conversation>()
   private listeners = new Set<(view: SessionView) => void>()
-  private finishedListeners = new Set<(id: string, trigger: Trigger) => void>()
+  private finishedListeners = new Set<(id: string, automation?: { id: string; name: string }) => void>()
   private timers = new Map<string, NodeJS.Timeout>()
   private settings = SettingsManager.inMemory(
     { compaction: { enabled: true }, retry: { enabled: true, maxRetries: 2 }, cacheWarming: 'off', enableInstallTelemetry: false },
@@ -56,6 +60,7 @@ export class AgentHost {
     private workspace: Workspace,
     private undo: UndoLog,
     private providers: Providers,
+    private memory: Memory,
   ) {}
 
   private get dir() {
@@ -70,11 +75,14 @@ export class AgentHost {
       try {
         const manager = SessionManager.open(join(this.dir, name), this.dir, this.workspace.root)
         const header = manager.getHeader()
-        const trigger = manager.getEntries().find((e) => e.type === 'custom' && e.customType === TRIGGER_ENTRY) as { data?: { trigger?: Trigger } } | undefined
+        const trigger = manager.getEntries().find((e) => e.type === 'custom' && e.customType === TRIGGER_ENTRY) as
+          | { data?: { trigger?: Trigger; automation?: { id: string; name: string } } }
+          | undefined
         const id = manager.getSessionId()
         this.conversations.set(id, {
           id,
           trigger: trigger?.data?.trigger ?? 'user',
+          automation: trigger?.data?.automation,
           started: new Date(header?.timestamp ?? (await stat(join(this.dir, name))).mtime),
           manager,
           session: null,
@@ -94,8 +102,8 @@ export class AgentHost {
     return () => this.listeners.delete(listener)
   }
 
-  /** Called when a run ends with an answer. */
-  onFinished(listener: (id: string, trigger: Trigger) => void) {
+  /** Called when a run ends with an answer, with the automation that started it, if one did. */
+  onFinished(listener: (id: string, automation?: { id: string; name: string }) => void) {
     this.finishedListeners.add(listener)
     return () => this.finishedListeners.delete(listener)
   }
@@ -113,6 +121,24 @@ export class AgentHost {
   }
 
   /** Starts a conversation Jezo asks for, like sorting notes. The request isn't shown to the user. */
+  /** Runs an automation: its body is the request, and the session remembers which automation it was. */
+  async startAutomation(automation: { id: string; name: string; trigger?: Trigger; request: string }) {
+    const conversation = await this.create(automation.trigger ?? 'automation', { id: automation.id, name: automation.name })
+    void this.run(conversation, (session) =>
+      session.sendCustomMessage({ customType: REQUEST_MESSAGE, content: automation.request, display: false }, { triggerTurn: true }),
+    )
+    return conversation.id
+  }
+
+  /** When each automation last started a session. */
+  lastRuns() {
+    const runs = new Map<string, Date>()
+    for (const c of this.conversations.values()) {
+      if (c.automation && (!runs.has(c.automation.id) || runs.get(c.automation.id)! < c.started)) runs.set(c.automation.id, c.started)
+    }
+    return runs
+  }
+
   async start(trigger: Trigger) {
     const request = REQUESTS[trigger]
     if (!request) throw new Error(`Nothing starts a session for ${trigger}.`)
@@ -127,13 +153,14 @@ export class AgentHost {
     await this.conversations.get(id)?.session?.abort()
   }
 
-  private async create(trigger: Trigger): Promise<Conversation> {
+  private async create(trigger: Trigger, automation?: { id: string; name: string }): Promise<Conversation> {
     const manager = SessionManager.create(this.workspace.root, this.dir)
-    manager.appendCustomEntry(TRIGGER_ENTRY, { trigger })
+    manager.appendCustomEntry(TRIGGER_ENTRY, { trigger, ...(automation && { automation }) })
     const id = manager.getSessionId()
     const conversation: Conversation = {
       id,
       trigger,
+      automation,
       started: new Date(),
       manager,
       session: null,
@@ -164,10 +191,16 @@ export class AgentHost {
       }
       c.context.run = `r-${Date.now().toString(36)}`
       this.undo.start({ id: c.context.run, session: c.id, trigger: c.trigger, at: localTime(new Date()) })
-      await prompt(session)
-      await session.waitForIdle()
+      // Everything this run does, however deep, is the agent's, acting on the user's words or on what Jezo asked.
+      const source = c.trigger === 'user' || c.trigger === 'hotkey' ? 'user' : 'agent'
+      const file = c.manager.getSessionFile()
+      const sessionPath = file ? `sessions/${basename(file)}` : undefined
+      await acting.run({ actor: { by: 'agent', run: c.context.run }, source, session: sessionPath }, async () => {
+        await prompt(session)
+        await session.waitForIdle()
+      })
       await this.undo.finish(c.context.run, firstSentence(session.getLastAssistantText() ?? ''))
-      for (const listener of this.finishedListeners) listener(c.id, c.trigger)
+      for (const listener of this.finishedListeners) listener(c.id, c.automation)
     } catch (error) {
       console.error(error)
       this.note(c, { kind: 'error', text: String(error instanceof Error ? error.message : error) })
@@ -213,7 +246,10 @@ export class AgentHost {
       additionalSkillPaths: await this.skillDirs(),
       systemPromptOverride: () => SYSTEM_PROMPT,
       appendSystemPromptOverride: () => [digest(this.workspace.list())],
-      extensionFactories: [{ name: 'jezo-checks', factory: (pi) => this.checks(pi, c) }],
+      extensionFactories: [
+        { name: 'jezo-checks', factory: (pi) => this.checks(pi, c) },
+        { name: 'jezo-memory', factory: memoryExtension(this.memory) },
+      ],
     })
     await loader.reload()
     const { session } = await createAgentSession({
@@ -225,7 +261,7 @@ export class AgentHost {
       model,
       thinkingLevel: this.providers.thinking(model) as ThinkingLevel,
       tools: TOOL_NAMES,
-      customTools: createTools(this.workspace, () => c.context),
+      customTools: createTools(this.workspace, () => c.context, (path) => this.blocked(path)),
       sessionManager: c.manager,
     })
     await session.bindExtensions({ mode: 'json', onError: (e) => console.error('pi extension error', e) })
@@ -249,6 +285,14 @@ export class AgentHost {
       this.undo.claimedWithoutChange(run)
       return { entries: [{ type: 'custom_message', customType: CHECK_MESSAGE, content: CLAIMED_WITHOUT_CHANGE, display: false }], continue: true }
     })
+  }
+
+  /**
+   * Conversations a deleted memory came from. The agent can't read them, so
+   * what the user deleted doesn't come back from where it was first said.
+   */
+  private blocked(path: string) {
+    return this.memory.deleted().some((f) => f.evidence?.includes(path))
   }
 
   /** Skills live in the workspace: its own skills/, and each plugin directory's. */
@@ -290,7 +334,11 @@ export class AgentHost {
     const firstUser = messages.find((m) => m.kind === 'user') as { text: string } | undefined
     return {
       id: c.id,
-      ...(c.trigger === 'user' || c.trigger === 'hotkey' ? firstUser && { title: title(firstUser.text) } : {}),
+      ...(c.trigger === 'user' || c.trigger === 'hotkey'
+        ? firstUser && { title: title(firstUser.text) }
+        : c.trigger === 'automation' && c.automation
+          ? { title: c.automation.name }
+          : {}),
       trigger: c.trigger,
       date: localTime(c.started).slice(0, 10),
       time: c.started.getHours() + c.started.getMinutes() / 60,

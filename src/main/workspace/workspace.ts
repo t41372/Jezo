@@ -63,11 +63,40 @@ export class Workspace {
   }
 
   list(): Item[] {
-    return [...this.items.values()]
+    return [...this.items.values()].map((item) => this.withLinks(item))
   }
 
   get(id: string): Item | undefined {
-    return this.items.get(id)
+    const item = this.items.get(id)
+    return item && this.withLinks(item)
+  }
+
+  /** Items that link to this one. */
+  backlinks(id: string): Item[] {
+    return this.list().filter((item) => item.links?.includes(id))
+  }
+
+  /**
+   * An item with the items it links to. Links are standard markdown links, so
+   * any editor opens them: `[寫第五段](../../todos/items/t-01j8z4.md)`, relative
+   * to the file. In frontmatter a plain id is a link (`goal: g-1`).
+   */
+  private withLinks(item: Item): Item {
+    const links = new Set<string>()
+    const dir = item.path.split('/').slice(0, -1)
+    for (const match of item.body.matchAll(/\[[^\]]*\]\(<?([^)\s>]+\.md)>?(?:#[^)]*)?\)/g)) {
+      const target = resolvePath(dir, decodeURI(match[1]))
+      const id = target && this.byPath.get(target)
+      if (id && id !== item.id) links.add(id)
+    }
+    const visit = (value: unknown): void => {
+      if (typeof value === 'string') {
+        if (value !== item.id && this.items.has(value)) links.add(value)
+      } else if (Array.isArray(value)) value.forEach(visit)
+      else if (value && typeof value === 'object') Object.entries(value).forEach(([key, v]) => key !== 'id' && visit(v))
+    }
+    visit(item.data)
+    return links.size ? { ...item, links: [...links] } : item
   }
 
   kindOf(name: string) {
@@ -142,6 +171,18 @@ export class Workspace {
       this.drop(item.path)
     })
     this.emit({ changed: [], removed: [id] })
+  }
+
+  /** Deletes any file in the workspace, recorded like a write. */
+  async removeFile(path: string, actor: Actor) {
+    await this.serial(path, async () => {
+      const text = await readIfExists(this.abs(path))
+      if (text === null) return
+      for (const listener of this.writeListeners) listener({ path, before: text, after: null, actor })
+      await rm(this.abs(path), { force: true })
+      const id = this.drop(path)
+      if (id) this.emit({ changed: [], removed: [id] })
+    })
   }
 
   /**
@@ -289,7 +330,8 @@ export class Workspace {
   }
 
   private emit(changes: ItemChanges) {
-    for (const listener of this.listeners) listener(changes)
+    const withLinks = { ...changes, changed: changes.changed.map((item) => this.withLinks(item)) }
+    for (const listener of this.listeners) listener(withLinks)
   }
 }
 
@@ -300,6 +342,19 @@ function merge(into: ItemChanges, from: ItemChanges) {
 
 function withoutNulls(fields: Fields) {
   return Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== null && v !== undefined))
+}
+
+/** A relative link from a file in `dir`, as a workspace path, or null if it leaves the workspace. */
+function resolvePath(dir: string[], link: string) {
+  if (/^[a-z]+:/i.test(link) || link.startsWith('/')) return null
+  const parts = [...dir]
+  for (const part of link.split('/')) {
+    if (part === '..') {
+      if (!parts.length) return null
+      parts.pop()
+    } else if (part && part !== '.') parts.push(part)
+  }
+  return parts.join('/')
 }
 
 /** A path inside the workspace, or null if it points outside. */

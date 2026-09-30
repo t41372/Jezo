@@ -162,6 +162,16 @@ export interface JezoBridge {
     list(): Promise<SkillInfo[]>
     setEnabled(id: string, enabled: boolean): Promise<SkillInfo[]>
   }
+  /**
+   * Long-term memory (docs/design/memory.md). Forgetting keeps the same words
+   * from being saved again; restore and discard are for undo.
+   */
+  memory: {
+    remember(input: { text: string; epistemic: 'stated' | 'inferred'; evidence?: string[] }): Promise<{ id: string }>
+    forget(id: string): Promise<void>
+    restore(record: Record<string, unknown>): Promise<void>
+    discard(id: string): Promise<void>
+  }
   /** Model providers and which model the agent uses. Keys go to the OS keychain and never come back. */
   providers: {
     list(): Promise<ProviderSummary[]>

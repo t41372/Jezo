@@ -32,6 +32,7 @@ export interface Goal {
   report?: { range: string; lines: Finding[] }
   /** A change to a rule the agent proposes because the rule keeps failing. The user decides. */
   ruleProposal?: { ruleIndex: number; cue: string; action: string; why: string }
+  links?: string[]
 }
 
 /** Something the agent concluded, and what it's based on: the user's word or a number of records. */
@@ -72,6 +73,8 @@ export interface Todo {
   amount?: number
   /** When it was done, in milliseconds since the epoch. */
   completedAt?: number
+  /** Items it links to (docs/design/backend.md, "Links"). */
+  links?: string[]
 }
 
 /**
@@ -97,6 +100,7 @@ export interface Note {
    */
   proposal?: NoteProposal
   became?: NoteOutcome
+  links?: string[]
 }
 
 /** What a note can become. `keep` stays a note: a thought worth keeping, nothing to do. */
@@ -184,6 +188,8 @@ export interface Memory {
   /** How many records an inference rests on, and how sure the agent is. */
   evidence?: number
   confidence?: 'low' | 'medium' | 'high'
+  /** The memory as its file says, to put it back after an undo. */
+  record?: Record<string, unknown>
 }
 
 export interface Skill {

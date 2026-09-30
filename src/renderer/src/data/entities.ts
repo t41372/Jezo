@@ -2,7 +2,7 @@
 // fields to write. The file formats are in docs/design/backend.md.
 
 import type { Fields, Item } from '../../../shared/workspace'
-import type { Goal, ISODate, Note, Todo } from './types'
+import type { Goal, ISODate, Memory, Note, Todo } from './types'
 
 // ─── Local times ───
 // On disk a time is local, with no zone: "2026-09-29T09:30". The UI keeps a
@@ -57,6 +57,7 @@ export function toTodo(item: Item): Todo {
     rank: str(d.rank),
     amount: typeof d.amount === 'number' ? d.amount : undefined,
     completedAt: toEpoch(d.completed),
+    links: item.links,
   }
 }
 
@@ -123,6 +124,7 @@ export function toGoal(item: Item, todos: Todo[], today: ISODate): Goal {
       .map((t) => ({ estimated: t.estimateMinutes, actual: Math.round((t.completedAt! - t.startedAt!) / 60_000) })),
     report: d.report as Goal['report'],
     ruleProposal: proposal && { ruleIndex: proposal.rule, cue: proposal.cue, action: proposal.action, why: proposal.why },
+    links: item.links,
   }
 }
 
@@ -132,6 +134,24 @@ export function weekOf(date: ISODate): [ISODate, ISODate] {
   const d = new Date(y, m - 1, day)
   const monday = new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7))
   return [localDate(monday), localDate(new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6))]
+}
+
+// ─── Memory ───
+
+/** A memory in use: replaced ones keep their files but aren't shown or used. */
+export function toMemory(item: Item): Memory | null {
+  const d = item.data
+  if (d.status === 'superseded') return null
+  const evidence = Array.isArray(d.evidence) ? (d.evidence as string[]) : []
+  return {
+    id: item.id,
+    text: item.body.trim(),
+    kind: d.epistemic === 'inferred' ? 'inferred' : 'stated',
+    date: String(d.recorded ?? '').slice(0, 10),
+    ...(evidence.some((e) => e.startsWith('notes/')) && { via: 'notes' as const }),
+    ...(d.epistemic === 'inferred' && { evidence: evidence.length, confidence: d.confidence as Memory['confidence'] }),
+    record: { ...d, text: item.body.trim() },
+  }
 }
 
 // ─── Notes ───
@@ -148,6 +168,7 @@ export function toNote(item: Item): Note {
     state: d.state === 'sorting' || d.state === 'sorted' ? d.state : 'new',
     proposal: d.proposal as Note['proposal'],
     became: d.became as Note['became'],
+    links: item.links,
   }
 }
 

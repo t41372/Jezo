@@ -85,7 +85,8 @@
       "hotkey": "⌥X",
       "user": "對話",
       "you": "你自己改的",
-      "notes": "整理隨手記"
+      "notes": "整理隨手記",
+      "automation": "自動化"
     },
     "retried_other": "重試了 {{count}} 次才寫對格式",
     "claimedWithoutChange": "系統抓到了，下一次重試成功",

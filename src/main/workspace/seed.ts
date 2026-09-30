@@ -12,23 +12,33 @@ const resources = () => (app.isPackaged ? process.resourcesPath : join(import.me
 const exists = (path: string) => stat(path).then(() => true, () => false)
 
 /**
- * Copies the shipped files into the workspace, never over a file that's there.
- * Skills come in the language the app is in; Traditional Chinese is the base,
- * and other languages replace the files they have.
+ * Copies the shipped files into the workspace. A plugin's directory is copied
+ * only when the workspace doesn't have it yet: after that it's the user's, and
+ * what they deleted from it (a built-in automation, a skill) stays deleted.
+ * Files at the top level are copied when missing. Skills and automations come
+ * in the language the app is in; Traditional Chinese is the base, and other
+ * languages replace the files they have.
  */
 export async function seedWorkspace(root: string, language: string) {
   await mkdir(root, { recursive: true })
+  const base = join(resources(), 'workspace')
   const overlay = join(resources(), `workspace.${language}`)
-  if (await exists(overlay)) await copyMissing(overlay, root)
-  await copyMissing(join(resources(), 'workspace'), root)
+  const hasOverlay = await exists(overlay)
+  for (const entry of await readdir(base, { withFileTypes: true })) {
+    const target = join(root, entry.name)
+    if (await exists(target)) continue
+    if (entry.isDirectory()) await mkdir(target, { recursive: true })
+    await copyInto(join(base, entry.name), target, entry.isDirectory())
+    if (hasOverlay && (await exists(join(overlay, entry.name)))) await copyInto(join(overlay, entry.name), target, entry.isDirectory(), true)
+  }
   await mkdir(join(root, 'sessions'), { recursive: true })
 }
 
-async function copyMissing(from: string, to: string) {
+async function copyInto(from: string, to: string, directory: boolean, replace = false) {
+  if (!directory) return cp(from, to, { force: replace })
   for (const entry of await readdir(from, { withFileTypes: true, recursive: true })) {
     if (!entry.isFile()) continue
     const source = join(entry.parentPath, entry.name)
-    const target = join(to, source.slice(from.length))
-    if (!(await exists(target))) await cp(source, target)
+    await cp(source, join(to, source.slice(from.length)), { force: replace })
   }
 }

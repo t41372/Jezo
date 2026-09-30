@@ -9,7 +9,7 @@ import { create } from 'zustand'
 import type { ThemeSource } from '../../../shared/bridge'
 import type { Fields, Item, ItemChanges } from '../../../shared/workspace'
 import i18n, { applyLanguage, storedLanguage, type LanguageSetting } from '@/i18n'
-import { entities, localDate, stamp, toGoal, toNote, toTodo, todoFields } from './entities'
+import { entities, localDate, stamp, toGoal, toMemory, toNote, toTodo, todoFields } from './entities'
 import * as mock from './mock'
 import type { CalendarEvent, CalendarViewName, Connection, Energy, Experiment, Goal, HistoryEntry, ISODate, Memory, Message, Note, NoteKind, NoteOutcome, NoteProposal, Session, Skill, Todo, Trigger } from './types'
 
@@ -168,6 +168,8 @@ function failed(error: unknown) {
 const byRank = (a: Todo, b: Todo) =>
   a.rank && b.rank ? (a.rank < b.rank ? -1 : a.rank > b.rank ? 1 : 0) : a.rank ? -1 : b.rank ? 1 : a.id < b.id ? -1 : 1
 
+const newestMemory = (a: Memory, b: Memory) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id)
+
 const byCreated = (a: Note, b: Note) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`) || a.id.localeCompare(b.id)
 
 /** Replaces the entities that changed, leaving the others, which may have writes of their own on the way. */
@@ -188,7 +190,15 @@ function applyChanges({ changed, removed }: ItemChanges) {
   for (const item of changed) if (item.kind === 'goal' && !item.id.startsWith('?')) goalItems.set(item.id, item)
   useStore.setState((s) => {
     const todos = upsert(s.todos, entities(changed, 'todo', toTodo), removed, byRank)
-    return { todos, notes: upsert(s.notes, entities(changed, 'note', toNote), removed, byCreated), goals: deriveGoals(todos, s.now.date) }
+    const memories = upsert(s.memories, entities(changed, 'memory', toMemory).filter((m): m is Memory => m !== null), removed, newestMemory)
+    // A memory that was just replaced comes back as superseded; it leaves the list.
+    const replaced = changed.filter((i) => i.kind === 'memory' && i.data.status === 'superseded').map((i) => i.id)
+    return {
+      todos,
+      notes: upsert(s.notes, entities(changed, 'note', toNote), removed, byCreated),
+      goals: deriveGoals(todos, s.now.date),
+      memories: memories.filter((m) => !replaced.includes(m.id)),
+    }
   })
 }
 
@@ -216,7 +226,14 @@ async function loadWorkspace() {
   const items: Item[] = await workspace().list()
   goalItems = new Map(items.filter((i) => i.kind === 'goal' && !i.id.startsWith('?')).map((i) => [i.id, i]))
   const todos = entities(items, 'todo', toTodo).sort(byRank)
-  useStore.setState((s) => ({ todos, notes: entities(items, 'note', toNote).sort(byCreated), goals: deriveGoals(todos, s.now.date) }))
+  useStore.setState((s) => ({
+    todos,
+    notes: entities(items, 'note', toNote).sort(byCreated),
+    goals: deriveGoals(todos, s.now.date),
+    memories: entities(items, 'memory', toMemory)
+      .filter((m): m is Memory => m !== null)
+      .sort(newestMemory),
+  }))
 }
 
 /** Reads the workspace and follows its changes. Called once, when the window opens. */
@@ -279,7 +296,7 @@ export const useStore = create<State>()((set, get) => ({
   todos: [],
   events: mock.events,
   sessions: [],
-  memories: mock.memories,
+  memories: [],
   notes: [],
   skills: [],
   experiments: mock.experiments,
@@ -458,9 +475,10 @@ export const useStore = create<State>()((set, get) => ({
         .create('todo', fields)
         .then((todo) => settle({ kind: 'todo', ref: todo.id }), failed)
     } else if (kind === 'memory') {
-      const ref = `m-${Date.now()}`
-      set((s) => ({ memories: [{ id: ref, text: title, kind: 'stated', date: s.now.date, via: 'notes' }, ...s.memories] }))
-      settle({ kind: 'memory', ref })
+      // The note is the user's own words, and it's the evidence.
+      window.jezo.memory
+        .remember({ text: title, epistemic: 'stated', evidence: [`notes/items/${noteId}.md`] })
+        .then((m) => settle({ kind: 'memory', ref: m.id }), failed)
     } else {
       settle(kind === 'goal' ? { kind: 'goal', title } : { kind: 'keep' })
     }
@@ -470,7 +488,8 @@ export const useStore = create<State>()((set, get) => ({
     if (!note?.proposal) return
     const { became, proposal } = note
     if (became?.kind === 'todo' && became.ref) workspace().remove(became.ref).catch(failed)
-    if (became?.kind === 'memory') set((s) => ({ memories: s.memories.filter((m) => m.id !== became.ref) }))
+    // Taking back a note just sorted into memory isn't deleting a memory: its words may be saved again later.
+    if (became?.kind === 'memory' && became.ref) window.jezo.memory.discard(became.ref).catch(failed)
     // An answered question goes back to being a question.
     const { decision: _, question, ...rest } = proposal
     const reopened: NoteProposal = question ? { as: 'ask', title: question, session: proposal.session } : rest
@@ -486,9 +505,13 @@ export const useStore = create<State>()((set, get) => ({
     }
     set({ closedProposals })
   },
-  deleteMemory: (id) => set((s) => ({ memories: s.memories.filter((m) => m.id !== id) })),
-  restoreMemory: (memory, index) =>
-    set((s) => ({ memories: [...s.memories.slice(0, index), memory, ...s.memories.slice(index)] })),
+  deleteMemory: (id) => {
+    set((s) => ({ memories: s.memories.filter((m) => m.id !== id) }))
+    window.jezo.memory.forget(id).catch(failed)
+  },
+  restoreMemory: (memory) => {
+    if (memory.record) window.jezo.memory.restore(memory.record).catch(failed)
+  },
   toggleSkill: (id) => {
     const skill = get().skills.find((k) => k.id === id)
     if (!skill) return

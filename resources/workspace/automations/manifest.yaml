@@ -1,0 +1,13 @@
+# What an automation is. The app checks every file in items/ against this schema.
+kind: automation
+prefix: a
+schema:
+  type: object
+  required: [id, name, schedule, state]
+  properties:
+    id: { type: string, pattern: "^a-" }
+    name: { type: string, minLength: 1 }
+    schedule: { type: string, pattern: "^\\S+( \\S+){4}$" }
+    state: { enum: [on, off] }
+    late: { type: integer, minimum: 0 }
+    trigger: { enum: [morning, evening, weekly] }

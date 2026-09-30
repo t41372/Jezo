@@ -46,6 +46,11 @@
       "title": "整理隨手記",
       "short": "隨手記",
       "started": "從隨手記交給 agent"
+    },
+    "automation": {
+      "title": "自動化",
+      "short": "自動",
+      "started": "自動開始"
     }
   },
   "todo": {
@@ -144,5 +149,10 @@
     "stop": "停下來",
     "micDenied": "沒辦法用麥克風。到系統設定的「隱私權與安全性」允許 Jezo 使用麥克風。",
     "speechMissing": "語音辨識還沒裝好。到設定按「安裝」，之後就能用說的。"
+  },
+  "related": {
+    "title": "相關",
+    "linksTo": "它連到的",
+    "linkedFrom": "連到它的"
   }
 }
