@@ -2,6 +2,11 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+@source "../../../../node_modules/streamdown/dist/*.js";
+@source "../../../../node_modules/@streamdown/code/dist/*.js";
+@source "../../../../node_modules/@streamdown/math/dist/*.js";
+@source "../../../../node_modules/@streamdown/cjk/dist/*.js";
+
 @custom-variant dark (&:is(.dark *));
 
 /*
@@ -216,4 +221,23 @@ body[data-ec-outside]
     transform: translateX(28px);
     opacity: 0;
   }
+}
+
+/* Chat markdown keeps the chat's type scale and scrolls wide code and tables. */
+.jezo-markdown {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.jezo-markdown pre,
+.jezo-markdown [data-streamdown="table-wrapper"] {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.jezo-markdown pre {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+.jezo-markdown .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
 }

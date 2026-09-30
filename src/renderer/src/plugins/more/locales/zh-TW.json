@@ -11,8 +11,8 @@
       "description": "你說過的、它猜的，都可以刪"
     },
     "skills": {
-      "title": "它用的方法",
-      "description": "怎麼拆目標、怎麼估時間，都能換"
+      "title": "已安裝",
+      "description": "方法、pi 套件和 MCP 伺服器"
     },
     "experiments": {
       "title": "小實驗",
@@ -46,9 +46,9 @@
     "delete": "刪掉"
   },
   "skills": {
-    "intro": "這些是 agent 幫你排事情時用的方法。沒有一套適合所有人，覺得不對就關掉。",
+    "intro": "方法、套件和伺服器都在這裡。想換做法或工具，可以安裝，也能停用或移除。",
     "tip": "想改細節，直接跟 agent 說，例如「估時間的時候，把通勤也算進去」。",
-    "back": "← 它用的方法",
+    "back": "← 已安裝",
     "proposalBadge": "有修改提案",
     "reviewed": "你看過",
     "proposal": "agent 想改這個方法",
@@ -86,7 +86,7 @@
     "localSource": "來自這台電腦",
     "from": "來自 {{source}}",
     "agentSource": "agent 裝的 · {{source}}",
-    "programs": "這個方法附了程式。Jezo 的 agent 目前不能執行程式，只會照著說明做。",
+    "programs": "這個方法附了程式，Jezo 的 agent 會在需要時執行它。",
     "skipped_other": "略過 {{count}} 個檔案：{{reason}}",
     "installed_other": "已安裝「{{title}}」，共 {{count}} 個檔案。方法已開啟。",
     "nextConversation": "下一個對話開始就會用到。",
@@ -124,7 +124,6 @@
       "automation": "自動化"
     },
     "retried_other": "重試了 {{count}} 次才寫對格式",
-    "claimedWithoutChange": "系統抓到了，下一次重試成功",
     "undo": "撤銷",
     "undone": "已撤銷",
     "files_other": "改了 {{count}} 個檔案",
@@ -208,5 +207,58 @@
     "googleSignedOut": "要重新連接：{{error}}",
     "googleDone": "已經連好了，可以關掉這個分頁，回到 Jezo。",
     "googleFailedPage": "沒有連上。回到 Jezo 看看發生了什麼。"
+  },
+  "install": {
+    "add": "安裝",
+    "hint": "貼上網址、指令或 MCP 設定，也可以選資料夾、壓縮檔，或自己寫方法。",
+    "paste": "貼上",
+    "source": "網址、指令或 JSON",
+    "find": "查看內容",
+    "installed": "已安裝「{{name}}」。",
+    "from": "來自 {{source}}",
+    "destination": "安裝到 {{path}}",
+    "suggestions": "也可以從這些開始。",
+    "options": {
+      "browser": "瀏覽器 · Playwright",
+      "files": "工作區檔案"
+    },
+    "kinds": {
+      "package": "pi 套件",
+      "mcp": "MCP 伺服器"
+    },
+    "packages": "pi 套件",
+    "servers": "MCP 伺服器",
+    "methods": "它用的方法",
+    "enabled": "已啟用",
+    "disabled": "停用",
+    "toggle": "啟用「{{name}}」",
+    "byAgent": "agent 裝的",
+    "resources_other": "{{count}} 個附帶資源",
+    "tools_other": "{{count}} 個工具",
+    "showTools": "查看工具",
+    "states": {
+      "connecting": "連線中",
+      "connected": "已連線",
+      "disconnected": "已斷線",
+      "needs-auth": "需要登入",
+      "failed": "連線失敗",
+      "closed": "已關閉",
+      "disabled": "停用"
+    },
+    "signIn": "登入",
+    "signInTitle": "登入「{{name}}」",
+    "signInHint": "在瀏覽器完成登入後，會自動回到這裡。如果沒有回來，可以貼上瀏覽器最後的網址。",
+    "redirect": "登入後的網址（選填）",
+    "openBrowser": "開啟瀏覽器",
+    "reconnect": "重新連線",
+    "send": "送出",
+    "allow": "同意",
+    "decline": "不同意",
+    "remaining": "{{seconds}} 秒後關閉",
+    "removeHint": "移除後可以重新安裝。已開啟的對話仍使用原本的資源。",
+    "sessionTools": "這個對話的工具",
+    "configuration": "查看設定",
+    "configure": "設定",
+    "installOption": "安裝「{{name}}」"
   }
 }

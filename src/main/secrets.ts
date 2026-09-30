@@ -2,10 +2,9 @@
 // (safeStorage) and kept in the app's data directory, never in the workspace
 // (AGENTS.md, principle 1). They never go back to a window.
 
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { app, safeStorage } from 'electron'
-import { writeAtomic } from './workspace/files'
 
 const file = () => join(app.getPath('userData'), 'keys.json')
 
@@ -27,8 +26,17 @@ export function getSecret(name: string) {
 
 /** Stores a secret under a name, or removes it when the value is null. */
 export async function storeSecret(name: string, value: string | null) {
+  storeSecretSync(name, value)
+}
+
+/** pi's OAuth backend also writes synchronously, including refreshed tokens. */
+export function storeSecretSync(name: string, value: string | null) {
   const all = read()
   if (value) all[name] = safeStorage.encryptString(value).toString('base64')
   else delete all[name]
-  await writeAtomic(file(), JSON.stringify(all))
+  const path = file()
+  mkdirSync(dirname(path), { recursive: true })
+  const temp = `${path}.tmp`
+  writeFileSync(temp, JSON.stringify(all), { mode: 0o600 })
+  renameSync(temp, path)
 }

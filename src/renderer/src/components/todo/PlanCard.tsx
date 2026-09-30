@@ -17,11 +17,17 @@ export function PlanCard({
   todoIds,
   onTweak,
   onGoToday,
+  changes,
+  superseded,
 }: {
   title: string
   todoIds: string[]
   onTweak: () => void
   onGoToday?: () => void
+  /** What changed from the plan this one revised. */
+  changes?: { added: string[]; changed: string[]; removed: string[] }
+  /** A later card in the conversation revised this plan. */
+  superseded?: boolean
 }) {
   const { t } = useTranslation()
   const allTodos = useStore((s) => s.todos)
@@ -33,6 +39,16 @@ export function PlanCard({
   const todos = todoIds.flatMap((id) => allTodos.find((x) => x.id === id) ?? [])
   const pending = todos.some((x) => x.state === 'draft')
   const doneCount = todos.filter((x) => x.state === 'done').length
+
+  // The new version is further down; this one would only repeat it with old times.
+  if (superseded) {
+    return (
+      <Card className="flex-row items-center gap-2 px-4 py-2.5 text-[13px]">
+        <span className="font-medium text-muted-foreground">{title}</span>
+        <span className="text-xs text-muted-foreground">{t('plan.revised')}</span>
+      </Card>
+    )
+  }
 
   return (
     <Card
@@ -50,6 +66,8 @@ export function PlanCard({
           <li key={todo.id} className="flex items-center gap-2.5 text-[13.5px]" style={goalStyle(goals.find((g) => g.id === todo.goalId)?.hue)}>
             <span className="size-2 shrink-0 rounded-[3px] bg-goal" />
             <span className="flex-1">{todo.title}</span>
+            {changes?.added.includes(todo.id) && <span className="text-xs text-muted-foreground">{t('plan.added')}</span>}
+            {changes?.changed.includes(todo.id) && <span className="text-xs text-muted-foreground">{t('plan.changed')}</span>}
             <span className="text-xs text-muted-foreground">
               {/* Moved to another day since the plan was made. */}
               {todo.slot && (todo.slot.date === today ? clock(todo.slot.start) : `${weekday(todo.slot.date)} ${clock(todo.slot.start)}`)}
@@ -57,6 +75,7 @@ export function PlanCard({
           </li>
         ))}
       </ul>
+      {!!changes?.removed.length && <div className="text-xs text-muted-foreground">{t('plan.removed', { titles: changes.removed.join('、') })}</div>}
       <AnimatePresence mode="wait" initial={false}>
         <motion.div
           key={pending ? 'pending' : 'accepted'}

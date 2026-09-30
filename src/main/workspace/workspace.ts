@@ -72,6 +72,12 @@ export class Workspace {
     return item && this.withLinks(item)
   }
 
+  /** The item read from this file, if it's an item file. */
+  at(path: string): Item | undefined {
+    const id = this.byPath.get(path)
+    return id === undefined ? undefined : this.get(id)
+  }
+
   /** Items that link to this one. */
   backlinks(id: string): Item[] {
     return this.list().filter((item) => item.links?.includes(id))
@@ -154,6 +160,8 @@ export class Workspace {
   async update(id: string, fields: Fields, actor: Actor, options: { body?: string; hash?: string } = {}): Promise<Item> {
     const item = this.items.get(id)
     if (!item) throw new Error(`There is no item ${id}.`)
+    // An id names the item everywhere, links and other devices included (AGENTS.md in the workspace, docs/design/sync.md).
+    if ('id' in fields && fields.id !== id) throw new Error(`An item's id never changes; ${id} stays ${id}.`)
     const k = this.kinds.get(item.kind)!
     return this.serial(item.path, async () => {
       const text = await readIfExists(this.abs(item.path))
@@ -202,6 +210,20 @@ export class Workspace {
     await this.serial(path, async () => {
       const current = before === undefined ? await readIfExists(this.abs(path)) : before
       await this.writeNow(path, text, actor, current)
+    })
+  }
+
+  /**
+   * A file that changed without coming through here, because a shell command the
+   * agent ran changed it. It's recorded and indexed like a write; the file on
+   * disk already says `after`.
+   */
+  async changedOutside(path: string, before: string | null, after: string | null, actor: Actor) {
+    await this.serial(path, async () => {
+      for (const listener of this.writeListeners) listener({ path, before, after, actor })
+      for (const listener of this.fileListeners) listener(path)
+      const changes = await this.reread(path, after ?? undefined)
+      if (changes) this.emit(changes)
     })
   }
 
@@ -295,7 +317,12 @@ export class Workspace {
       const message = error instanceof FrontmatterError ? `The frontmatter doesn't parse: ${error.message}` : String(error)
       item = { kind: kind.name, id: `?${path}`, path, data: {}, body: text, hash, problems: [message] }
     }
-    // The file's id changed, or it's new.
+    // An id changed in the file keeps the item it was, so links and undo still
+    // find it; the change is a problem until the id is put back (docs/design/sync.md).
+    if (existing && !existing.startsWith('?') && !item.id.startsWith('?') && existing !== item.id) {
+      item = { ...item, id: existing, problems: [...(item.problems ?? []), `Its id was ${existing} and was changed to ${item.id}. An id never changes; put ${existing} back.`] }
+    }
+    // The file was new, or couldn't be read before.
     if (existing && existing !== item.id) {
       this.items.delete(existing)
       removed.push(existing)

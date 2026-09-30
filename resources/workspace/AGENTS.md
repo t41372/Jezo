@@ -14,7 +14,7 @@ Each top-level directory with a `manifest.yaml` holds one kind of item:
 - `sessions/`: conversations, written by the app. Read them if you need an earlier conversation; don't edit them.
 - `skills/`: methods that aren't one plugin's, like how to estimate time. A plugin's own methods are in its `skills/`. The user chose these; follow the ones that apply, and don't change a skill without telling them why.
 
-  Install skills with `skill_install` when the user asks, or write one by hand.
+  Install skills with `install_from_address` when the user asks, or write one by hand.
 
 Every item is one markdown file in the directory's `items/`, with YAML frontmatter. The manifest's schema says which fields exist. Each directory's `AGENTS.md` says what its items mean and how to handle them. Read it before you change items there.
 

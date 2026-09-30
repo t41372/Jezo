@@ -66,7 +66,8 @@ async function download(url: string) {
   return bytes
 }
 
-export async function prepareRemote(source: string, refOverride?: string, selectedPath?: string): Promise<Prepared> {
+/** The unified installer inspects this same download for a pi manifest. */
+export async function remoteFiles(source: string, refOverride?: string) {
   source = source.trim()
   const address = parseSource(source)
   let ref = refOverride ?? address.ref
@@ -81,6 +82,13 @@ export async function prepareRemote(source: string, refOverride?: string, select
     bytes = await download(`${GITHUB_CODELOAD}/${address.owner}/${address.repo}/tar.gz/${encodeURIComponent(ref)}`)
   } else bytes = await download(source)
   const tree = archiveEntries(bytes, address.kind === 'github' ? 'tar.gz' : new URL(source).pathname, address.kind === 'github')
+  return { ...tree, ref, address }
+}
+
+export async function prepareRemote(source: string, refOverride?: string, selectedPath?: string, downloaded?: Awaited<ReturnType<typeof remoteFiles>>): Promise<Prepared> {
+  source = source.trim()
+  const tree = downloaded ?? await remoteFiles(source, refOverride)
+  const { address, ref } = tree
   const path = address.path ?? selectedPath
   const entries = path === undefined ? tree.entries : tree.entries.filter((f) => !path || f.path.startsWith(`${path}/`))
   let skills = discoverSkills(entries)
@@ -140,7 +148,7 @@ export class SkillInstaller {
     }
   }
 
-  async remote(source: string) { return this.preview(await prepareRemote(source)) }
+  async remote(source: string, downloaded?: Awaited<ReturnType<typeof remoteFiles>>) { return this.preview(await prepareRemote(source, undefined, undefined, downloaded)) }
 
   async local(path: string) {
     const info = await lstat(path)

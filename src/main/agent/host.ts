@@ -5,25 +5,33 @@
 
 import { mkdir, readdir, stat } from 'node:fs/promises'
 import { basename, join } from 'node:path'
+import { randomUUID } from 'node:crypto'
+import type { PiAgentMessage, PiClient, PiClientEvent, PiClientEventBody, PiSendMessageInput, PiThreadMetadata } from '@assistant-ui/react-pi'
+import { shownCustom, UNCHANGED_ENTRY, type ChatSnapshot } from '../../shared/chat'
 import {
   type AgentSession,
   type AgentSessionEvent,
   createAgentSession,
+  createCodemodeExtension,
+  createToolSearchExtension,
   DefaultResourceLoader,
   type ExtensionAPI,
   SessionManager,
-  SettingsManager,
 } from '@earendil-works/pi-coding-agent'
 import type { ThinkingLevel } from '@earendil-works/pi-agent-core'
 import type { SessionMessage, SessionView, Step, Trigger } from '../../shared/session'
-import { calendarExtension } from '../calendar/agent'
+import { calendarExtension, HELD_MESSAGE } from '../calendar/agent'
+import { type Held, type OutsideContent, outsideToolResults } from './outside'
 import type { Calendars } from '../calendar/calendars'
+import { newId } from '../workspace/files'
 import { skillRoots } from '../workspace/skills'
 import type { Workspace } from '../workspace/workspace'
 import { type Memory, memoryExtension } from '../../../packages/pi-memory/src/index.ts'
 import { acting } from './acting'
+import { ExtensionUI } from './extension-ui'
+import { installer } from '../install/installer'
 import type { Providers } from './providers'
-import { CLAIMED_WITHOUT_CHANGE, CLAIMS_ACTION, digest, REQUESTS, SYSTEM_PROMPT } from './prompt'
+import { digest, NOTHING_CHANGED, REQUESTS, SYSTEM_PROMPT, timeNote } from './prompt'
 import { type CardDetails, createTools, type RunContext, TOOL_NAMES } from './tools'
 import type { UndoLog } from './undo'
 
@@ -41,24 +49,41 @@ interface Conversation {
   partial: unknown | null
   running: boolean
   /** Messages shown for this conversation that pi doesn't record, like "no model", and where they go. */
-  extra: { at: number; message: SessionMessage }[]
+  extra: { at: number; leafId: string | null; message: SessionMessage }[]
   /** Tools whose last call in this run failed, with the error, until a later call of the same tool works. */
   failed: Map<string, string>
+  seq: number
+  publishedEntries: number
+  turn: number
+  update?: Extract<PiClientEventBody, { type: 'message_update' }>
+  liveAssistantId?: string
+  initializing?: Promise<AgentSession | null>
+  completion?: Promise<void>
+  finishing?: boolean
+  aborted?: boolean
+  projection?: { leafId: string | null; messages: SessionMessage[]; entryIds: Set<string> }
+  catalogChanged?: boolean
 }
 
 const TRIGGER_ENTRY = 'jezo.session'
 const CHECK_MESSAGE = 'jezo.check'
 const REQUEST_MESSAGE = 'jezo.request'
+const TIME_MESSAGE = 'jezo.time'
+const NUDGE_MESSAGE = 'jezo.nudge'
 
 export class AgentHost {
   private conversations = new Map<string, Conversation>()
-  private listeners = new Set<(view: SessionView) => void>()
+  private listeners = new Set<(view: SessionView, catalogChanged: boolean) => void>()
+  private eventListeners = new Set<(event: PiClientEvent) => void>()
+  private entryIds = new WeakMap<object, string>()
   private finishedListeners = new Set<(id: string, automation?: { id: string; name: string }) => void>()
   private timers = new Map<string, NodeJS.Timeout>()
-  private settings = SettingsManager.inMemory(
-    { compaction: { enabled: true }, retry: { enabled: true, maxRetries: 2 }, cacheWarming: 'off', enableInstallTelemetry: false },
-    { projectTrusted: false },
-  )
+  private ui = new ExtensionUI((id, question) => {
+    const c = this.conversations.get(id)
+    if (!c) return
+    c.manager.appendCustomEntry('jezo.extension-ui', structuredClone(question))
+    this.emit(c, true)
+  })
 
   constructor(
     private workspace: Workspace,
@@ -66,6 +91,7 @@ export class AgentHost {
     private providers: Providers,
     private memory: Memory,
     private calendars: Calendars,
+    private outside: OutsideContent,
   ) {}
 
   private get dir() {
@@ -96,6 +122,9 @@ export class AgentHost {
           running: false,
           extra: [],
           failed: new Map(),
+          seq: 0,
+          publishedEntries: manager.getEntries().length,
+          turn: 0,
         })
       } catch (error) {
         console.error(`Can't read the conversation ${name}:`, error)
@@ -103,9 +132,163 @@ export class AgentHost {
     }
   }
 
-  onChange(listener: (view: SessionView) => void) {
+  onChange(listener: (view: SessionView, catalogChanged: boolean) => void) {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
+  }
+
+  onEvent(listener: (event: PiClientEvent) => void) {
+    this.eventListeners.add(listener)
+    return () => this.eventListeners.delete(listener)
+  }
+
+  private conversation(id: string) {
+    const c = this.conversations.get(id)
+    if (!c) throw new Error(`There is no conversation ${id}.`)
+    return c
+  }
+
+  private metadata(c: Conversation): PiThreadMetadata {
+    const model = this.providers.model(c.trigger === 'user' || c.trigger === 'hotkey' ? 'main' : 'background')
+    const queuedMessages = [
+      ...(c.session?.getSteeringMessages() ?? []).map((content, i) => ({ id: `steer:${i}`, mode: 'steer' as const, content })),
+      ...(c.session?.getFollowUpMessages() ?? []).map((content, i) => ({ id: `followUp:${i}`, mode: 'followUp' as const, content })),
+    ]
+    return {
+      id: c.id, title: c.manager.getSessionName() || this.view(c).title,
+      workspacePath: this.workspace.root,
+      status: c.running ? 'running' : 'idle',
+      createdAt: c.started.toISOString(), sessionFile: c.manager.getSessionFile(),
+      queuedMessages,
+      ...(model && { config: { provider: model.provider, modelId: model.id, thinkingLevel: this.providers.thinking(model) } }),
+    }
+  }
+
+  listThreads() {
+    return [...this.conversations.values()].map((c) => this.metadata(c))
+  }
+
+  async createThread(input?: Parameters<PiClient['createThread']>[0]) {
+    const c = await this.create('user')
+    if (input?.title) c.manager.appendSessionInfo(input.title)
+    if (input?.initialMessage) await this.sendMessage(c.id, input.initialMessage)
+    this.emit(c, true)
+    return this.getThread(c.id)
+  }
+
+  /** Reading an old conversation doesn't create a model session. */
+  getThread(id: string): ChatSnapshot {
+    const c = this.conversation(id)
+    const branch = c.manager.getBranch()
+    const entryIds = new Set(branch.map((entry) => entry.id))
+    const asked = new Set<string>()
+    const messages: PiAgentMessage[] = branch.flatMap((entry) => {
+      const message = entry.type === 'message' ? entry.message
+        : entry.type === 'custom_message' ? { role: 'custom', ...entry, timestamp: new Date(entry.timestamp).getTime() }
+        : shownCustom(entry as ChatSnapshot['tree']['entries'][number], asked)
+      return message ? [{ ...message, jezoEntryId: entry.id } as PiAgentMessage] : []
+    })
+    if (c.partial) messages.push(c.partial as PiAgentMessage)
+    for (const { message, leafId } of c.extra) {
+      if (leafId && !entryIds.has(leafId)) continue
+      messages.push({ role: 'custom', customType: 'jezo.error', content: '', display: true, details: message, timestamp: c.started.getTime(), jezoEntryId: message.id, jezoLeafId: leafId })
+    }
+    const flatten = (nodes: ReturnType<SessionManager['getTree']>): ChatSnapshot['tree']['entries'] =>
+      nodes.flatMap((node) => [node.entry as ChatSnapshot['tree']['entries'][number], ...flatten(node.children)])
+    return { metadata: this.metadata(c), messages, seq: c.seq, tree: { entries: flatten(c.manager.getTree()), leafId: c.manager.getLeafId() } }
+  }
+
+  async sendMessage(id: string, input: PiSendMessageInput): Promise<void> {
+    const c = this.conversation(id)
+    if (c.running) {
+      if (c.finishing && c.completion) {
+        await c.completion
+        return this.sendMessage(id, input)
+      }
+      const session = c.session ?? await this.sessionFor(c)
+      if (!session) throw new Error('No model is available.')
+      if (input.streamingBehavior === 'steer') await session.steer(input.content, input.attachments)
+      else await session.followUp(input.content, input.attachments)
+      return
+    }
+    this.launch(c, (session) => session.prompt(input.content, { images: input.attachments }), input.content)
+  }
+
+  clearQueue(id: string) {
+    const cleared = this.conversation(id).session?.clearQueue() ?? { steering: [], followUp: [] }
+    this.emit(this.conversation(id), true)
+    return cleared
+  }
+
+  /** Navigation changes model context, never workspace files or the undo log. */
+  async navigate(id: string, leafId: string) {
+    const c = this.conversation(id)
+    if (c.running) throw new Error('Wait until the agent stops before switching versions.')
+    const session = c.session
+    const entry = c.manager.getEntry(leafId)
+    if (session && entry?.type === 'message' && entry.message.role === 'user') {
+      // Pi treats a user target as an edit. Browse its continuation instead.
+      c.manager.branch(leafId)
+      const continuation = c.manager.appendCustomEntry('jezo.branch', {})
+      await session.navigateTree(continuation, { summarize: false })
+    } else if (session) await session.navigateTree(leafId, { summarize: false })
+    else c.manager.branch(leafId)
+    // A custom entry makes the selected leaf survive reopening the JSONL.
+    c.manager.appendCustomEntry('jezo.branch', {})
+    this.publishEntries(c)
+    this.publish(c, { type: 'snapshot', snapshot: this.getThread(id) })
+    this.emit(c, true)
+  }
+
+  async edit(id: string, entryId: string, text: string, retry = false) {
+    const c = this.conversation(id)
+    if (c.running) throw new Error('Wait until the agent stops before editing a message.')
+    const entry = c.manager.getEntry(entryId)
+    if (entry?.type !== 'message' || entry.message.role !== 'user') throw new Error('This is not a user message.')
+    const cold = !c.session
+    if (cold) {
+      if (entry.parentId) c.manager.branch(entry.parentId)
+      else c.manager.resetLeaf()
+      if (retry) c.manager.appendCustomEntry('jezo.retry', { userEntryId: entryId })
+    }
+    this.launch(c, async (session) => {
+      if (!cold) {
+        const result = await session.navigateTree(entryId, { summarize: false })
+        if (result.cancelled) return
+        // Retried input is the same displayed user turn, with another answer.
+        if (retry) c.manager.appendCustomEntry('jezo.retry', { userEntryId: entryId })
+      }
+      this.publish(c, { type: 'snapshot', snapshot: this.getThread(id) })
+      await session.prompt(text)
+    }, text)
+  }
+
+  async retry(id: string, userEntryId: string | null) {
+    const c = this.conversation(id)
+    if (!userEntryId) {
+      if (c.running) throw new Error('Wait until the agent stops before retrying.')
+      const request = c.manager.getBranch().find((entry) => entry.type === 'custom_message' && entry.customType === REQUEST_MESSAGE)
+      if (request?.type !== 'custom_message') throw new Error('There is no request to retry.')
+      this.launch(c, async (session) => {
+        const result = await session.navigateTree(request.id, { summarize: false })
+        if (result.cancelled || c.aborted) return
+        this.publish(c, { type: 'snapshot', snapshot: this.getThread(id) })
+        await session.sendCustomMessage({ customType: REQUEST_MESSAGE, content: request.content, display: false }, { triggerTurn: true })
+      })
+      return
+    }
+    const entry = c.manager.getEntry(userEntryId)
+    if (entry?.type !== 'message' || entry.message.role !== 'user') throw new Error('This is not a user message.')
+    const content = entry.message.content
+    const text = typeof content === 'string' ? content : content.filter((p) => p.type === 'text').map((p) => p.text).join('\n')
+    return this.edit(id, userEntryId, text, true)
+  }
+
+  rename(id: string, name: string) {
+    const c = this.conversation(id)
+    c.manager.appendSessionInfo(name)
+    this.publish(c, { type: 'session_info_changed', name })
+    this.emit(c, true)
   }
 
   /** Called when a run ends with an answer, with the automation that started it, if one did. */
@@ -119,10 +302,10 @@ export class AgentHost {
   }
 
   /** Sends the user's message, starting a conversation when `id` is null. Returns the conversation's id. */
-  async send(id: string | null, text: string, trigger: Trigger = 'user') {
+  async send(id: string | null, text: string, trigger: Trigger = 'user', streamingBehavior?: 'followUp' | 'steer') {
     const conversation = id ? this.conversations.get(id) : await this.create(trigger)
     if (!conversation) throw new Error(`There is no conversation ${id}.`)
-    void this.run(conversation, (session) => session.prompt(text), text)
+    await this.sendMessage(conversation.id, { content: text, streamingBehavior })
     return conversation.id
   }
 
@@ -130,7 +313,7 @@ export class AgentHost {
   /** Runs an automation: its body is the request, and the session remembers which automation it was. */
   async startAutomation(automation: { id: string; name: string; trigger?: Trigger; request: string }) {
     const conversation = await this.create(automation.trigger ?? 'automation', { id: automation.id, name: automation.name })
-    void this.run(conversation, (session) =>
+    this.launch(conversation, (session) =>
       session.sendCustomMessage({ customType: REQUEST_MESSAGE, content: automation.request, display: false }, { triggerTurn: true }),
     )
     return conversation.id
@@ -149,14 +332,42 @@ export class AgentHost {
     const request = REQUESTS[trigger]?.(this.workspace.list())
     if (!request) throw new Error(`Nothing starts a session for ${trigger}.`)
     const conversation = await this.create(trigger)
-    void this.run(conversation, (session) =>
+    this.launch(conversation, (session) =>
       session.sendCustomMessage({ customType: REQUEST_MESSAGE, content: request, display: false }, { triggerTurn: true }),
     )
     return conversation.id
   }
 
   async abort(id: string) {
-    await this.conversations.get(id)?.session?.abort()
+    this.ui.cancel(id)
+    const c = this.conversation(id)
+    c.aborted = true
+    this.clearQueue(id)
+    await c.session?.abort()
+    await c.completion
+  }
+
+  /**
+   * The user's 請它動手 under a run that changed nothing: a hidden message
+   * asking the agent to make the change it described, or say that nothing needed one.
+   */
+  nudge(id: string) {
+    const c = this.conversation(id)
+    if (c.running) throw new Error('Wait until the agent stops.')
+    this.launch(c, (session) => session.sendCustomMessage({ customType: NUDGE_MESSAGE, content: NOTHING_CHANGED, display: false }, { triggerTurn: true }), '')
+  }
+
+  answerExtension(id: string, request: string, value?: string | boolean) { this.ui.answer(id, request, value) }
+
+  async close() {
+    this.ui.close()
+    await Promise.all([...this.conversations.values()].map(async (c) => {
+      if (!c.session) return
+      try {
+        await c.session.abort()
+        await c.session.extensionRunner.emit({ type: 'session_shutdown', reason: 'quit' })
+      } finally { c.session.dispose() }
+    }))
   }
 
   private async create(trigger: Trigger, automation?: { id: string; name: string }): Promise<Conversation> {
@@ -175,29 +386,42 @@ export class AgentHost {
       running: false,
       extra: [],
       failed: new Map(),
+      seq: 0,
+      publishedEntries: 0,
+      turn: 0,
     }
     this.conversations.set(id, conversation)
     return conversation
   }
 
   private contextFor(session: string): RunContext {
-    const context: RunContext = { run: '', session, said: '', refused: () => this.undo.refused(context.run) }
+    const context: RunContext = { run: '', session, said: '', acted: false, heard: [], closed: [], refused: () => this.undo.refused(context.run) }
     return context
   }
 
   /** One run: the agent works until it's done with this message. */
+  private launch(c: Conversation, prompt: (session: AgentSession) => Promise<void>, userText?: string) {
+    c.completion = this.run(c, prompt, userText)
+  }
+
   private async run(c: Conversation, prompt: (session: AgentSession) => Promise<void>, userText?: string) {
     c.running = true
+    c.finishing = false
+    c.aborted = false
     this.emit(c)
     try {
       const session = await this.sessionFor(c)
-      if (!session) {
-        if (userText) this.note(c, { kind: 'user', text: userText })
+      if (c.aborted) return
+      if (!session?.model) {
+        if (userText) c.manager.appendMessage({ role: 'user', content: userText, timestamp: Date.now() })
         this.note(c, { kind: 'error', code: 'no-model' })
         return
       }
-      c.context.run = `r-${Date.now().toString(36)}`
+      c.context.run = newId('r')
       c.context.said = userText ?? ''
+      c.context.acted = false
+      c.context.heard = [...heard(c.manager.getEntries()), ...(userText ? [userText] : [])]
+      c.context.closed = this.memory.deleted().flatMap((f) => f.evidence ?? [])
       c.failed.clear()
       this.undo.start({ id: c.context.run, session: c.id, trigger: c.trigger, at: localTime(new Date()) })
       // Everything this run does, however deep, is the agent's, acting on the user's words or on what Jezo asked.
@@ -207,25 +431,38 @@ export class AgentHost {
       await acting.run({ actor: { by: 'agent', run: c.context.run }, source, session: sessionPath }, async () => {
         await prompt(session)
         await session.waitForIdle()
+        c.finishing = true
       })
       await this.undo.finish(c.context.run, firstSentence(session.getLastAssistantText() ?? ''))
+      // Said so under the reply, so a reply that claims a change the run never made is easy to see (docs/design/frontend.md, "Chat").
+      if (!c.aborted && !this.undo.changed(c.context.run) && !c.context.acted) c.manager.appendCustomEntry(UNCHANGED_ENTRY, {})
       for (const listener of this.finishedListeners) listener(c.id, c.automation)
     } catch (error) {
       console.error(error)
       this.note(c, { kind: 'error', text: String(error instanceof Error ? error.message : error) })
     } finally {
+      this.ui.cancel(c.id)
       c.running = false
       c.partial = null
+      this.publishEntries(c)
+      this.publish(c, { type: 'snapshot', snapshot: this.getThread(c.id) })
       this.emit(c, true)
     }
   }
 
   /** Adds a message pi doesn't record, after what's there now. */
   private note(c: Conversation, message: SessionMessage) {
-    c.extra.push({ at: this.view(c).messages.length, message })
+    message.id = `notice:${randomUUID()}`
+    c.extra.push({ at: this.view(c).messages.length, leafId: c.manager.getLeafId(), message })
   }
 
   private async sessionFor(c: Conversation): Promise<AgentSession | null> {
+    if (c.initializing) return c.initializing
+    c.initializing = this.loadSession(c)
+    try { return await c.initializing } finally { c.initializing = undefined }
+  }
+
+  private async loadSession(c: Conversation): Promise<AgentSession | null> {
     // What the user starts uses the main model; what Jezo starts on its own uses the background one.
     const role = c.trigger === 'user' || c.trigger === 'hotkey' ? 'main' : 'background'
     let model = this.providers.model(role)
@@ -234,71 +471,109 @@ export class AgentHost {
       await this.providers.refreshServers()
       model = this.providers.model(role)
     }
-    if (!model) return null
     if (c.session) {
       // The user may have picked another model, or another thinking level, since this conversation started.
-      if (c.session.model?.provider !== model.provider || c.session.model?.id !== model.id) await c.session.setModel(model)
-      c.session.setThinkingLevel(this.providers.thinking(model) as ThinkingLevel)
+      if (model) {
+        if (c.session.model?.provider !== model.provider || c.session.model?.id !== model.id) await c.session.setModel(model)
+        c.session.setThinkingLevel(this.providers.thinking(model) as ThinkingLevel)
+      }
       return c.session
     }
     const runtime = this.providers.runtime
+    const installs = installer(this.workspace)
+    const settings = installs.settings
+    const resources = await installs.resources()
 
+    // The prompt's picture of the day is from now; each message says the time again (timeNote).
+    const promptTime = new Date()
     const loader = new DefaultResourceLoader({
       cwd: this.workspace.root,
       agentDir: process.env.PI_CODING_AGENT_DIR!,
-      settingsManager: this.settings,
+      settingsManager: settings,
       noExtensions: true,
       noSkills: true,
       noPromptTemplates: true,
       noThemes: true,
       noContextFiles: true,
-      additionalSkillPaths: await this.skillDirs(),
+      additionalSkillPaths: [...await this.skillDirs(), ...resources.skills.filter((r) => r.enabled).map((r) => r.path)],
+      additionalExtensionPaths: resources.extensions.filter((r) => r.enabled).map((r) => r.path),
+      additionalPromptTemplatePaths: resources.prompts.filter((r) => r.enabled).map((r) => r.path),
       systemPromptOverride: () => SYSTEM_PROMPT,
-      appendSystemPromptOverride: () => [digest(this.workspace.list())],
+      appendSystemPromptOverride: () => [digest(this.workspace.list(), promptTime)],
       extensionFactories: [
+        { name: 'codemode', factory: createCodemodeExtension({ mode: 'on' }), replaceable: true },
+        { name: 'tool-search', factory: createToolSearchExtension(), replaceable: true },
+        { name: 'mcp', factory: await installs.mcpExtension(), replaceable: true },
         { name: 'jezo-checks', factory: (pi) => this.checks(pi, c) },
+        { name: 'jezo-time', factory: (pi) => this.time(pi, promptTime) },
         { name: 'jezo-memory', factory: memoryExtension(this.memory) },
-        { name: 'jezo-calendar', factory: calendarExtension(this.calendars) },
+        { name: 'jezo-calendar', factory: calendarExtension(this.calendars, this.outside) },
+        // Tools the user installed that bring in other people's text: MCP servers.
+        { name: 'jezo-outside', factory: outsideToolResults(this.outside, (tool) => tool.startsWith('mcp__')) },
       ],
     })
     await loader.reload()
+    // reload() reads settings from disk and clears applyOverrides().
+    settings.applyOverrides({ compaction: { enabled: true }, retry: { enabled: true, maxRetries: 2 }, cacheWarming: 'off', defaultTools: TOOL_NAMES })
     const { session } = await createAgentSession({
       cwd: this.workspace.root,
       agentDir: process.env.PI_CODING_AGENT_DIR!,
       modelRuntime: runtime,
-      settingsManager: this.settings,
+      settingsManager: settings,
       resourceLoader: loader,
-      model,
-      thinkingLevel: this.providers.thinking(model) as ThinkingLevel,
-      tools: TOOL_NAMES,
+      model: model ?? undefined,
+      thinkingLevel: model ? this.providers.thinking(model) as ThinkingLevel : 'off',
       customTools: createTools(
         this.workspace,
         () => c.context,
         (path) => this.blocked(path),
-        async (scheduled, minutes) => (await this.calendars.overlapping(scheduled, minutes)).map((e) => `"${e.title}" ${e.start.slice(11)}–${e.end.slice(11)}`),
+        async (scheduled, minutes) =>
+          Promise.all(
+            (await this.calendars.overlapping(scheduled, minutes)).map(
+              async (e) => `${(await this.outside.screen(e.title, `the calendar, ${e.start.replace('T', ' ')}`)).text} ${e.start.slice(11)}–${e.end.slice(11)}`,
+            ),
+          ),
+        (todoId) => this.planOf(c, todoId),
       ),
       sessionManager: c.manager,
     })
-    await session.bindExtensions({ mode: 'json', onError: (e) => console.error('pi extension error', e) })
-    session.subscribe((event) => this.onEvent(c, event))
+    session.subscribe((event) => this.onSessionEvent(c, event))
     c.session = session
+    await session.bindExtensions({ mode: 'json', uiContext: await this.ui.context(c.id), shutdownHandler: () => { void this.abort(c.id) }, onError: (e) => console.error('pi extension error', e) })
     return session
   }
 
   /**
-   * Checks at the end of a run, before it settles (AGENTS.md, principle 7). A
-   * reply that says something was done when no file changed goes back to the
-   * agent once, to do it or to say it didn't.
+   * The time, with each of the user's messages (prompt.ts, timeNote). pi puts a
+   * message from before_agent_start after the user's, so the model's last input
+   * would be the clock rather than what the user asked; it's moved in front of
+   * it for the model, and kept after it in the session file.
+   */
+  private time(pi: ExtensionAPI, promptTime: Date) {
+    pi.on('before_agent_start', () => ({ message: { customType: TIME_MESSAGE, content: timeNote(new Date(), promptTime), display: false } }))
+    pi.on('context', (event) => {
+      const messages = [...event.messages]
+      for (let i = 1; i < messages.length; i++) {
+        const note = messages[i] as { role: string; customType?: string }
+        if (note.role === 'custom' && note.customType === TIME_MESSAGE && messages[i - 1].role === 'user') [messages[i - 1], messages[i]] = [messages[i], messages[i - 1]]
+      }
+      return { messages }
+    })
+  }
+
+  /**
+   * Checks at the end of a run, before it settles (AGENTS.md, principle 8). They
+   * look at what the tools did, never at the words of the reply, so they hold in
+   * any language (docs/design/backend.md, "Checks").
    */
   private checks(pi: ExtensionAPI, c: Conversation) {
-    let sentBack = ''
     let failedSentBack = ''
     pi.on('agent_before_settle', () => {
       const run = c.context.run
       // A call that failed and was never made to work, whatever the reply says about it.
       // A small model answered "I've proposed the plan" after two failed calls.
       // Only when nothing changed: a failed call is often followed by the right one (todos_update after a refused todos_propose).
-      if (c.failed.size && failedSentBack !== run && !this.undo.changed(run)) {
+      if (c.failed.size && failedSentBack !== run && !this.undo.changed(run) && !c.context.acted) {
         failedSentBack = run
         const content = [
           "Before you finish: these tool calls failed and weren't made to work, so nothing they were for happened.",
@@ -307,11 +582,6 @@ export class AgentHost {
         ].join('\n')
         return { entries: [{ type: 'custom_message', customType: CHECK_MESSAGE, content, display: false }], continue: true }
       }
-      const text = c.session?.getLastAssistantText() ?? ''
-      if (sentBack === run || this.undo.changed(run) || !CLAIMS_ACTION.test(text)) return
-      sentBack = run
-      this.undo.claimedWithoutChange(run)
-      return { entries: [{ type: 'custom_message', customType: CHECK_MESSAGE, content: CLAIMED_WITHOUT_CHANGE, display: false }], continue: true }
     })
   }
 
@@ -323,32 +593,121 @@ export class AgentHost {
     return this.memory.deleted().some((f) => f.evidence?.includes(path))
   }
 
+  /**
+   * The latest plan card holding a todo, in this conversation first: the morning's
+   * plan can be tweaked from another one too.
+   */
+  private planOf(c: Conversation, todoId: string) {
+    const latest = (conversation: Conversation) => {
+      let found: string[] | undefined
+      for (const entry of conversation.manager.getEntries()) {
+        const m = (entry as { message?: { role?: string; isError?: boolean; details?: CardDetails } }).message
+        const card = m?.role === 'toolResult' && !m.isError ? m.details?.card : undefined
+        if (card?.kind === 'plan' && card.todoIds.includes(todoId)) found = card.todoIds
+      }
+      return found
+    }
+    return latest(c) ?? [...this.conversations.values()].map(latest).find(Boolean)
+  }
+
   /** Skills live in the workspace: its own skills/, and each plugin directory's. */
   private async skillDirs() {
     return (await skillRoots(this.workspace.root)).map((dir) => join(this.workspace.root, dir))
   }
 
-  private onEvent(c: Conversation, event: AgentSessionEvent) {
+  private onSessionEvent(c: Conversation, event: AgentSessionEvent) {
+    this.forwardEvent(c, event)
+    if (event.type === 'message_start' && event.message.role === 'user') {
+      const content = event.message.content
+      const text = typeof content === 'string' ? content : content.filter((p) => p.type === 'text').map((p) => p.text).join('\n')
+      if (text !== c.context.said) c.context.said += `\n${text}`
+      // The owner can join an automation with a queued instruction. Delivery
+      // happens after its previous tools finish; later work is on their words.
+      const scope = acting.getStore()
+      if (scope) scope.source = 'user'
+    }
     if (event.type === 'tool_execution_end') {
-      if (!event.isError) c.failed.delete(event.toolName)
+      if (!event.isError) {
+        c.failed.delete(event.toolName)
+        // External actions need not write a workspace file. Read-only tools
+        // and the discovery/orchestration tools still don't prove an action.
+        if (!TOOL_NAMES.includes(event.toolName) && !['tool_search', 'codemode'].includes(event.toolName)) {
+          const tool = c.session?.getAllTools().find((t) => t.name === event.toolName)
+          if (tool && tool.annotations?.readOnlyHint !== true) c.context.acted = true
+        }
+      }
       else {
         const content = (event.result as { content?: { type: string; text?: string }[] } | undefined)?.content
         c.failed.set(event.toolName, content?.map((b) => b.text ?? '').join('') || 'failed')
       }
     }
-    if (event.type === 'message_update' && event.message.role === 'assistant') c.partial = event.message
+    if (event.type === 'message_update' && event.message.role === 'assistant') c.partial = { ...event.message, jezoEntryId: c.liveAssistantId }
     if (event.type === 'message_end') c.partial = null
-    if (event.type === 'message_update' || event.type === 'message_end' || event.type === 'tool_execution_end' || event.type === 'tool_execution_start') {
-      this.emit(c)
+    if (event.type === 'message_update' || event.type === 'message_end' || event.type === 'tool_execution_end' || event.type === 'tool_execution_start' || event.type === 'queue_update') {
+      this.emit(c, false, event.type !== 'message_update')
     }
   }
 
+  private publish(c: Conversation, body: PiClientEventBody) {
+    const event = { ...body, threadId: c.id, seq: ++c.seq } as PiClientEvent
+    for (const listener of this.eventListeners) listener(event)
+  }
+
+  /** New entries go over IPC once. Token updates carry only the live message. */
+  private publishEntries(c: Conversation) {
+    if (c.manager.getEntryCount() === c.publishedEntries) return
+    const entries = c.manager.getEntries()
+    for (const entry of entries.slice(c.publishedEntries)) {
+      if (entry.type === 'message') this.entryIds.set(entry.message, entry.id)
+      this.publish(c, { type: 'entry_appended', entry: entry as ChatSnapshot['tree']['entries'][number] })
+    }
+    c.publishedEntries = entries.length
+  }
+
+  private forwardEvent(c: Conversation, event: AgentSessionEvent) {
+    if (event.type === 'turn_start') c.turn++
+    if (event.type === 'message_start' && event.message.role === 'assistant') c.liveAssistantId = `live:${randomUUID()}`
+    let body = (event.type === 'turn_start' || event.type === 'turn_end' ? { type: event.type, turnIndex: c.turn } : event) as PiClientEventBody
+    if (event.type === 'message_start' || event.type === 'message_update') body = {
+      ...event, message: { ...event.message, jezoEntryId: event.message.role === 'assistant' ? c.liveAssistantId : `live:${randomUUID()}` },
+    } as PiClientEventBody
+    if (event.type === 'message_update') {
+      c.update = body as Extract<PiClientEventBody, { type: 'message_update' }>
+      return
+    }
+    if (c.update) {
+      this.publish(c, c.update)
+      c.update = undefined
+    }
+    if (event.type === 'message_end') {
+      // Pi appends the entry after public listeners return. Final messages use
+      // that entry's ID; live messages have a temporary UUID until it exists.
+      queueMicrotask(() => {
+        this.publishEntries(c)
+        const entryId = this.entryIds.get(event.message) ?? c.manager.getLeafId()
+        this.publish(c, { type: 'message_end', message: { ...event.message, jezoEntryId: entryId } as PiAgentMessage })
+        if (event.message.role === 'user') this.publish(c, { type: 'snapshot', snapshot: this.getThread(c.id) })
+      })
+      return
+    }
+    this.publish(c, body as PiClientEventBody)
+    // Pi persists after notifying subscribers. Read the entries after that.
+    if (event.type === 'turn_end') queueMicrotask(() => this.publishEntries(c))
+  }
+
   /** Tells the windows. Streaming text arrives often, so updates go out at most every 50 ms. */
-  private emit(c: Conversation, now = false) {
+  private emit(c: Conversation, now = false, catalogChanged = true) {
+    if (catalogChanged) c.catalogChanged = true
     const send = () => {
       this.timers.delete(c.id)
+      if (c.update) {
+        this.publish(c, c.update)
+        c.update = undefined
+      }
       const view = this.view(c)
-      for (const listener of this.listeners) listener(view)
+      const changed = c.catalogChanged ?? false
+      c.catalogChanged = false
+      for (const listener of this.listeners) listener(view, changed)
     }
     if (now) {
       clearTimeout(this.timers.get(c.id))
@@ -358,19 +717,40 @@ export class AgentHost {
   }
 
   private view(c: Conversation): SessionView {
-    const entries: unknown[] = [...c.manager.getEntries()]
-    if (c.partial) entries.push({ type: 'message', message: c.partial })
-    const messages = toMessages(entries, this.workspace.root)
-    for (const { at, message } of c.extra) messages.splice(Math.min(at, messages.length), 0, message)
+    const leafId = c.manager.getLeafId()
+    if (!c.projection || c.projection.leafId !== leafId) {
+      const branch = c.manager.getBranch()
+      c.projection = { leafId, messages: toMessages(branch, this.workspace.root), entryIds: new Set(branch.map((entry) => entry.id)) }
+    }
+    const messages = [...c.projection.messages]
+    if (c.partial) {
+      const tail = toMessages([{ type: 'message', id: c.liveAssistantId, message: c.partial }], this.workspace.root)
+      const previous = messages.at(-1)
+      const first = tail[0]
+      if (previous?.kind === 'agent' && first?.kind === 'agent') {
+        messages[messages.length - 1] = { ...previous, text: previous.text + first.text, streaming: true }
+        tail.shift()
+      }
+      messages.push(...tail)
+    }
+    for (const { at, message, leafId } of c.extra) {
+      if (!leafId || c.projection.entryIds.has(leafId)) messages.splice(Math.min(at, messages.length), 0, message)
+    }
+    // A question an extension asked that nobody can answer any more (the app restarted, the run stopped) shows as answered.
+    for (const [i, message] of messages.entries()) {
+      if (message.kind === 'extension-question' && !message.question.answered && !this.ui.isPending(c.id, message.question.id)) {
+        messages[i] = { ...message, question: { ...message.question, answered: true } }
+      }
+    }
     if (c.partial) {
       const last = messages.at(-1)
-      if (last?.kind === 'agent') last.streaming = true
+      if (last?.kind === 'agent') messages[messages.length - 1] = { ...last, streaming: true }
     }
     const firstUser = messages.find((m) => m.kind === 'user') as { text: string } | undefined
     return {
       id: c.id,
       ...(c.trigger === 'user' || c.trigger === 'hotkey'
-        ? firstUser && { title: title(firstUser.text) }
+        ? { title: c.manager.getSessionName() || (firstUser && title(firstUser.text)) }
         : c.trigger === 'automation' && c.automation
           ? { title: c.automation.name }
           : {}),
@@ -378,7 +758,9 @@ export class AgentHost {
       date: localTime(c.started).slice(0, 10),
       time: c.started.getHours() + c.started.getMinutes() / 60,
       messages,
+      tools: c.session?.getAllTools().filter((tool) => tool.exposure !== 'hidden').map((tool) => tool.name),
       ...(c.running && { running: true }),
+      pending: { steering: [...(c.session?.getSteeringMessages() ?? [])], followUp: [...(c.session?.getFollowUpMessages() ?? [])] },
     }
   }
 }
@@ -401,31 +783,44 @@ interface Block {
 export function toMessages(entries: unknown[], root: string): SessionMessage[] {
   const out: SessionMessage[] = []
   const steps = new Map<string, Step>()
-  for (const entry of entries as { type: string; message?: Record<string, unknown> }[]) {
+  const questions = new Map<string, Extract<SessionMessage, { kind: 'extension-question' }>>()
+  for (const entry of entries as { id?: string; type: string; customType?: string; data?: import('../../shared/install').ExtensionQuestion; details?: { held?: Held[] }; message?: Record<string, unknown> }[]) {
+    if (entry.type === 'custom' && entry.customType === 'jezo.extension-ui' && entry.data) {
+      const previous = questions.get(entry.data.id)
+      if (previous) previous.question = entry.data
+      else {
+        const card: Extract<SessionMessage, { kind: 'extension-question' }> = { kind: 'extension-question', question: entry.data, id: entry.id }
+        questions.set(entry.data.id, card)
+        out.push(card)
+      }
+    }
+    if (entry.type === 'custom_message' && entry.customType === HELD_MESSAGE && entry.details?.held) out.push({ kind: 'held', items: entry.details.held, id: entry.id })
     if (entry.type !== 'message' || !entry.message) continue
     const m = entry.message
     if (m.role === 'user') {
       const text = typeof m.content === 'string' ? m.content : (m.content as Block[]).filter((b) => b.type === 'text').map((b) => b.text).join('\n')
-      out.push({ kind: 'user', text })
+      out.push({ id: entry.id, kind: 'user', text })
     } else if (m.role === 'assistant') {
       for (const block of (m.content as Block[]) ?? []) {
         const last = out.at(-1)
         if (block.type === 'text' && block.text?.trim()) {
           if (last?.kind === 'agent') last.text += block.text
-          else out.push({ kind: 'agent', text: block.text })
+          else out.push({ id: entry.id, kind: 'agent', text: block.text })
         } else if (block.type === 'toolCall' && block.id && block.name) {
           const step: Step = { tool: block.name, ...target(block.name, block.arguments ?? {}, root) }
           steps.set(block.id, step)
           if (last?.kind === 'steps') last.steps.push(step)
-          else out.push({ kind: 'steps', steps: [step] })
+          else out.push({ id: `${entry.id}:steps`, kind: 'steps', steps: [step] })
         }
       }
-      if (m.stopReason === 'error' && typeof m.errorMessage === 'string') out.push({ kind: 'error', text: m.errorMessage })
+      if (m.stopReason === 'error' && typeof m.errorMessage === 'string') out.push({ id: `${entry.id}:error`, kind: 'error', text: m.errorMessage })
     } else if (m.role === 'toolResult') {
       const step = steps.get(m.toolCallId as string)
       if (step && m.isError) step.error = true
       const card = (m.details as CardDetails | undefined)?.card
-      if (card && !m.isError) out.push(structuredClone(card))
+      if (card && !m.isError) out.push({ ...structuredClone(card), id: entry.id })
+      const held = (m.details as { held?: Held[] } | undefined)?.held
+      if (held) out.push({ kind: 'held', items: held, id: entry.id && `${entry.id}:held` })
     }
   }
   // A choice the user answered shows as their message; the buttons go away.
@@ -436,9 +831,18 @@ export function toMessages(entries: unknown[], root: string): SessionMessage[] {
   return out
 }
 
+/** What the user said in a conversation so far. */
+function heard(entries: unknown[]): string[] {
+  return entries.flatMap((entry) => {
+    const m = (entry as { message?: { role?: string; content?: unknown } }).message
+    if (m?.role !== 'user') return []
+    return typeof m.content === 'string' ? [m.content] : ((m.content ?? []) as { type: string; text?: string }[]).flatMap((b) => (b.type === 'text' && b.text ? [b.text] : []))
+  })
+}
+
 /** What a tool call touched, for the steps list. */
 function target(tool: string, args: Record<string, unknown>, root: string): { target?: string } {
-  if (tool === 'skill_install' && typeof args.source === 'string') return { target: args.source }
+  if (tool === 'install_from_address' && typeof args.source === 'string') return { target: args.source }
   if (typeof args.path === 'string') return { target: args.path.startsWith(root) ? args.path.slice(root.length + 1) : args.path }
   if (typeof args.id === 'string') return { target: args.id }
   for (const key of ['todos', 'items'] as const) if (Array.isArray(args[key])) return { target: String((args[key] as unknown[]).length) }

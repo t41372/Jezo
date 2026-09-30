@@ -4,7 +4,6 @@
 // it still holds what the agent wrote; a file someone changed since is left alone.
 
 import { readFileSync } from 'node:fs'
-import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { diffLines } from 'diff'
 import type { DiffLine, HistoryEntry, Trigger, UndoResult } from '../../shared/session'
@@ -30,8 +29,6 @@ interface Run {
   files: FileChange[]
   /** Writes a check refused before the agent got them right. */
   retries: number
-  /** The agent said it changed something and hadn't; it was sent back to do it. */
-  claimed?: boolean
   finished: boolean
   undone?: boolean
 }
@@ -68,11 +65,6 @@ export class UndoLog {
   /** Whether the run has changed any file so far. */
   changed(runId: string) {
     return Boolean(this.runs.find((r) => r.id === runId)?.files.length)
-  }
-
-  claimedWithoutChange(runId: string) {
-    const run = this.runs.find((r) => r.id === runId)
-    if (run) run.claimed = true
   }
 
   /** A check refused one of the agent's writes. */
@@ -126,14 +118,11 @@ export class UndoLog {
         kept.push(change.path)
         continue
       }
-      if (change.before === null) {
-        await rm(this.workspace.abs(change.path), { force: true })
-      } else {
-        await writeAtomic(this.workspace.abs(change.path), change.before)
-      }
+      // Through the workspace, so an undo is an ordinary change by the user: indexed, and seen by whatever follows writes.
+      if (change.before === null) await this.workspace.removeFile(change.path, { by: 'user' })
+      else await this.workspace.writeFile(change.path, change.before, { by: 'user' }, current)
     }
     run.undone = true
-    await this.workspace.rescan()
     await this.save()
     return { kept }
   }
@@ -149,9 +138,7 @@ export class UndoLog {
         source: r.trigger,
         session: r.session,
         summary: r.summary,
-        ...(r.claimed
-          ? { check: { level: 'error' as const, kind: 'claimed-without-change' as const } }
-          : r.retries > 0 && { check: { level: 'warn' as const, retries: r.retries } }),
+        ...(r.retries > 0 && { check: { retries: r.retries } }),
         files: r.files.map((f) => ({ path: f.path, lines: diff(f.before, f.after) })),
         ...(r.undone && { undone: true }),
       }))

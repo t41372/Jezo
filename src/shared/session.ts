@@ -15,16 +15,26 @@ export interface Step {
   error?: boolean
 }
 
-export type SessionMessage =
+export type SessionMessage = { id?: string } & (
   | { kind: 'user'; text: string }
   /** What the agent said. `streaming` while it's still being written. */
   | { kind: 'agent'; text: string; streaming?: boolean }
   /** What the agent looked at or changed, folded away by default. */
   | { kind: 'steps'; steps: Step[] }
   /** A plan the agent proposed. Its todos are drafts until accepted. */
-  | { kind: 'plan'; title: string; todoIds: string[] }
+  /** Outside content held back from the agent because it read like instructions to an AI. */
+  | { kind: 'held'; items: { source: string; text: string }[] }
+  | {
+      kind: 'plan'
+      title: string
+      todoIds: string[]
+      /** The todos of the plan this one replaced, and what changed from it. */
+      revises?: string[]
+      changes?: { added: string[]; changed: string[]; removed: string[] }
+    }
   /** A question with answers to pick from. The answer the user picked follows as their message. */
   | { kind: 'choices'; options: string[]; picked?: string }
+  | { kind: 'extension-question'; question: import('./install').ExtensionQuestion }
   /**
    * A message of a kind a plugin brings, drawn by the view the plugin
    * registered as "<plugin>.<type>". The core doesn't look inside `data`.
@@ -32,6 +42,7 @@ export type SessionMessage =
   | { kind: 'plugin'; plugin: string; type: string; data: unknown }
   /** The model couldn't answer. `code` is Jezo's own reason, which the window words; `text` is what the provider said. */
   | { kind: 'error'; code?: 'no-model'; text?: string }
+)
 
 export interface SessionView {
   id: string
@@ -42,8 +53,11 @@ export interface SessionView {
   /** Hours from midnight. */
   time: number
   messages: SessionMessage[]
+  /** Tools registered in this live session. Hidden tools are left out. */
+  tools?: string[]
   /** The agent is working. */
   running?: boolean
+  pending?: { steering: string[]; followUp: string[] }
 }
 
 /** One line of a change to a file, as a diff shows it. */
@@ -63,7 +77,7 @@ export interface HistoryEntry {
   session?: string
   summary: string
   /** Set when a check caught a problem with this change. */
-  check?: { level: 'warn'; retries: number } | { level: 'error'; kind: 'claimed-without-change' }
+  check?: { retries: number }
   /** The files the change touched, and how. */
   files?: { path: string; lines: DiffLine[]; note?: string }[]
   undone?: boolean

@@ -11,8 +11,8 @@
       "description": "What you told it and what it guessed. Delete anything."
     },
     "skills": {
-      "title": "Methods it uses",
-      "description": "How it breaks down goals and estimates time. All swappable."
+      "title": "Installed",
+      "description": "Methods, pi packages and MCP servers"
     },
     "experiments": {
       "title": "Experiments",
@@ -50,9 +50,9 @@
     "delete": "Delete"
   },
   "skills": {
-    "intro": "These are the methods the agent uses when it plans for you. No method suits everyone, so turn off any that don't fit.",
+    "intro": "Your methods, packages and servers are here. Install, disable or remove them as your needs change.",
     "tip": "To change the details, just tell the agent, for example “count my commute when you estimate time”.",
-    "back": "← Methods it uses",
+    "back": "← Installed",
     "proposalBadge": "Change proposed",
     "reviewed": "You reviewed it",
     "proposal": "The agent wants to change this method",
@@ -90,7 +90,7 @@
     "localSource": "From this computer",
     "from": "From {{source}}",
     "agentSource": "Installed by the agent · {{source}}",
-    "programs": "This method includes programs. Jezo’s agent cannot run programs yet; it only follows the instructions.",
+    "programs": "This method comes with programs, which Jezo’s agent runs when it needs them.",
     "skipped_one": "Skipped {{count}} file: {{reason}}",
     "skipped_other": "Skipped {{count}} files: {{reason}}",
     "installed_one": "Installed “{{title}}” with {{count}} file. The method is on.",
@@ -132,7 +132,6 @@
     },
     "retried_one": "Took {{count}} retry to get the format right",
     "retried_other": "Took {{count}} retries to get the format right",
-    "claimedWithoutChange": "A check caught this, and the next retry worked",
     "undo": "Undo",
     "undone": "Undone",
     "files_one": "Changed {{count}} file",
@@ -218,5 +217,60 @@
     "googleSignedOut": "Needs connecting again: {{error}}",
     "googleDone": "You're connected. Close this tab and go back to Jezo.",
     "googleFailedPage": "That didn't connect. Go back to Jezo to see what happened."
+  },
+  "install": {
+    "add": "Install",
+    "hint": "Paste an address, command or MCP config, choose a folder or archive, or write a method.",
+    "paste": "Paste",
+    "source": "Address, command or JSON",
+    "find": "Inspect",
+    "installed": "Installed “{{name}}”.",
+    "from": "From {{source}}",
+    "destination": "Install in {{path}}",
+    "suggestions": "You can also start with these.",
+    "options": {
+      "browser": "Browser · Playwright",
+      "files": "Workspace files"
+    },
+    "kinds": {
+      "package": "pi package",
+      "mcp": "MCP server"
+    },
+    "packages": "pi packages",
+    "servers": "MCP servers",
+    "methods": "Its methods",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "toggle": "Enable “{{name}}”",
+    "byAgent": "Installed by the agent",
+    "resources_one": "{{count}} included resource",
+    "resources_other": "{{count}} included resources",
+    "tools_one": "{{count}} tool",
+    "tools_other": "{{count}} tools",
+    "showTools": "View tools",
+    "states": {
+      "connecting": "Connecting",
+      "connected": "Connected",
+      "disconnected": "Disconnected",
+      "needs-auth": "Sign-in needed",
+      "failed": "Connection failed",
+      "closed": "Closed",
+      "disabled": "Disabled"
+    },
+    "signIn": "Sign in",
+    "signInTitle": "Sign in to “{{name}}”",
+    "signInHint": "Finish signing in in your browser. If this window does not update, paste the final browser address here.",
+    "redirect": "Final browser address (optional)",
+    "openBrowser": "Open browser",
+    "reconnect": "Reconnect",
+    "send": "Send",
+    "allow": "Allow",
+    "decline": "Decline",
+    "remaining": "Closes in {{seconds}} seconds",
+    "removeHint": "You can install it again after removing it. Open conversations continue using their existing resources.",
+    "sessionTools": "Tools in this conversation",
+    "configuration": "View config",
+    "configure": "Configure",
+    "installOption": "Install {{name}}"
   }
 }

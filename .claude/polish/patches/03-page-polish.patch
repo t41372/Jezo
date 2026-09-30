@@ -1,0 +1,87 @@
+Subject: style(ui): Polish page typography and themed surfaces
+
+Co-Authored-By: Codex <noreply@openai.com>
+
+diff --git a/src/renderer/src/plugins/goals/Goals.tsx b/src/renderer/src/plugins/goals/Goals.tsx
+index 235190c..b1d55b7 100644
+--- a/src/renderer/src/plugins/goals/Goals.tsx
++++ b/src/renderer/src/plugins/goals/Goals.tsx
+@@ -134,8 +134,8 @@ function GoalView({ goal }: { goal: Goal }) {
+         {t('back')}
+       </button>
+       <div>
+-        <h1 className="flex items-center gap-2.5 text-[28px] font-semibold">
+-          <span className="size-3 rounded-[4px] bg-goal" />
++        <h1 className="flex items-center gap-2.5 text-[26px] font-semibold tracking-tight">
++          <span className="size-3 shrink-0 rounded-[4px] bg-goal" />
+           {goal.name}
+         </h1>
+         {dueLabel && <p className="mt-0.5 text-sm text-muted-foreground">{dueLabel}</p>}
+diff --git a/src/renderer/src/plugins/more/More.tsx b/src/renderer/src/plugins/more/More.tsx
+index 491edcf..9275aa1 100644
+--- a/src/renderer/src/plugins/more/More.tsx
++++ b/src/renderer/src/plugins/more/More.tsx
+@@ -47,13 +47,13 @@ function Index() {
+           <button
+             key={id}
+             onClick={() => s.navigate('more', id)}
+-            className="flex items-center gap-3 px-4.5 py-3.5 text-left transition-colors duration-150 hover:bg-muted active:bg-foreground/8"
++            className="flex items-center gap-3 px-4 py-3.5 text-left outline-none transition-colors duration-150 hover:bg-muted active:bg-foreground/8 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+           >
+             <div className="flex-1">
+               <div className="text-[15px] font-medium">{t(`sections.${id}.title`)}</div>
+               <div className="mt-0.5 text-[12.5px] text-muted-foreground">{t(`sections.${id}.description`)}</div>
+             </div>
+-            <span className="text-[12.5px] text-muted-foreground">{counts[id]}</span>
++            <span className="text-[12.5px] text-muted-foreground tabular-nums">{counts[id]}</span>
+             <ChevronRight className="size-4 text-muted-foreground" />
+           </button>
+         ))}
+diff --git a/src/renderer/src/plugins/more/parts.tsx b/src/renderer/src/plugins/more/parts.tsx
+index 733d161..4208624 100644
+--- a/src/renderer/src/plugins/more/parts.tsx
++++ b/src/renderer/src/plugins/more/parts.tsx
+@@ -10,7 +10,7 @@ export function SectionHeader({ title, children }: { title: string; children?: R
+         {t('back')}
+       </button>
+       <div>
+-        <h1 className="text-[26px] font-semibold">{title}</h1>
++        <h1 className="text-[26px] font-semibold tracking-tight">{title}</h1>
+         {children && <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{children}</p>}
+       </div>
+     </>
+diff --git a/src/renderer/src/plugins/more/sections.tsx b/src/renderer/src/plugins/more/sections.tsx
+index c4a6374..109e7f6 100644
+--- a/src/renderer/src/plugins/more/sections.tsx
++++ b/src/renderer/src/plugins/more/sections.tsx
+@@ -102,7 +102,7 @@ export function SkillView({ id }: { id: string }) {
+       </button>
+       <div className="flex items-start gap-3">
+         <div className="flex-1">
+-          <h1 className="text-[26px] font-semibold">{skill.title}</h1>
++          <h1 className="text-[26px] font-semibold tracking-tight">{skill.title}</h1>
+           <p className="mt-1 text-sm text-muted-foreground">{skill.description}</p>
+         </div>
+         <Switch checked={skill.enabled} onCheckedChange={() => toggleSkill(skill.id)} aria-label={skill.title} className="mt-2.5" />
+@@ -175,7 +175,7 @@ function FinishedExperiment({ experiment: x }: { experiment: Experiment }) {
+       </div>
+       <div className="grid grid-cols-2 gap-3">
+         {x.arms?.map((arm) => (
+-          <div key={arm.label} className={cn('rounded-[10px] px-3.5 py-3', arm.highlight ? 'bg-[oklch(0.68_0.16_255/0.14)]' : 'bg-muted')}>
++          <div key={arm.label} className={cn('rounded-lg px-3.5 py-3', arm.highlight ? 'bg-brand/14' : 'bg-muted')}>
+             <div className="text-xs text-muted-foreground">{arm.label}</div>
+             <div className="mt-0.5 text-[26px] font-medium tabular-nums">{arm.value}</div>
+             <div className="text-xs text-muted-foreground">{arm.metric}</div>
+diff --git a/src/renderer/src/plugins/notes/Notes.tsx b/src/renderer/src/plugins/notes/Notes.tsx
+index 53bcb85..1486f10 100644
+--- a/src/renderer/src/plugins/notes/Notes.tsx
++++ b/src/renderer/src/plugins/notes/Notes.tsx
+@@ -116,7 +116,7 @@ function Composer() {
+     setText('')
+   }
+   return (
+-    <div className="rounded-2xl border border-card-border bg-card px-4 pt-3 pb-2 shadow-[0_1px_2px_rgb(10_14_40/0.04)] transition-shadow duration-150 focus-within:ring-3 focus-within:ring-ring/25">
++    <div className="rounded-2xl border border-card-border bg-card px-4 pt-3 pb-2 shadow-[0_1px_2px_var(--card-border)] focus-within:ring-3 focus-within:ring-ring/25">
+       <textarea
+         value={text}
+         rows={1}

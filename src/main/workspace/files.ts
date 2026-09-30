@@ -29,5 +29,9 @@ export async function readIfExists(path: string): Promise<string | null> {
   }
 }
 
-/** A new id: the kind's prefix, then time and randomness, short enough to read. */
-export const newId = (prefix: string) => `${prefix}-${Date.now().toString(36)}${randomBytes(3).toString('hex')}`
+/**
+ * A new id: the kind's prefix, then time and randomness, short enough to read.
+ * 48 random bits, so ids made on two devices in the same millisecond, once
+ * they sync, don't collide (docs/design/sync.md). Older, shorter ids stay valid.
+ */
+export const newId = (prefix: string) => `${prefix}-${Date.now().toString(36)}${randomBytes(6).readUIntBE(0, 6).toString(36).padStart(10, '0')}`

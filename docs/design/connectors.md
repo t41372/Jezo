@@ -16,7 +16,7 @@ How should Jezo connect to Google Calendar now, and later to Gmail, Microsoft 36
    - **GitHub:** the official `gh` CLI or the official local MCP server, which ship with GitHub's own registered app.
    - **Microsoft 365 / Outlook:** our own public client through MSAL and Graph. There's no secret, and publisher verification is free.
    - **Gmail:** held back. Reading mail is a restricted scope, so it needs a security assessment when data goes through third-party servers, and sending mail to a cloud model may count. Ask Google for a determination before building. Alternatives: IMAP with a Google app password (still supported), or file import.
-5. **The agent reaches connectors through files and a small CLI or skill, not injected tools.** Imported events are written to the workspace with their source account. Everything outside content goes through is checked at the exits: sending mail, inviting attendees, sharing, deleting remote objects.
+5. **The agent reaches connectors through files and a small CLI or skill, not injected tools.** Imported events are written to the workspace with their source account. What comes in is marked and checked as outside content, and actions that go out (sending mail, inviting attendees, sharing, deleting remote objects) get their own check.
 
 ## Facts that decide this
 

@@ -4,6 +4,7 @@
 import { BrowserWindow, dialog, ipcMain } from 'electron'
 import type { UndoLog } from '../agent/undo'
 import { skillInstaller } from './skill-install'
+import { installer as resourceInstaller } from '../install/installer'
 import type { Fields } from '../../shared/workspace'
 import { listSkills, setSkillEnabled } from './skills'
 import type { Workspace } from './workspace'
@@ -21,6 +22,23 @@ export function serveWorkspace(workspace: Workspace, undo: UndoLog) {
     return listSkills(workspace.root)
   })
   const installer = skillInstaller(workspace)
+  const installs = resourceInstaller(workspace)
+  ipcMain.handle('install:preview', (_, source: string) => installs.preview(source))
+  ipcMain.handle('install:pick', async () => {
+    const picked = await dialog.showOpenDialog({ properties: ['openFile', 'openDirectory'], filters: [{ name: 'Skills', extensions: ['zip', 'skill', 'gz', 'tgz'] }] })
+    return picked.canceled || !picked.filePaths[0] ? null : installs.local(picked.filePaths[0])
+  })
+  ipcMain.handle('install:apply', (_, token: string, selected: string[], replace?: boolean) => installs.install(token, selected, replace))
+  ipcMain.handle('install:discard', (_, token: string) => installs.discard(token))
+  ipcMain.handle('install:list', () => installs.list())
+  ipcMain.handle('install:set-enabled', (_, kind: 'package' | 'mcp', id: string, enabled: boolean) => installs.setEnabled(kind, id, enabled))
+  ipcMain.handle('install:remove', (_, kind: 'package' | 'mcp', id: string) => installs.remove(kind, id))
+  ipcMain.handle('install:sign-in', (_, name: string) => installs.signIn(name))
+  ipcMain.handle('install:sign-in-reply', (_, name: string, url?: string) => installs.replySignIn(name, url))
+  ipcMain.handle('install:reconnect', (_, name: string) => installs.reconnect(name))
+  installs.onChange(() => {
+    for (const window of BrowserWindow.getAllWindows()) window.webContents.send('install:changed')
+  })
   ipcMain.handle('skills:preview', (_, source: string) => installer.remote(source))
   ipcMain.handle('skills:pick', async () => {
     const picked = await dialog.showOpenDialog({

@@ -1,5 +1,5 @@
 import { cn } from 'cn'
-import { ArrowUp, Mic, Plus, Square } from 'lucide-react'
+import { ArrowUp, CornerUpLeft, Mic, Plus, Square } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -11,13 +11,14 @@ import { ModelChip } from './ModelChip'
 /**
  * The box for talking to Jezo, in the chat and in the ⌥X window: what you
  * type, the model and how hard it thinks, the microphone, and send (stop while
- * the agent works). Enter sends; Shift+Enter starts a new line.
+ * the agent works). Enter sends or queues; Shift+Enter starts a new line.
  */
 export function Composer({
   value,
   onChange,
   onSubmit,
   onStop,
+  onSteer,
   running,
   placeholder,
   autoFocus,
@@ -30,6 +31,7 @@ export function Composer({
   onChange: (value: string) => void
   onSubmit: (text: string) => void
   onStop?: () => void
+  onSteer?: (text: string) => void
   running?: boolean
   placeholder: string
   autoFocus?: boolean
@@ -51,7 +53,7 @@ export function Composer({
 
   const submit = () => {
     const text = value.trim()
-    if (text && !running) onSubmit(text)
+    if (text) onSubmit(text)
   }
 
   // What was said goes into the box, after what was typed; the user sends it.
@@ -79,6 +81,11 @@ export function Composer({
           onKeyDown={(e) => {
             onKeyDown?.(e)
             if (e.defaultPrevented) return
+            if (e.key === 'Enter' && e.shiftKey && (e.metaKey || e.ctrlKey) && !e.nativeEvent.isComposing && running && onSteer && !listening) {
+              e.preventDefault()
+              if (value.trim()) onSteer(value.trim())
+              return
+            }
             // Enter while an input method is composing picks a candidate; it must not send.
             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault()
@@ -116,13 +123,19 @@ export function Composer({
           <Mic className="size-[18px]" />
         </Button>
       )}
-      {running ? (
+      {running && onSteer && (
+        <Button variant="ghost" size="icon" className="size-9 shrink-0 rounded-full text-muted-foreground" aria-label={t('composer.steer')} disabled={!value.trim()} onClick={() => onSteer(value.trim())}>
+          <CornerUpLeft className="size-[18px]" />
+        </Button>
+      )}
+      {(!running || value.trim()) && (
+        <Button size="icon" className="size-9 shrink-0 rounded-full" aria-label={t(running ? 'composer.queue' : 'composer.send')} disabled={!value.trim()} onClick={submit}>
+          <ArrowUp className="size-[18px]" />
+        </Button>
+      )}
+      {running && (
         <Button size="icon" className="size-9 shrink-0 rounded-full" aria-label={t('composer.stop')} onClick={onStop}>
           <Square className="size-3.5 fill-current" />
-        </Button>
-      ) : (
-        <Button size="icon" className="size-9 shrink-0 rounded-full" aria-label={t('composer.send')} disabled={!value.trim()} onClick={submit}>
-          <ArrowUp className="size-[18px]" />
         </Button>
       )}
     </div>

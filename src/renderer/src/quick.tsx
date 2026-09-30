@@ -15,8 +15,12 @@ import { Check, Mic } from 'lucide-react'
 import { StrictMode, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import { Composer } from '@/components/composer/Composer'
+import { PendingMessages } from '@/components/composer/PendingMessages'
 import { Button } from '@/components/ui/button'
+import { Toaster } from '@/components/ui/sonner'
+import { ExtensionQuestionCard } from '@/components/ExtensionQuestionCard'
 import { Kbd } from '@/components/ui/kbd'
 import type { QuickCommand } from '../../shared/bridge'
 import type { SessionView } from '../../shared/session'
@@ -36,6 +40,7 @@ type Mode =
 
 function Quick() {
   useDarkClass()
+  useEffect(() => window.jezo.agent.onNotice(({ message, type }) => toast[type](message)), [])
   const { t } = useTranslation()
   const [mode, setMode] = useState<Mode>({ kind: 'type' })
   const [text, setText] = useState('')
@@ -57,11 +62,11 @@ function Quick() {
   // The first question starts a conversation; the ones after it go on in it.
   const sessionRef = useRef<string | null>(null)
   sessionRef.current = session
-  const ask = (question: string) => {
+  const ask = (question: string, behavior?: 'followUp' | 'steer') => {
     setText('')
     setAsked(question)
     const current = sessionRef.current
-    if (current) void window.jezo.agent.send(current, question)
+    if (current) void window.jezo.agent.send(current, question, 'hotkey', behavior)
     else window.jezo.agent.send(null, question, 'hotkey').then(setSession)
   }
 
@@ -125,10 +130,16 @@ function Quick() {
       ) : (
         <>
           {asked && <Answer question={asked} view={view} onPick={ask} />}
+          {view?.pending && <PendingMessages pending={view.pending} onTakeBack={async () => {
+            if (!session) return
+            const cleared = await window.jezo.agent.pi.clearQueue(session)
+            setText([text, ...cleared.steering, ...cleared.followUp].filter(Boolean).join('\n\n'))
+          }} />}
           <Composer
             value={text}
             onChange={setText}
             onSubmit={ask}
+            onSteer={(question) => ask(question, 'steer')}
             running={view?.running}
             onStop={() => session && void window.jezo.agent.abort(session)}
             placeholder={session ? t('quick.followUp') : t('quick.placeholder')}
@@ -137,7 +148,7 @@ function Quick() {
             textareaClassName="text-[15.5px]"
             onKeyDown={(e) => {
               const question = text.trim()
-              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+              if (e.key === 'Enter' && !e.shiftKey && (e.metaKey || e.ctrlKey)) {
                 e.preventDefault()
                 continueInMain()
               } else if (e.key === 'Enter' && e.altKey && question && !e.nativeEvent.isComposing) {
@@ -150,6 +161,7 @@ function Quick() {
           <Hints canContinue={Boolean(session || text.trim())} onContinue={continueInMain} />
         </>
       )}
+      <Toaster position="bottom-center" />
     </div>
   )
 }
@@ -185,7 +197,7 @@ function useFit() {
 function Answer({ question, view, onPick }: { question: string; view: SessionView | null; onPick: (option: string) => void }) {
   const { t } = useTranslation()
   const messages = view?.messages ?? []
-  const shown = messages.filter((m) => m.kind === 'user' || m.kind === 'agent' || m.kind === 'error' || (m.kind === 'choices' && !m.picked))
+  const shown = messages.filter((m) => m.kind === 'user' || m.kind === 'agent' || m.kind === 'error' || m.kind === 'extension-question' || (m.kind === 'choices' && !m.picked))
   const scroller = useRef<HTMLDivElement>(null)
   useEffect(() => {
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight })
@@ -195,26 +207,26 @@ function Answer({ question, view, onPick }: { question: string; view: SessionVie
     <div ref={scroller} className="flex max-h-[360px] flex-col gap-2.5 overflow-auto px-1 pt-1">
       {(shown.length ? shown : [{ kind: 'user' as const, text: question }]).map((m, i) =>
         m.kind === 'user' ? (
-          <div key={i} className="max-w-[85%] self-end rounded-[18px] bg-primary px-3.5 py-2 text-[14px] leading-relaxed text-primary-foreground" data-selectable>
+          <div key={m.id ?? 'pending-question'} className="max-w-[85%] self-end rounded-[18px] bg-primary px-3.5 py-2 text-[14px] leading-relaxed text-primary-foreground" data-selectable>
             {m.text}
           </div>
         ) : m.kind === 'agent' ? (
-          <div key={i} className="text-[14.5px] leading-[1.7] text-pretty whitespace-pre-wrap" data-selectable>
+          <div key={m.id ?? 'pending-question'} className="text-[14.5px] leading-[1.7] text-pretty whitespace-pre-wrap" data-selectable>
             {m.text.trim()}
           </div>
         ) : m.kind === 'error' ? (
-          <div key={i} className="text-[13.5px] text-destructive">
+          <div key={m.id ?? 'pending-question'} className="text-[13.5px] text-destructive">
             {m.code === 'no-model' ? t('quick.noModel') : m.text}
           </div>
         ) : m.kind === 'choices' ? (
-          <div key={i} className="flex flex-wrap gap-1.5">
+          <div key={m.id ?? 'pending-question'} className="flex flex-wrap gap-1.5">
             {m.options.map((o) => (
               <Button key={o} variant="outline" size="sm" className="rounded-full font-normal" onClick={() => onPick(o)}>
                 {o}
               </Button>
             ))}
           </div>
-        ) : null,
+        ) : m.kind === 'extension-question' ? <ExtensionQuestionCard key={i} session={view!.id} question={m.question} /> : null,
       )}
       {waiting && <div className="text-[13px] text-muted-foreground motion-safe:animate-pulse">{t('quick.thinking')}</div>}
     </div>

@@ -64,14 +64,32 @@
       "ask_user": "問你",
       "todos_list": "看待辦",
       "item_links": "看連結",
-      "skill_install": "安裝方法"
+      "install_from_address": "安裝方法"
     }
   },
   "working": "正在想…",
   "stop": "停下來",
   "error": {
     "noModel": "找不到可以用的模型。打開 LM Studio 或 Ollama 並載入一個模型，或到設定換成雲端模型。",
-    "failed": "這次沒回答成功：{{text}}"
+    "failed": "這次沒回答成功：{{text}}",
+    "cutOff": "模型想太久，還沒寫完就停了。按 ↻ 再試一次。"
   },
-  "send": "送出"
+  "send": "送出",
+  "actions": {
+    "copy": "複製訊息",
+    "edit": "編輯訊息",
+    "retry": "重新回答",
+    "previous": "上一個版本",
+    "next": "下一個版本",
+    "cancel": "取消",
+    "save": "儲存並送出",
+    "latest": "跳到最新訊息"
+  },
+  "held": {
+    "title_other": "有 {{count}} 段外來的內容讀起來像是寫給 AI 的指令，Jezo 沒讓 agent 看。"
+  },
+  "unchanged": {
+    "text": "這輪沒有改動",
+    "nudge": "請它動手"
+  }
 }

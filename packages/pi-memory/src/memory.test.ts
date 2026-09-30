@@ -18,6 +18,8 @@
 // 15. A changed preference is saved next to the old one instead of replacing it,
 //     so both are used and they contradict each other. Found with a real model
 //     on 2026-09-30: it left out `replaces` two runs in three.
+// 16. A forgotten memory's file comes back (a backup, a sync, a copy) and it's
+//     recalled again, though forgotten.yaml still says it was deleted.
 
 import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -108,6 +110,19 @@ describe('forget', () => {
     await memory.forget(m.id)
     const again = await memory.remember({ text: '我討厭早上開會', epistemic: 'stated', again: true }) // 4
     expect(memory.recall('早上開會').map((r) => r.id)).toEqual([again.id])
+  })
+
+  test('its file coming back from a backup does not bring it back', async () => {
+    const { dir, memory } = setup()
+    await memory.load()
+    const m = await memory.remember({ text: '我討厭早上開會', epistemic: 'stated' })
+    const saved = readFileSync(join(dir, 'items', files(dir)[0]), 'utf8')
+    const name = files(dir)[0]
+    await memory.forget(m.id)
+    writeFileSync(join(dir, 'items', name), saved)
+    await memory.load()
+    expect(memory.recall('早上開會')).toEqual([]) // 16
+    expect(memory.context().text).not.toContain('早上開會') // 16
   })
 
   test("the agent can't lift it on its own", async () => {

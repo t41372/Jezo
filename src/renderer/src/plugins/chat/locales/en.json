@@ -67,14 +67,33 @@
       "ask_user": "ask you",
       "todos_list": "list todos",
       "item_links": "look at links",
-      "skill_install": "install a method"
+      "install_from_address": "install a method"
     }
   },
   "working": "Thinking…",
   "stop": "Stop",
   "error": {
     "noModel": "No model to use. Open LM Studio or Ollama and load a model, or switch to a cloud model in Settings.",
-    "failed": "That didn't work: {{text}}"
+    "failed": "That didn't work: {{text}}",
+    "cutOff": "The model thought too long and stopped before it finished. Press ↻ to try again."
   },
-  "send": "Send"
+  "send": "Send",
+  "actions": {
+    "copy": "Copy message",
+    "edit": "Edit message",
+    "retry": "Retry answer",
+    "previous": "Previous version",
+    "next": "Next version",
+    "cancel": "Cancel",
+    "save": "Save and send",
+    "latest": "Jump to latest message"
+  },
+  "held": {
+    "title_one": "Jezo kept {{count}} piece of outside content from the agent: it reads like instructions to an AI.",
+    "title_other": "Jezo kept {{count}} pieces of outside content from the agent: they read like instructions to an AI."
+  },
+  "unchanged": {
+    "text": "Nothing changed this turn",
+    "nudge": "Ask it to do it"
+  }
 }

@@ -1,0 +1,197 @@
+Subject: feat(ui): Add a time picker for the schedule rows
+
+Co-Authored-By: Codex <noreply@openai.com>
+
+diff --git a/src/renderer/src/locales/en.json b/src/renderer/src/locales/en.json
+index 3f231e5..f744963 100644
+--- a/src/renderer/src/locales/en.json
++++ b/src/renderer/src/locales/en.json
+@@ -17,6 +17,10 @@
+     "tomorrow": "Tomorrow",
+     "dayTime": "{{day}} {{time}}"
+   },
++  "timeField": {
++    "hours": "Hours",
++    "minutes": "Minutes"
++  },
+   "trigger": {
+     "morning": {
+       "title": "Morning plan",
+diff --git a/src/renderer/src/locales/zh-TW.json b/src/renderer/src/locales/zh-TW.json
+index 1e7ae8a..5143597 100644
+--- a/src/renderer/src/locales/zh-TW.json
++++ b/src/renderer/src/locales/zh-TW.json
+@@ -16,6 +16,10 @@
+     "tomorrow": "明天",
+     "dayTime": "{{day}} {{time}}"
+   },
++  "timeField": {
++    "hours": "小時",
++    "minutes": "分鐘"
++  },
+   "trigger": {
+     "morning": {
+       "title": "早上排程",
+diff --git a/src/renderer/src/plugins/settings/ScheduleRows.tsx b/src/renderer/src/plugins/settings/ScheduleRows.tsx
+index a713dae..254f825 100644
+--- a/src/renderer/src/plugins/settings/ScheduleRows.tsx
++++ b/src/renderer/src/plugins/settings/ScheduleRows.tsx
+@@ -1,6 +1,7 @@
+ import { useEffect, useState } from 'react'
+ import { useTranslation } from 'react-i18next'
+ import { Row } from '@/components/ListCard'
++import { TimeField } from '@/components/TimeField'
+ import { Switch } from '@/components/ui/switch'
+ import type { Schedule } from '../../../../shared/bridge'
+ 
+@@ -19,12 +20,10 @@ export function ScheduleRows() {
+   return (['morning', 'evening'] as const).map((kind) => (
+     <Row key={kind} title={t(kind)} description={schedule[kind] ? t(`${kind}Hint`) : t('scheduleOff')}>
+       {schedule[kind] && (
+-        <input
+-          type="time"
++        <TimeField
+           value={schedule[kind]!}
+           aria-label={t(kind)}
+-          onChange={(e) => e.target.value && change({ [kind]: e.target.value })}
+-          className="h-7 rounded-md bg-muted px-2 font-mono text-[13px] tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
++          onChange={(value) => change({ [kind]: value })}
+         />
+       )}
+       <Switch checked={schedule[kind] !== null} onCheckedChange={(on) => change({ [kind]: on ? DEFAULTS[kind] : null })} aria-label={t(kind)} />
+diff --git a/src/renderer/src/components/TimeField.tsx b/src/renderer/src/components/TimeField.tsx
+new file mode 100644
+index 0000000..06b04f4
+--- /dev/null
++++ b/src/renderer/src/components/TimeField.tsx
+@@ -0,0 +1,130 @@
++import { cn } from 'cn'
++import { ChevronDown } from 'lucide-react'
++import { useLayoutEffect, useRef, useState, type RefObject } from 'react'
++import { useTranslation } from 'react-i18next'
++import { Button } from '@/components/ui/button'
++import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
++
++const pad = (value: number) => String(value).padStart(2, '0')
++const HOURS = Array.from({ length: 24 }, (_, hour) => pad(hour))
++const MINUTES = Array.from({ length: 12 }, (_, minute) => pad(minute * 5))
++
++function selectedButton(column: RefObject<HTMLDivElement | null>) {
++  return column.current?.querySelector<HTMLButtonElement>('[aria-pressed="true"]') ?? null
++}
++
++/** A 24-hour time, with separate hour and minute choices. */
++export function TimeField({
++  value,
++  onChange,
++  'aria-label': label,
++}: {
++  value: string
++  onChange: (value: string) => void
++  'aria-label': string
++}) {
++  const { t } = useTranslation('common')
++  const [open, setOpen] = useState(false)
++  const hours = useRef<HTMLDivElement>(null)
++  const minutes = useRef<HTMLDivElement>(null)
++  const [hour, minute] = value.split(':')
++  const minuteChoices = MINUTES.includes(minute) ? MINUTES : [...MINUTES, minute].sort()
++  const switchColumn = (direction: 'left' | 'right') => selectedButton(direction === 'left' ? hours : minutes)?.focus()
++
++  return (
++    <Popover open={open} onOpenChange={setOpen}>
++      <PopoverTrigger render={<Button variant="outline" size="sm" className="gap-1.5" aria-label={label} />}>
++        <span className="font-mono tabular-nums">{value}</span>
++        <ChevronDown className="size-3.5 opacity-60" />
++      </PopoverTrigger>
++      <PopoverContent
++        align="end"
++        className="w-fit p-1.5 animate-none data-open:animate-none data-closed:animate-none"
++        initialFocus={() => selectedButton(hours)}
++        onKeyDown={(event) => {
++          if (event.key === 'Enter') {
++            event.preventDefault()
++            setOpen(false)
++          }
++        }}
++      >
++        <div className="flex gap-1.5">
++          <TimeColumn
++            columnRef={hours}
++            label={t('timeField.hours')}
++            values={HOURS}
++            selected={hour}
++            open={open}
++            onChange={(next) => onChange(`${next}:${minute}`)}
++            onSwitchColumn={switchColumn}
++          />
++          <div className="w-px self-stretch bg-card-border" />
++          <TimeColumn
++            columnRef={minutes}
++            label={t('timeField.minutes')}
++            values={minuteChoices}
++            selected={minute}
++            open={open}
++            onChange={(next) => onChange(`${hour}:${next}`)}
++            onSwitchColumn={switchColumn}
++          />
++        </div>
++      </PopoverContent>
++    </Popover>
++  )
++}
++
++function TimeColumn({
++  columnRef,
++  label,
++  values,
++  selected,
++  open,
++  onChange,
++  onSwitchColumn,
++}: {
++  columnRef: RefObject<HTMLDivElement | null>
++  label: string
++  values: string[]
++  selected: string
++  open: boolean
++  onChange: (value: string) => void
++  onSwitchColumn: (direction: 'left' | 'right') => void
++}) {
++  useLayoutEffect(() => {
++    const column = columnRef.current
++    const button = selectedButton(columnRef)
++    if (open && column && button) {
++      column.scrollTop = button.offsetTop - column.offsetTop - (column.clientHeight - button.offsetHeight) / 2
++    }
++  }, [open, selected, columnRef])
++
++  return (
++    <div ref={columnRef} role="group" aria-label={label} className="flex max-h-56 flex-col overflow-y-auto">
++      {values.map((item, index) => (
++        <button
++          key={item}
++          type="button"
++          aria-pressed={item === selected}
++          onClick={() => onChange(item)}
++          onKeyDown={(event) => {
++            if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
++              event.preventDefault()
++              const next = Math.max(0, Math.min(values.length - 1, index + (event.key === 'ArrowUp' ? -1 : 1)))
++              columnRef.current?.querySelectorAll<HTMLButtonElement>('button')[next]?.focus()
++            } else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
++              event.preventDefault()
++              onSwitchColumn(event.key === 'ArrowLeft' ? 'left' : 'right')
++            }
++          }}
++          className={cn(
++            'pressable h-8 shrink-0 rounded-md px-3 text-[13.5px] font-mono tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
++            item === selected ? 'bg-primary text-primary-foreground' : 'hover:bg-muted',
++          )}
++        >
++          {item}
++        </button>
++      ))}
++    </div>
++  )
++}

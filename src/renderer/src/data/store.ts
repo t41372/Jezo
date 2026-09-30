@@ -63,9 +63,7 @@ interface State {
   openSession(id: string | null, composer?: string): void
   /** Sends a message in the open conversation, or starts one. */
   send(text: string, trigger?: Trigger): void
-  /** Stops the agent in the open conversation. */
-  stop(): void
-  pickChoice(sessionId: string, index: number, option: string): void
+  pickChoice(sessionId: string, option: string): void
 
   setDone(id: string, done: boolean): void
   accept(ids: string[]): void
@@ -331,16 +329,12 @@ export const useStore = create<State>()((set, get) => ({
     set({ composer: '' })
     window.jezo.agent.send(id, text, trigger).then((opened) => {
       if (!id) set({ sessionId: opened })
-    }, failed)
+    }, (error) => {
+      if (!get().composer) set({ composer: text })
+      failed(error)
+    })
   },
-  stop: () => {
-    const { sessionId } = get()
-    if (sessionId) void window.jezo.agent.abort(sessionId)
-  },
-
-  pickChoice: (sessionId, index, option) => {
-    const message = get().sessions.find((x) => x.id === sessionId)?.messages[index]
-    if (message?.kind !== 'choices' || message.picked) return
+  pickChoice: (sessionId, option) => {
     window.jezo.agent.send(sessionId, option).catch(failed)
   },
 

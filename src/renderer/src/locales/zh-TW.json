@@ -95,7 +95,11 @@
     "tweak": "改一下",
     "tweakPrefill": "我想改：",
     "goToday": "去今天 →",
-    "undo": "撤銷"
+    "undo": "撤銷",
+    "revised": "已更新，見下方",
+    "added": "新的",
+    "changed": "改過",
+    "removed": "拿掉了：{{titles}}"
   },
   "quick": {
     "placeholder": "跟 Jezo 說…",
@@ -153,7 +157,12 @@
     "send": "送出",
     "stop": "停下來",
     "micDenied": "沒辦法用麥克風。到系統設定的「隱私權與安全性」允許 Jezo 使用麥克風。",
-    "speechMissing": "語音辨識還沒裝好。到設定按「安裝」，之後就能用說的。"
+    "speechMissing": "語音辨識還沒裝好。到設定按「安裝」，之後就能用說的。",
+    "queue": "排在後面",
+    "steer": "先照這個做",
+    "queued": "接著問",
+    "steering": "先照這個做",
+    "takeBack": "拿回待送訊息"
   },
   "related": {
     "title": "相關",

@@ -17,6 +17,10 @@ export interface Jezo {
   page: Page
   /** The test's workspace. */
   root: string
+  /** The app's own data, including pi settings and encrypted keychain records. */
+  data: string
+  /** Restarts the real app with the same workspace and app data. */
+  restart(): Promise<void>
   /** An item file's frontmatter and body, read from disk. */
   read(path: string): { data: Record<string, unknown>; body: string }
   /** Every item in a plugin's directory, read from disk. */
@@ -33,7 +37,16 @@ interface Prepare {
   data?(dir: string): void
   /** Extra Chromium switches, like a fake microphone. */
   args?: string[]
+  /** null leaves the agent's model unpicked, as on a new install. */
+  model?: null
 }
+
+/**
+ * The agent's model in every test, picked in the test's own config.json. Unpicked,
+ * Jezo would use whatever LM Studio has loaded, so a test's model would change
+ * with what the developer is using (e2e/setup.ts loads this one).
+ */
+export const TEST_MODEL = process.env.JEZO_TEST_MODEL ?? 'qwen3.6-35b-a3b-splash'
 
 export const test = base.extend<{ jezo: Jezo; prepare: Prepare }>({
   prepare: [{}, { option: true }],
@@ -48,12 +61,17 @@ export const test = base.extend<{ jezo: Jezo; prepare: Prepare }>({
     }
     prepare.workspace?.(root)
     mkdirSync(join(dir, 'data'), { recursive: true })
+    if (prepare.model !== null) {
+      writeFileSync(join(dir, 'data/config.json'), JSON.stringify({ models: { main: { provider: 'lmstudio', id: TEST_MODEL } } }))
+      info.annotations.push({ type: 'model', description: `lmstudio/${TEST_MODEL}` })
+    }
     prepare.data?.(join(dir, 'data'))
-    const app = await electron.launch({
+    const launchOptions = {
       executablePath: electronPath,
       args: [join(repo, 'out/main/index.js'), ...(prepare.args ?? [])],
       env: { ...process.env, JEZO_WORKSPACE: root, JEZO_USER_DATA: join(dir, 'data') },
-    })
+    }
+    let app = await electron.launch(launchOptions)
     // The ⌥X window is created too; the main window is the one showing index.html.
     let page = app.windows().find((w) => w.url().includes('/index.html'))
     while (!page) {
@@ -82,15 +100,42 @@ export const test = base.extend<{ jezo: Jezo; prepare: Prepare }>({
             return []
           }
         })
-    await use({ app, page, root, read, items, errors })
+    const jezo: Jezo = { app, page, root, data: join(dir, 'data'), read, items, errors, restart: async () => {
+      await app.close()
+      app = await electron.launch(launchOptions)
+      let next = app.windows().find((w) => w.url().includes('/index.html'))
+      while (!next) {
+        await app.waitForEvent('window')
+        next = app.windows().find((w) => w.url().includes('/index.html'))
+      }
+      next.on('pageerror', (e) => errors.push(String(e)))
+      next.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
+      await next.locator('nav button').first().waitFor()
+      jezo.app = app
+      jezo.page = next
+    } }
+    await use(jezo)
 
     // The workspace as the test left it is part of the result.
     await info.attach('workspace', { body: root })
+    await info.attach('app-data', { body: join(dir, 'data') })
     await app.close()
   },
 })
 
 export { expect } from '@playwright/test'
+
+/** Whether a local model server (LM Studio or Ollama) answers. Tests with the agent skip without one. */
+export async function localModel() {
+  for (const url of ['http://localhost:1234/v1/models', 'http://localhost:11434/v1/models']) {
+    try {
+      if ((await fetch(url, { signal: AbortSignal.timeout(1000) })).ok) return true
+    } catch {
+      // Not running.
+    }
+  }
+  return false
+}
 
 /** Goes to a page by its rail label. */
 export const open = (page: Page, label: string) => page.locator('nav button', { hasText: label }).first().click()

@@ -50,6 +50,14 @@ test('notes go to files and come back from them', async ({ jezo }) => {
   rmSync(join(root, 'notes/items/n-4.md'))
   await expect(texts.filter({ hasText: 'Ken 生日' })).toHaveCount(0)
 
+  // An id changed by hand doesn't make it another note: it keeps its id, with a problem saying so, until the id is put back.
+  const atN1 = async () => (await page.evaluate(() => window.jezo.workspace.list())).find((i) => i.path === 'notes/items/n-1.md')
+  writeFileSync(n1, readFileSync(n1, 'utf8').replace('id: n-1', 'id: n-99'))
+  await expect.poll(async () => (await atN1())?.problems?.join('\n') ?? '').toContain('n-99')
+  expect((await atN1())?.id).toBe('n-1')
+  writeFileSync(n1, readFileSync(n1, 'utf8').replace('id: n-99', 'id: n-1'))
+  await expect.poll(async () => (await atN1())?.problems).toBeUndefined()
+
   expect(jezo.errors).toEqual([])
 })
 
@@ -161,7 +169,7 @@ test.describe('deciding on a proposal', () => {
 test('skills come from the workspace, and turning one off writes it to its file', async ({ jezo }) => {
   const { page, read } = jezo
   await open(page, '更多')
-  await page.getByText('它用的方法').click()
+  await page.getByText('已安裝', { exact: true }).click()
   const toggle = page.getByRole('switch', { name: '用紀錄估時間' })
   await expect(page.locator('main').getByText('整理隨手記')).toBeVisible()
 

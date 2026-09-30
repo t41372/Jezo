@@ -4,6 +4,8 @@ import type { CalendarEvent, CalendarSource, CalendarStatus } from './calendar'
 import type { HistoryEntry, SessionView, Trigger, UndoResult } from './session'
 import type { Fields, Item, ItemChanges } from './workspace'
 import type { SkillInfo, SkillInstallResult, SkillPreview } from './skills'
+import type { ExtensionNotice, InstallPreview, InstallResult, InstalledResources } from './install'
+import type { ChatBridge } from './chat'
 export type { SkillInfo } from './skills'
 
 export type ThemeSource = 'system' | 'light' | 'dark'
@@ -120,14 +122,32 @@ export interface JezoBridge {
   }
   /** Conversations with Jezo's agent. */
   agent: {
+    pi: ChatBridge
     list(): Promise<SessionView[]>
     /** Sends the user's message, starting a conversation when `id` is null. Resolves to the conversation's id once it has one. */
-    send(id: string | null, text: string, trigger?: Trigger): Promise<string>
+    send(id: string | null, text: string, trigger?: Trigger, behavior?: 'followUp' | 'steer'): Promise<string>
     /** Starts a conversation Jezo asks for on the user's behalf, like sorting notes. */
     start(trigger: Trigger): Promise<string>
     abort(id: string): Promise<void>
-    /** Called with a conversation whenever it changes, while the agent writes too. */
+    /** Asks the agent, without a visible message, to make the change it described in a run that changed nothing. */
+    nudge(id: string): Promise<void>
+    answerExtension(id: string, request: string, value?: string | boolean): Promise<void>
+    onNotice(listener: (notice: ExtensionNotice) => void): () => void
+    /** Saved records, queues and run status; the quick preview also receives streaming text. */
     onChange(listener: (view: SessionView) => void): () => void
+  }
+  install: {
+    preview(source: string): Promise<InstallPreview>
+    pick(): Promise<InstallPreview | null>
+    apply(token: string, selected: string[], replace?: boolean): Promise<InstallResult>
+    discard(token: string): Promise<void>
+    list(): Promise<InstalledResources>
+    setEnabled(kind: 'package' | 'mcp', id: string, enabled: boolean): Promise<void>
+    remove(kind: 'package' | 'mcp', id: string): Promise<void>
+    signIn(name: string): Promise<void>
+    replySignIn(name: string, url?: string): Promise<void>
+    reconnect(name: string): Promise<void>
+    onChange(listener: () => void): () => void
   }
   /** Hold-to-talk. The ⌥X window sends 16 kHz 16-bit audio and hears the text back as it's recognized. */
   speech: {

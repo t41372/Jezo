@@ -32,7 +32,7 @@ function Index() {
   const s = useStore()
   const counts: Record<SectionId, string> = {
     memory: String(s.memories.length),
-    skills: t('counts.skills', { count: s.skills.filter((k) => k.enabled).length }),
+    skills: '',
     experiments: t('counts.experiments', { count: s.experiments.filter((x) => !x.finished).length }),
     history: '',
     connections: t('counts.connections', { count: s.connections.filter((c) => c.connected).length }),

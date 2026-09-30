@@ -8,6 +8,7 @@ import { serveAgent } from './agent/ipc'
 import { createMemory, serveMemory } from './agent/memory'
 import { Providers } from './agent/providers'
 import { Schedule, setLanguage } from './agent/schedule'
+import { modelJudge, OutsideContent } from './agent/outside'
 import { historyFile, UndoLog } from './agent/undo'
 import { Calendars } from './calendar/calendars'
 import { serveCalendars } from './calendar/ipc'
@@ -19,6 +20,7 @@ import { Speech } from './speech/speech'
 import { serveWorkspace } from './workspace/ipc'
 import { seedWorkspace } from './workspace/seed'
 import { Workspace } from './workspace/workspace'
+import { installer } from './install/installer'
 
 
 const QUICK_KEY = 'Alt+X'
@@ -111,6 +113,7 @@ ipcMain.on('language:set', (_, language: string) => setLanguage(language))
 let workspace: Workspace | null = null
 let schedule: Schedule | null = null
 let calendars: Calendars | null = null
+let host: AgentHost | null = null
 const speech = new Speech()
 
 /** Opens the workspace, creating it on first run. The seeded skills follow the OS language. */
@@ -119,6 +122,7 @@ async function openWorkspace() {
   await seedWorkspace(root, app.getLocale().startsWith('zh') ? 'zh-TW' : 'en')
   workspace = new Workspace(root)
   await workspace.open()
+  await installer(workspace).open()
   const undo = new UndoLog(workspace, historyFile(app.getPath('userData')))
   serveWorkspace(workspace, undo)
   const providers = new Providers()
@@ -129,7 +133,8 @@ async function openWorkspace() {
   calendars = new Calendars(workspace)
   await calendars.open()
   serveCalendars(calendars)
-  const host = new AgentHost(workspace, undo, providers, memory, calendars)
+  const outside = new OutsideContent(modelJudge(providers), join(app.getPath('userData'), 'outside.json'))
+  host = new AgentHost(workspace, undo, providers, memory, calendars, outside)
   await host.open()
   schedule = new Schedule(workspace, host, providers, openSession)
   serveAgent(host, undo, providers, schedule)
@@ -170,6 +175,20 @@ app.whenReady().then(async () => {
 
   app.on('activate', () => {
     if (!mainWindow) createMainWindow()
+  })
+})
+
+let readyToQuit = false
+let quitting = false
+app.on('before-quit', (event) => {
+  if (readyToQuit) return
+  event.preventDefault()
+  if (quitting) return
+  quitting = true
+  schedule?.stop()
+  void Promise.all([host?.close(), workspace && installer(workspace).close()]).catch(console.error).finally(() => {
+    readyToQuit = true
+    app.quit()
   })
 })
 

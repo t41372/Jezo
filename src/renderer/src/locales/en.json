@@ -98,7 +98,11 @@
     "tweak": "Change something",
     "tweakPrefill": "I'd like to change: ",
     "goToday": "Go to Today →",
-    "undo": "Undo"
+    "undo": "Undo",
+    "revised": "Updated, see below",
+    "added": "new",
+    "changed": "changed",
+    "removed": "Removed: {{titles}}"
   },
   "quick": {
     "placeholder": "Tell Jezo…",
@@ -156,7 +160,12 @@
     "send": "Send",
     "stop": "Stop",
     "micDenied": "Jezo can't use the microphone. Allow it in System Settings, Privacy & Security.",
-    "speechMissing": "Speech recognition isn't installed yet. Install it in Settings to talk instead of typing."
+    "speechMissing": "Speech recognition isn't installed yet. Install it in Settings to talk instead of typing.",
+    "queue": "Queue message",
+    "steer": "Steer current work",
+    "queued": "Up next",
+    "steering": "Steering",
+    "takeBack": "Take back pending messages"
   },
   "related": {
     "title": "Related",

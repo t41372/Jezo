@@ -13,8 +13,9 @@ import { dayLabel, dayTime } from '@/lib/time'
 import { offerUndo } from '@/lib/undo'
 import { ListCard, Row } from '@/components/ListCard'
 import { CalendarConnections } from './CalendarConnections'
-import { AddSkillDialog, RemoveSkillDialog, SkillSource } from './SkillDialogs'
+import { InstallDialog, RemoveSkillDialog, SkillSource } from './SkillDialogs'
 import { SectionHeader } from './parts'
+import { Installed } from './Installed'
 
 export function Memories() {
   const { t } = useTranslation('more')
@@ -67,7 +68,9 @@ export function Skills() {
   const { toggleSkill, navigate } = useStore.getState()
   return (
     <>
-      <SectionHeader title={t('sections.skills.title')} action={<AddSkillDialog />}>{t('skills.intro')}</SectionHeader>
+      <SectionHeader title={t('sections.skills.title')} action={<InstallDialog />}>{t('skills.intro')}</SectionHeader>
+      <Installed />
+      <h2 className="mt-1.5 text-xs text-muted-foreground">{t('install.methods')}</h2>
       <ListCard>
         {skills.map((k) => (
           <div
@@ -113,7 +116,7 @@ export function SkillView({ id }: { id: string }) {
 
       <div className="flex flex-wrap items-center gap-2">
         <span className="flex-1 text-[13px] text-muted-foreground"><SkillSource skill={skill} /></span>
-        {skill.updatable && <AddSkillDialog update={skill} />}
+        {skill.updatable && <InstallDialog update={skill} />}
         {skill.removable && <RemoveSkillDialog skill={skill} />}
       </div>
       {skill.origin && /^https?:\/\//.test(skill.origin.source) && (
@@ -241,8 +244,8 @@ export function History() {
               </div>
               <div className={cn('mt-0.5 text-[14.5px]', h.undone && 'text-muted-foreground line-through')}>{h.summary}</div>
               {h.check && (
-                <div className={cn('mt-0.5 text-[12.5px]', h.check.level === 'error' ? 'text-destructive' : 'text-warn')}>
-                  {h.check.level === 'warn' ? t('history.retried', { count: h.check.retries }) : t('history.claimedWithoutChange')}
+                <div className="mt-0.5 text-[12.5px] text-warn">
+                  {t('history.retried', { count: h.check.retries })}
                 </div>
               )}
               {h.files && (
@@ -262,12 +265,9 @@ export function History() {
             {h.undone ? (
               <span className="text-[12.5px] text-muted-foreground">{t('history.undone')}</span>
             ) : (
-              // A change that never landed has nothing to undo.
-              h.check?.level !== 'error' && (
-                <Button variant="outline" size="sm" onClick={() => undo(h.id)}>
-                  {t('history.undo')}
-                </Button>
-              )
+              <Button variant="outline" size="sm" onClick={() => undo(h.id)}>
+                {t('history.undo')}
+              </Button>
             )}
           </div>
         ))}

@@ -43,7 +43,7 @@ Restoring to a point undoes everything after that point, including the user's ow
 Follow Hermes' model, with storage outside the workspace. Built on 2026-09-29 (`src/main/agent/undo.ts`), at file level:
 
 1. **Record what the agent writes.** For every file Jezo's agent changes in a turn, store the file's content from before the change and the hash of what the agent wrote, in the app-data directory. Changes made through the shell are caught by comparing hashes of the workspace files before and after the turn.
-2. **Undo checks before it reverts.** A file is restored only if its current hash still matches what the agent wrote. If the user has changed it since, it's left alone, and the preview says so, for example: "3 changes undone, 1 kept because you edited it afterward".
+2. **Undo checks before it reverts.** A file is restored only if its current hash still matches what the agent wrote. If the user has changed it since, it's left alone, and the preview says so, for example: "3 changes undone, 1 kept because you edited it afterward". The restore is written through the workspace as a change by the user, like an edit in the GUI, so the index, the windows, and later a sync see it the same way.
 3. **For structured data, go per field** if file-level checks turn out to be too coarse. Record `{entity id, field, old, new}`, so the agent's change to one field can be undone even when the user edited a different field in the same file.
 4. **Keep only recent turns.** History older than a short window is dropped. Losing it is fine.
 

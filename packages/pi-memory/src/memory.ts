@@ -153,9 +153,13 @@ export class Memory {
     for (const r of this.records.values()) insert.run(r.id, r.text)
   }
 
-  /** Active and not expired. */
+  /**
+   * Active, not expired, and not forgotten. A forgotten memory's file can come
+   * back from a backup or a copy; forgotten.yaml still says it was deleted.
+   */
   private current(r: MemoryRecord) {
-    return r.status === 'active' && (!r.valid_until || r.valid_until >= local(this.now()).slice(0, 10))
+    const forgotten = this.forgotten.some((f) => f.id === r.id || f.hash === hashOf(r.text))
+    return !forgotten && r.status === 'active' && (!r.valid_until || r.valid_until >= local(this.now()).slice(0, 10))
   }
 
   list(): MemoryRecord[] {
@@ -218,7 +222,7 @@ export class Memory {
     }
 
     const record: MemoryRecord = {
-      id: `m-${Date.now().toString(36)}${randomBytes(3).toString('hex')}`,
+      id: `m-${Date.now().toString(36)}${randomBytes(6).readUIntBE(0, 6).toString(36).padStart(10, '0')}`,
       text,
       ...(input.about && { about: input.about }),
       epistemic: input.epistemic,

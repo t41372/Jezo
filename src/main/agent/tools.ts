@@ -5,6 +5,7 @@
 
 import { access, readFile } from 'node:fs/promises'
 import {
+  createBashToolDefinition,
   createEditToolDefinition,
   createLsToolDefinition,
   createReadToolDefinition,
@@ -18,7 +19,9 @@ import type { SessionMessage } from '../../shared/session'
 import type { Fields } from '../../shared/workspace'
 import { FrontmatterError, parse } from '../workspace/frontmatter'
 import { currentActing } from './acting'
-import { skillInstaller } from '../workspace/skill-install'
+import { installer } from '../install/installer'
+import { shellOperations } from './shell'
+import { listSkills } from '../workspace/skills'
 import { insideWorkspace, type Workspace } from '../workspace/workspace'
 
 /** The run the tools are working for. The session updates it before each prompt. */
@@ -27,6 +30,12 @@ export interface RunContext {
   session: string
   /** What the user said to start this run, or '' when Jezo started it. */
   said: string
+  /** A tool completed an action outside workspace file history. */
+  acted: boolean
+  /** Everything the user said in this conversation, for the folders they named (shell.ts). */
+  heard: string[]
+  /** Conversations closed to the agent because the user deleted a memory from them, as workspace paths. */
+  closed: string[]
   /** A check refused a write; the history counts these. */
   refused(): void
 }
@@ -44,7 +53,10 @@ const LOCAL_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/
 const text = (s: string) => [{ type: 'text' as const, text: s }]
 
 function checkTime(value: string | undefined) {
-  if (value && !LOCAL_TIME.test(value)) throw new Error(`"${value}" isn't a local time. Write it like 2026-09-29T09:30.`)
+  if (!value || LOCAL_TIME.test(value)) return
+  // Real dates to copy: a small model wrote "Tomorrow 19:00", and after a fixed example it gave up and asked the user.
+  const day = (offset: number) => nowLocal(new Date(Date.now() + offset * 86_400_000)).slice(0, 10)
+  throw new Error(`"${value}" isn't a local time. Write the date and time, like ${day(0)}T19:00 for today at 19:00 or ${day(1)}T09:30 for tomorrow morning.`)
 }
 
 /** A todo as a tool result reports it, so the model sees what its call actually did. */
@@ -65,7 +77,16 @@ export function saidTime(said: string, scheduled: string) {
 /** Calendar events that overlap a todo's slot, described for the agent. */
 export type Clashes = (scheduled: string, minutes: number) => Promise<string[]>
 
-export function createTools(workspace: Workspace, context: () => RunContext, blocked: (path: string) => boolean, clashes: Clashes = async () => []): ToolDefinition[] {
+/** The todos of the latest plan card in this conversation that holds a todo, for revising it. */
+export type Plans = (todoId: string) => string[] | undefined
+
+export function createTools(
+  workspace: Workspace,
+  context: () => RunContext,
+  blocked: (path: string) => boolean,
+  clashes: Clashes = async () => [],
+  plans: Plans = () => undefined,
+): ToolDefinition[] {
   const root = workspace.root
   const actor = () => ({ by: 'agent' as const, run: context().run })
 
@@ -77,19 +98,26 @@ export function createTools(workspace: Workspace, context: () => RunContext, blo
     return path
   }
 
-  /** An item file must still match its manifest after the write. */
+  /** An item file must still match its manifest after the write, and keep its id. */
   const check = (path: string, content: string) => {
     const manifest = workspace.kindAt(path)
     if (!manifest) return
     let problems: string[]
+    let data: Record<string, unknown> = {}
     try {
-      problems = manifest.check(parse(content).data)
+      data = parse(content).data
+      problems = manifest.check(data)
     } catch (error) {
       problems = [error instanceof FrontmatterError ? `The frontmatter doesn't parse: ${error.message}` : String(error)]
     }
     if (problems.length) {
       context().refused()
       throw new Error(`Not written, because ${path} would not match ${manifest.dir}/manifest.yaml:\n- ${problems.join('\n- ')}\nFix it and write again.`)
+    }
+    const id = workspace.at(path)?.id
+    if (id && !id.startsWith('?') && data.id !== id) {
+      context().refused()
+      throw new Error(`Not written, because it changes the id of ${path}. Its id is ${id}, and an id never changes.`)
     }
   }
 
@@ -134,6 +162,7 @@ export function createTools(workspace: Workspace, context: () => RunContext, blo
   }
 
   const todoInput = Type.Object({
+    id: Type.Optional(Type.String({ description: 'When revising, the id of the draft this one keeps. Leave out for a new todo.' })),
     title: Type.String({ description: 'What to do, starting with a verb.' }),
     estimate: Type.Integer({ minimum: 1, description: 'Minutes, based on how long similar todos actually took.' }),
     scheduled: Type.Optional(Type.String({ description: 'Local time, like 2026-09-29T09:30. Leave out to put it in the backlog.' })),
@@ -146,9 +175,10 @@ export function createTools(workspace: Workspace, context: () => RunContext, blo
     name: 'todos_propose',
     label: 'Propose todos',
     description:
-      'Proposes new todos as drafts, shown to the user as one plan they can accept, tweak, or turn down. Nothing counts until they accept. Returns the new ids.',
+      'Proposes new todos as drafts, shown to the user as one plan they can accept, tweak, or turn down. Nothing counts until they accept. Returns the new ids. To change a plan you proposed, call it again with revise and the whole new list. Give each draft you keep its id. A draft you leave out of the list is deleted: that is how to drop one from the plan.',
     parameters: Type.Object({
       title: Type.Optional(Type.String({ description: "The plan's name as the user would say it, like 今天的安排." })),
+      revise: Type.Optional(Type.String({ description: 'The id of any draft in the plan this replaces.' })),
       todos: Type.Array(todoInput, { minItems: 1 }),
     }),
     async execute(_id, params) {
@@ -157,30 +187,65 @@ export function createTools(workspace: Workspace, context: () => RunContext, blo
         .filter((i) => i.kind === 'todo')
         .reduce<string | null>((max, i) => (typeof i.data.rank === 'string' && (!max || i.data.rank > max) ? i.data.rank : max), null)
       for (const todo of params.todos) checkTime(todo.scheduled)
+      const same = (a: unknown) => String(a).replace(/\s+/g, '').toLowerCase()
+      // Iterating on a plan had no way to drop a draft, and proposing again was refused as a duplicate.
+      // A small model listed the plan again without revise, twice, then gave up: when every title it
+      // repeats is a draft of one plan, that's the plan it means.
+      const repeated = workspace.list().filter((i) => i.data.state === 'draft' && params.todos.some((t) => t.id === i.id || same(t.title) === same(i.data.title)))
+      const inferred = !params.revise && repeated.length ? plans(repeated[0].id) : undefined
+      const revise = params.revise ?? (inferred && repeated.every((i) => inferred.includes(i.id)) ? repeated[0].id : undefined)
+      const revised = revise ? plans(revise) : undefined
+      if (params.revise && !revised) throw new Error(`No plan in this conversation has ${params.revise}. Give the id of a draft from the plan to change. Nothing was proposed.`)
+      const drafts = (revised ?? []).flatMap((id) => {
+        const item = workspace.get(id)
+        return item?.data.state === 'draft' ? [item] : []
+      })
       // Asked to schedule a todo from the backlog, a small model proposed a new one with the same name.
-      const same = (a: string) => a.replace(/\s+/g, '').toLowerCase()
-      const open = workspace.list().filter((i) => i.kind === 'todo' && i.data.state !== 'done')
-      const existing = params.todos.flatMap((t) => open.filter((i) => same(String(i.data.title)) === same(t.title)))
-      if (existing.length) {
-        throw new Error(
-          `Not proposed: ${existing.map((i) => `"${i.data.title}" is already a todo (${i.id}${i.data.scheduled ? '' : ', in the backlog'})`).join('; ')}. To schedule or change it, use todos_update with its id. Propose only todos that don't exist yet.`,
-        )
+      const open = workspace.list().filter((i) => i.kind === 'todo' && i.data.state !== 'done' && !drafts.includes(i))
+      const existing = params.todos.flatMap((t) => open.filter((i) => same(i.data.title) === same(t.title)))
+      // Revising, a model listed a todo from another plan alongside this plan's: that one is left as it is, and the rest goes ahead.
+      const skipped = revised ? existing : []
+      if (existing.length && !revised) {
+        const why = (i: (typeof existing)[number]) =>
+          i.data.state === 'draft'
+            ? `"${i.data.title}" is already a draft you proposed (${i.id}); to change that plan, call todos_propose with revise: ${i.id} and the whole new list`
+            : `"${i.data.title}" is already a todo (${i.id}${i.data.scheduled ? '' : ', in the backlog'}); to schedule or change it, use todos_update with its id`
+        throw new Error(`Not proposed: ${existing.map(why).join('; ')}. Propose only todos that don't exist yet.`)
       }
       let rank = lastRank
       const ids: string[] = []
       const lines: string[] = []
-      for (const todo of params.todos) {
-        rank = generateKeyBetween(rank, null)
-        const fields: Fields = { title: todo.title, state: 'draft', estimate: todo.estimate, rank, created: nowLocal() }
-        if (todo.scheduled) Object.assign(fields, { scheduled: todo.scheduled, proposed: true })
-        for (const key of ['goal', 'cue', 'why'] as const) if (todo[key]) fields[key] = todo[key]
-        const item = await workspace.create('todo', fields, '', actor())
+      const changes = { added: [] as string[], changed: [] as string[], removed: [] as string[] }
+      for (const todo of params.todos.filter((t) => !skipped.some((i) => same(i.data.title) === same(t.title)))) {
+        const fields: Fields = { title: todo.title, estimate: todo.estimate, scheduled: todo.scheduled || null, proposed: todo.scheduled ? true : null }
+        for (const key of ['goal', 'cue', 'why'] as const) fields[key] = todo[key] || null
+        const draft = drafts.find((d) => d.id === todo.id) ?? drafts.find((d) => same(d.data.title) === same(todo.title))
+        let item
+        if (draft) {
+          item = await workspace.update(draft.id, fields, actor())
+          if (draft.data.scheduled !== item.data.scheduled || draft.data.estimate !== item.data.estimate) changes.changed.push(item.id)
+        } else {
+          rank = generateKeyBetween(rank, null)
+          item = await workspace.create('todo', { ...Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== null)), state: 'draft', rank, created: nowLocal() }, '', actor())
+          changes.added.push(item.id)
+        }
         ids.push(item.id)
         lines.push(`- ${describe(item.data)}${await overlaps(item.data)}${unknownFields(todo, Object.keys(todoInput.properties))}`)
       }
+      // Drafts are the agent's own proposals, so leaving one out removes it; undo brings it back.
+      for (const draft of drafts.filter((d) => !ids.includes(d.id))) {
+        await workspace.removeFile(draft.path, actor())
+        changes.removed.push(String(draft.data.title))
+      }
       // A small model left the plan's name out; the first todo names it then.
-      const details: CardDetails = { card: { kind: 'plan', title: params.title || params.todos[0].title, todoIds: ids } }
-      return { content: text(`Proposed ${ids.length} drafts. The user sees them as one plan and decides:\n${lines.join('\n')}`), details }
+      const title = params.title || params.todos[0].title
+      const details: CardDetails = { card: { kind: 'plan', title, todoIds: ids, ...(revised && { revises: revised, changes }) } }
+      const removed = changes.removed.length ? `\nRemoved: ${changes.removed.map((t) => `"${t}"`).join(', ')}.` : ''
+      const left = skipped.length ? `\nLeft as they are, since they aren't in this plan: ${skipped.map((i) => `"${i.data.title}" (${i.id})`).join(', ')}. Use todos_update to change them.` : ''
+      return {
+        content: text(`${revised ? `Revised the plan${params.revise ? '' : ' (its drafts were listed again, so this is taken as a new version)'}` : 'Proposed the plan'}: ${ids.length} drafts. The user sees it as one plan and decides:\n${lines.join('\n')}${removed}${left}\nTo change it, call todos_propose with revise: ${ids[0]} and the whole new list, each kept draft with its id. A draft left out is deleted.`),
+        details,
+      }
     },
   })
 
@@ -302,11 +367,11 @@ export function createTools(workspace: Workspace, context: () => RunContext, blo
   })
 
   const skillInstall = defineTool({
-    name: 'skill_install',
-    label: 'Install a skill',
-    description: 'Installs a method from a GitHub address or archive link when the user asks in the conversation. If several methods are found, returns their paths without installing; call again with path. Use replace only when the user asked to replace an existing method.',
+    name: 'install_from_address',
+    label: 'Install',
+    description: "Installs a skill, pi package or MCP server, only when the user asks to install one. Accepts a GitHub or archive address, npm:name@version, an MCP URL, a command, or mcpServers JSON. Skills already installed are listed in your instructions: to use one, read its SKILL.md and follow it; don't install it. If several skills are found, returns their paths without installing; call again with path. Use replace only when the user asked to replace an existing installation.",
     parameters: Type.Object({
-      source: Type.String({ description: 'A GitHub repository, tree or SKILL.md address, or a .zip, .skill, .tar.gz or .tgz link.' }),
+      source: Type.String({ description: 'A GitHub or archive address, local folder or archive path, npm:name@version, MCP URL, command with arguments, or mcpServers JSON.' }),
       path: Type.Optional(Type.String({ description: 'The method directory in the source, from the list returned by this tool. An empty string selects the root.' })),
       replace: Type.Optional(Type.Boolean()),
     }),
@@ -315,10 +380,19 @@ export function createTools(workspace: Workspace, context: () => RunContext, blo
       // calendar invite, must not get an unattended run to install one.
       const acting = currentActing()
       if (acting.actor.by !== 'agent' || acting.source !== 'user') throw new Error('Skills can only be installed when the user asks in the conversation.')
-      const outcome = await skillInstaller(workspace).agentInstall(params.source, params.path, params.replace)
+      // A small model called this to use a skill it already had, passing its SKILL.md.
+      const named = (await listSkills(workspace.root)).find((k) => `${params.source} ${params.path ?? ''}`.includes(k.name))
+      if (named && !/^(https?:\/\/|npm:)/.test(params.source.trim())) {
+        throw new Error(`"${params.source}" is the skill ${named.name}, which is already installed. To use it, read ${named.id}/SKILL.md and do what it says.`)
+      }
+      const outcome = await installer(workspace).agentInstall(params.source, params.path, params.replace)
+      if (outcome.summary) {
+        context().acted = true
+        return { content: text(outcome.summary), details: undefined }
+      }
       const skipped = outcome.skipped ?? outcome.result?.skipped ?? []
       const warnings = skipped.map((s) => `${s.count} skipped: ${s.reason}`).join('; ')
-      if (outcome.choices) return { content: text(`Nothing installed. Choose a method and call skill_install again with its path:\n${outcome.choices.map((s) => `- path: ${JSON.stringify(s.path)}, name: ${s.name}, description: ${s.description}`).join('\n')}${warnings ? `\n${warnings}` : ''}`), details: undefined }
+      if (outcome.choices) return { content: text(`Nothing installed. Choose a method and call install_from_address again with its path:\n${outcome.choices.map((s) => `- path: ${JSON.stringify(s.path)}, name: ${s.name}, description: ${s.description}`).join('\n')}${warnings ? `\n${warnings}` : ''}`), details: undefined }
       return {
         content: text(`${outcome.result!.installed.map((s) => `Installed "${s.title}" at ${s.directory}/ (${s.files} files). The skill is on.`).join('\n')}${warnings ? `\n${warnings}` : ''}\nIt will be used from the next conversation.${outcome.result!.installed.some((s) => s.binary) ? ' Binary files are not covered by undo.' : ''}`),
         details: undefined,
@@ -351,6 +425,10 @@ export function createTools(workspace: Workspace, context: () => RunContext, blo
   return [
     createReadToolDefinition(root, { operations: readOps }),
     createLsToolDefinition(root),
+    createBashToolDefinition(root, {
+      operations: shellOperations(workspace, () => ({ actor: actor(), heard: context().heard, closed: context().closed })),
+      exposeSessionEnvironment: false,
+    }),
     createWriteToolDefinition(root, { operations: writeOps }),
     createEditToolDefinition(root, { operations: editOps }),
     todosList,
@@ -363,7 +441,7 @@ export function createTools(workspace: Workspace, context: () => RunContext, blo
   ] as ToolDefinition[]
 }
 
-export const TOOL_NAMES = ['read', 'ls', 'write', 'edit', 'todos_list', 'todos_propose', 'todos_update', 'notes_propose', 'item_links', 'ask_user', 'memory_remember', 'memory_recall', 'memory_forget', 'calendar_events', 'skill_install']
+export const TOOL_NAMES = ['read', 'ls', 'bash', 'write', 'edit', 'todos_list', 'todos_propose', 'todos_update', 'notes_propose', 'item_links', 'ask_user', 'memory_remember', 'memory_recall', 'memory_forget', 'calendar_events', 'install_from_address']
 
 function nowLocal(at = new Date()) {
   const pad = (n: number) => String(n).padStart(2, '0')

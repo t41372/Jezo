@@ -10,5 +10,6 @@ export default defineConfig({
   timeout: 60_000,
   reporter: [['list'], ['html', { outputFolder: 'e2e/report', open: 'never' }]],
   outputDir: 'e2e/results',
+  globalSetup: './e2e/setup.ts',
   use: { trace: 'retain-on-failure', screenshot: 'only-on-failure' },
 })

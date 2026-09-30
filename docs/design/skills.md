@@ -1,6 +1,6 @@
 # Skills
 
-Status: decided on 2026-09-30. The user can add methods in 更多 → 它用的方法, and ask Jezo's agent to install one in a conversation.
+Status: decided on 2026-09-30. The user can add methods in 更多 → 已安裝, and ask Jezo's agent to install one in a conversation. The shared entry also installs pi packages and MCP servers ([extensions.md](extensions.md)).
 
 ## Sources and destination
 
@@ -8,7 +8,7 @@ A method follows the Agent Skills format: a directory with SKILL.md, YAML frontm
 
 The user can paste a GitHub repository, tree, or SKILL.md address; paste a link to a .zip, .skill, .tar.gz or .tgz archive; choose a folder or archive in the native picker; or write a name, one-line description and instructions in the app. GitHub repositories without a ref use the default branch reported by the repository API. Jezo downloads a tarball from codeload, removes the repository wrapper and PAX global header, and keeps the method's own file layout. A ref with slashes can be URL-encoded as one path segment.
 
-Jezo finds every directory with SKILL.md, skipping dot directories, .git and node_modules. A GitHub address pointing at a method selects that method. For other sources holding several methods, the dialog shows checkboxes, all selected initially. `skill_install` writes nothing and returns each method's path, name and description; the agent calls again with a path.
+Jezo finds every directory with SKILL.md, skipping dot directories, .git and node_modules. A GitHub address pointing at a method selects that method. For other sources holding several methods, the dialog shows checkboxes, all selected initially. `install_from_address` writes nothing and returns each method's path, name and description; the agent calls again with a path.
 
 The main process retains the files while the user chooses what to install. It discards them when the dialog closes. Confirmation installs the same files the user saw.
 
@@ -18,7 +18,7 @@ SKILL.md must be UTF-8 text and have frontmatter that parses, with a name and de
 
 Archive entries with absolute paths, `..` segments or links are skipped and counted by reason. Jezo checks raw tar names before nanotar reads them, because that parser normalizes unsafe paths. ZIP's central directory supplies link and executable information. Local folders are read without following links. These checks keep an archive's files in their method directory; they do not restrict instructions or the owner's content.
 
-The page says when a method includes scripts, program files or executable files. Jezo's agent cannot execute programs yet, so only the instructions are used.
+The page says when a method includes scripts, program files or executable files. The agent runs them with its shell when the instructions call for it (backend.md, "Tools").
 
 ## Writes, provenance and undo
 
@@ -40,7 +40,7 @@ pi loads skills when a session is created. Installing during a conversation affe
 
 ## Who may install
 
-The GUI is always available to the owner. `skill_install` accepts plain string and boolean parameters: source, optional path, optional replace. Checks run inside the tool, rather than in schema patterns or nullable unions that break local model grammars.
+The GUI is always available to the owner. `install_from_address` accepts plain string and boolean parameters: source, optional path, optional replace. Checks run inside the tool, rather than in schema patterns or nullable unions that break local model grammars.
 
 The tool only runs when `currentActing().source` is `user`, in a run started by chat or ⌥X, including a user reply in an earlier automatic conversation. Automations and 隨手記 sorting use `agent` and are refused with: “Skills can only be installed when the user asks in the conversation.” A skill is lasting instructions. Outside content, such as an email or calendar invite, must not get an unattended agent to install instructions that influence later conversations. This follows AGENTS.md's trust model, including the risk from what the agent keeps.
 
@@ -48,7 +48,7 @@ The agent can still write a method by hand with its existing file tools. No exec
 
 ## Rejected
 
-- Installing through pi's package manager. Jezo does not load the user's pi settings, and packages can bring extensions, which are code.
+- Previously rejected: installing pi packages because they can bring executable extensions. Tim reversed this on 2026-09-30: all installed code is equally trusted and pi's own features come first. Packages use Jezo's own persistent pi directory; standalone methods keep their workspace installer and undo ([extensions.md](extensions.md)).
 - `git clone`. Git is not installed on every Mac. GitHub's tarballs need no external executable.
 - Letting automations install. Outside content must not gain lasting instructions through an unattended run.
 

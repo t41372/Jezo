@@ -5,6 +5,12 @@ directories:
 files:
   - out/**
   - package.json
+# The npm launcher uses Electron in Node mode. npm and its own dependencies
+# must be real files, including the executables npm's lifecycle scripts call.
+asarUnpack:
+  - node_modules/npm/**
+electronFuses:
+  runAsNode: true
 mac:
   category: public.app-category.productivity
   extendInfo:

@@ -2,6 +2,10 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import type { JezoBridge, QuickCommand, SpeechStatus } from '../shared/bridge'
 import type { SessionView } from '../shared/session'
 import type { ItemChanges } from '../shared/workspace'
+import type { PiClientEvent } from '@assistant-ui/react-pi'
+
+// Sessions.tsx has no archive/delete surface; Jezo tools ask with cards.
+const unavailable = () => Promise.reject(new Error('This chat operation is not available in Jezo.'))
 
 function listen<T>(channel: string, listener: (value: T) => void) {
   const handler = (_: IpcRendererEvent, value: T) => listener(value)
@@ -21,11 +25,47 @@ const bridge: JezoBridge = {
     onChange: (listener) => listen<ItemChanges>('workspace:changed', listener),
   },
   agent: {
+    pi: {
+      listThreads: () => ipcRenderer.invoke('chat:list'),
+      createThread: (input) => ipcRenderer.invoke('chat:create', input),
+      getThread: (id) => ipcRenderer.invoke('chat:get', id),
+      sendMessage: (id, input) => ipcRenderer.invoke('chat:send', id, input),
+      cancelRun: (id) => ipcRenderer.invoke('agent:abort', id),
+      clearQueue: (id) => ipcRenderer.invoke('chat:clear-queue', id),
+      getAvailableModels: () => ipcRenderer.invoke('chat:models'),
+      setModel: async (_, input) => { await ipcRenderer.invoke('providers:choose', 'main', { provider: input.provider, id: input.modelId }) },
+      setThinkingLevel: async (_, level) => { await ipcRenderer.invoke('providers:set-thinking', level) },
+      renameThread: (id, title) => ipcRenderer.invoke('chat:rename', id, title),
+      archiveThread: unavailable,
+      unarchiveThread: unavailable,
+      deleteThread: unavailable,
+      respondToHostUiRequest: unavailable,
+      edit: (id, entryId, text) => ipcRenderer.invoke('chat:edit', id, entryId, text),
+      retry: (id, entryId) => ipcRenderer.invoke('chat:retry', id, entryId),
+      navigate: (id, leafId) => ipcRenderer.invoke('chat:navigate', id, leafId),
+      onEvent: (listener) => listen<PiClientEvent>('chat:event', listener),
+    },
     list: () => ipcRenderer.invoke('agent:list'),
-    send: (id, text, trigger) => ipcRenderer.invoke('agent:send', id, text, trigger),
+    send: (id, text, trigger, behavior) => ipcRenderer.invoke('agent:send', id, text, trigger, behavior),
     start: (trigger) => ipcRenderer.invoke('agent:start', trigger),
     abort: (id) => ipcRenderer.invoke('agent:abort', id),
+    nudge: (id) => ipcRenderer.invoke('agent:nudge', id),
+    answerExtension: (id, request, value) => ipcRenderer.invoke('agent:extension-answer', id, request, value),
+    onNotice: (listener) => listen('agent:notice', listener),
     onChange: (listener) => listen<SessionView>('agent:changed', listener),
+  },
+  install: {
+    preview: (source) => ipcRenderer.invoke('install:preview', source),
+    pick: () => ipcRenderer.invoke('install:pick'),
+    apply: (token, selected, replace) => ipcRenderer.invoke('install:apply', token, selected, replace),
+    discard: (token) => ipcRenderer.invoke('install:discard', token),
+    list: () => ipcRenderer.invoke('install:list'),
+    setEnabled: (kind, id, enabled) => ipcRenderer.invoke('install:set-enabled', kind, id, enabled),
+    remove: (kind, id) => ipcRenderer.invoke('install:remove', kind, id),
+    signIn: (name) => ipcRenderer.invoke('install:sign-in', name),
+    replySignIn: (name, url) => ipcRenderer.invoke('install:sign-in-reply', name, url),
+    reconnect: (name) => ipcRenderer.invoke('install:reconnect', name),
+    onChange: (listener) => listen<void>('install:changed', listener),
   },
   speech: {
     status: () => ipcRenderer.invoke('speech:status'),

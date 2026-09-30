@@ -1,20 +1,9 @@
 // Jezo's agent, with a real model. These need a local model server (LM Studio
 // or Ollama) with a model loaded; without one they're skipped, and say why.
 
-import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { expect, open, test } from './jezo'
-
-const localModel = async () => {
-  for (const url of ['http://localhost:1234/v1/models', 'http://localhost:11434/v1/models']) {
-    try {
-      if ((await fetch(url, { signal: AbortSignal.timeout(1000) })).ok) return true
-    } catch {
-      // Not running.
-    }
-  }
-  return false
-}
+import { expect, localModel, open, test } from './jezo'
 
 test.beforeEach(async () => {
   test.skip(!(await localModel()), 'No local model server (LM Studio or Ollama) is running.')
@@ -53,6 +42,156 @@ test('the agent does what the user asks, and undo takes it back', async ({ jezo 
   expect(jezo.errors).toEqual([])
 })
 
+test('a turn that changed nothing says so, and one tap asks the agent to act without a typed message', async ({ jezo }) => {
+  const { page, read, root } = jezo
+  const main = page.locator('main')
+  const box = main.locator('textarea').first()
+  const unchanged = main.locator('[data-unchanged]')
+  const nudge = main.getByRole('button', { name: '請它動手' })
+  await box.fill('今天還有什麼事？')
+  await box.press('Enter')
+  await settled(page)
+  await expect(unchanged).toHaveCount(1)
+  await expect(unchanged).toContainText('這輪沒有改動')
+
+  // The tap starts a run from a hidden message: no new bubble from the user, and the old button goes away.
+  await nudge.click()
+  await settled(page)
+  await expect(main.locator('[data-chat-message="user"]')).toHaveCount(1)
+  const session = readdirSync(join(root, 'sessions')).find((f) => f.endsWith('.jsonl'))!
+  const entries = readFileSync(join(root, 'sessions', session), 'utf8').trim().split('\n').map((l) => JSON.parse(l))
+  expect(entries.filter((e) => e.customType === 'jezo.nudge').map((e) => e.display)).toEqual([false])
+  await expect(nudge).toHaveCount((await unchanged.count()) === 2 ? 1 : 0)
+
+  // A turn that changes a file has no such line under it.
+  const before = await unchanged.count()
+  await box.fill('把「打給媽」排到明天晚上 20:00')
+  await box.press('Enter')
+  await settled(page)
+  expect(read('todos/items/t-u2.md').data.scheduled).toBe(`${tomorrow()}T20:00`)
+  await expect(unchanged).toHaveCount(before)
+  await expect(nudge).toHaveCount(0)
+  expect(jezo.errors).toEqual([])
+})
+
+test('a conversation picked up two hours later plans from the new time', async ({ jezo }) => {
+  const { app, page, read, root } = jezo
+  const say = async (text: string) => {
+    const box = page.locator('main textarea').first()
+    await box.fill(text)
+    await box.press('Enter')
+    await settled(page)
+  }
+  await say('今天還有什麼事？')
+
+  // Two hours pass while the conversation stays open: the main process's clock moves on.
+  const offset = 2 * 3600_000
+  await app.evaluate((_, offset) => {
+    const Real = Date
+    class Later extends Real {
+      constructor(...args: unknown[]) {
+        if (args.length) super(...(args as [number]))
+        else super(Real.now() + offset)
+      }
+      static now() {
+        return Real.now() + offset
+      }
+    }
+    globalThis.Date = Later as DateConstructor
+  }, offset)
+  const then = new Date(Date.now() + offset)
+  await say('一小時後我要打給媽，幫我排進去。')
+
+  // Planned from the time now, not from when the conversation started.
+  const scheduled = read('todos/items/t-u2.md').data.scheduled as string
+  const minutes = (new Date(scheduled).getTime() - then.getTime()) / 60_000
+  expect(minutes, `scheduled ${scheduled}, two hours later it was ${then.toString()}`).toBeGreaterThanOrEqual(45)
+  expect(minutes).toBeLessThanOrEqual(75)
+  // The time went with the message.
+  const session = readdirSync(join(root, 'sessions')).find((f) => f.endsWith('.jsonl'))!
+  const notes = readFileSync(join(root, 'sessions', session), 'utf8').split('\n').filter((l) => l.includes('"jezo.time"'))
+  expect(notes).toHaveLength(2)
+  expect(jezo.errors).toEqual([])
+})
+
+test('a plan changed in the conversation is one plan, and the new version shows at the bottom', async ({ jezo }) => {
+  const { page, items } = jezo
+  const say = async (text: string) => {
+    const box = page.locator('main textarea').first()
+    await box.fill(text)
+    await box.press('Enter')
+    await settled(page)
+  }
+  const draft = (word: string) => items('todos').filter((t) => t.data.state === 'draft' && String(t.data.title).includes(word))
+  const planned = () => ['洗衣服', '買菜', '繳電費', '修腳踏車'].flatMap(draft)
+  await say('明天早上幫我排：洗衣服 30 分鐘、買菜 40 分鐘、繳電費 10 分鐘。')
+  expect(planned()).toHaveLength(3)
+
+  // Changing it takes moving one, dropping one and adding one.
+  await say('買菜改到晚上七點，繳電費拿掉，再加一個修腳踏車 45 分鐘。')
+  expect(draft('洗衣服')).toHaveLength(1)
+  expect(draft('繳電費')).toHaveLength(0)
+  expect(draft('修腳踏車')).toHaveLength(1)
+  expect(draft('買菜').map((t) => t.data.scheduled)).toEqual([`${tomorrow()}T19:00`])
+  expect(planned()).toHaveLength(3)
+
+  // The new version is the last card, saying what changed; the first one points down to it.
+  const cards = page.locator('main [data-slot=card]').filter({ hasText: '洗衣服' })
+  await expect(cards.last()).toContainText('修腳踏車')
+  await expect(cards.last()).toContainText('拿掉了')
+  await expect(page.locator('main').getByText('已更新，見下方')).toBeVisible()
+  expect(jezo.errors).toEqual([])
+})
+
+test('the agent runs a command, and undo takes back what it changed', async ({ jezo }) => {
+  const { page, root } = jezo
+  const box = page.locator('main textarea').first()
+  await box.fill('用 bash 指令在 notes 資料夾建立 hello.md，內容寫 hi。')
+  await box.press('Enter')
+  await settled(page)
+  const file = join(root, 'notes/hello.md')
+  expect(readFileSync(file, 'utf8').trim()).toBe('hi')
+  const session = readdirSync(join(root, 'sessions')).find((f) => f.endsWith('.jsonl'))!
+  expect(readFileSync(join(root, 'sessions', session), 'utf8')).toContain('"name":"bash"')
+
+  await open(page, '更多')
+  await page.getByText('修改紀錄').click()
+  await page.getByRole('button', { name: '撤銷' }).first().click()
+  await expect.poll(() => existsSync(file)).toBe(false)
+  expect(jezo.errors).toEqual([])
+})
+
+test.describe('a method with a program', () => {
+  // A skill that comes with a script, the way CLI skills do. Only the script knows the answer,
+  // so the agent has to read the skill and run it.
+  test.use({
+    prepare: {
+      workspace: (root) => {
+        const dir = join(root, 'skills/trail-conditions')
+        mkdirSync(join(dir, 'scripts'), { recursive: true })
+        writeFileSync(
+          join(dir, 'SKILL.md'),
+          '---\nname: trail-conditions\ndescription: The state of the user\'s running trail, from the park office. Use it when the user asks whether the trail is open or muddy.\n---\nRun `sh skills/trail-conditions/scripts/trail.sh` from the workspace. It prints the trail\'s state and a report number; tell the user both.\n',
+        )
+        writeFileSync(join(dir, 'scripts/trail.sh'), '#!/bin/sh\necho "Trail: open, muddy after km 3. Report 4172."\n', { mode: 0o755 })
+      },
+    },
+  })
+
+  test('the agent runs the script and reports what it printed', async ({ jezo }) => {
+    const { page } = jezo
+    const box = page.locator('main textarea').first()
+    await box.fill('我明天想去跑步，步道現在能跑嗎？')
+    await box.press('Enter')
+    await settled(page)
+    // What only the script knows reached the user.
+    await expect(page.locator('main')).toContainText(/泥濘|泥|muddy/)
+    const session = readdirSync(join(jezo.root, 'sessions')).find((f) => f.endsWith('.jsonl'))!
+    expect(readFileSync(join(jezo.root, 'sessions', session), 'utf8')).toContain('Report 4172')
+    expect(jezo.errors).toEqual([])
+  })
+})
+
 test('the agent sorts notes; undo leaves the ones the user already decided', async ({ jezo }) => {
   const { page, read, items } = jezo
   await open(page, '隨手記')
@@ -70,9 +209,10 @@ test('the agent sorts notes; undo leaves the ones the user already decided', asy
   const decided = items('notes').find((n) => n.data.state === 'sorted')!
 
   // Undoing the agent's run clears its proposals, but not the note the user decided on.
+  // The run shows in the history once it has finished, which can be after its cards appear.
   await open(page, '更多')
   await page.getByText('修改紀錄').click()
-  await page.getByRole('button', { name: '撤銷' }).first().click()
+  await page.getByRole('button', { name: '撤銷' }).first().click({ timeout: 240_000 })
   await expect.poll(() => items('notes').filter((n) => n.data.state === 'new').length).toBe(4)
   expect(read(`notes/items/${decided.file}`).data.state).toBe('sorted')
   await expect(page.getByText(/有 1 個檔案你後來改過/)).toBeVisible()
@@ -80,33 +220,37 @@ test('the agent sorts notes; undo leaves the ones the user already decided', asy
   expect(jezo.errors).toEqual([])
 })
 
-test('a server added by hand is tested, and its model can be picked for the agent', async ({ jezo }) => {
-  const { page } = jezo
-  const config = () => JSON.parse(readFileSync(join(jezo.root, '../data/config.json'), 'utf8'))
-  await open(page, '設定')
-  // Until the user picks, Jezo uses a model that works and says so.
-  await expect(page.getByText('還沒選，先用這個能用的')).toBeVisible()
-  await page.getByRole('button', { name: /模型服務商/ }).click()
+test.describe('a new install', () => {
+  test.use({ prepare: { model: null } })
 
-  await page.getByRole('button', { name: '新增服務商' }).click()
-  await page.getByLabel('名稱').or(page.locator('[role=dialog] input').first()).first().fill('My server')
-  await page.locator('[role=dialog] input').nth(1).fill('http://localhost:1234/v1')
-  await page.getByRole('button', { name: '新增', exact: true }).click()
-  await expect(page.locator('main h2')).toHaveText('My server')
-  await expect(page.locator('main header').getByText('可用', { exact: true })).toBeVisible()
-  expect(config().models.custom).toEqual([{ id: 'custom-my-server', name: 'My server', baseUrl: 'http://localhost:1234/v1' }])
+  test('a server added by hand is tested, and its model can be picked for the agent', async ({ jezo }) => {
+    const { page } = jezo
+    const config = () => JSON.parse(readFileSync(join(jezo.root, '../data/config.json'), 'utf8'))
+    await open(page, '設定')
+    // Until the user picks, Jezo uses a model that works and says so.
+    await expect(page.getByText('還沒選，先用這個能用的')).toBeVisible()
+    await page.getByRole('button', { name: /模型服務商/ }).click()
 
-  await page.getByRole('button', { name: '測試' }).click()
-  await expect(page.getByText(/可以用 · [\d.]+ 秒/)).toBeVisible({ timeout: 120_000 })
+    await page.getByRole('button', { name: '新增服務商' }).click()
+    await page.getByLabel('名稱').or(page.locator('[role=dialog] input').first()).first().fill('My server')
+    await page.locator('[role=dialog] input').nth(1).fill('http://localhost:1234/v1')
+    await page.getByRole('button', { name: '新增', exact: true }).click()
+    await expect(page.locator('main h2')).toHaveText('My server')
+    await expect(page.locator('main header').getByText('可用', { exact: true })).toBeVisible()
+    expect(config().models.custom).toEqual([{ id: 'custom-my-server', name: 'My server', baseUrl: 'http://localhost:1234/v1' }])
 
-  // Pick one of its models for the agent.
-  await page.getByRole('button', { name: '設定' }).first().click()
-  await page.locator('main').getByRole('button', { name: /· LM Studio/ }).click()
-  await page.getByRole('option').filter({ hasText: /./ }).and(page.locator('[data-value^="My server"]')).first().click()
-  await expect(page.getByText('你選的')).toBeVisible()
-  expect(config().models.main.provider).toBe('custom-my-server')
+    await page.getByRole('button', { name: '測試' }).click()
+    await expect(page.getByText(/可以用 · [\d.]+ 秒/)).toBeVisible({ timeout: 120_000 })
 
-  expect(jezo.errors).toEqual([])
+    // Pick one of its models for the agent.
+    await page.getByRole('button', { name: '設定' }).first().click()
+    await page.locator('main').getByRole('button', { name: /· LM Studio/ }).click()
+    await page.getByRole('option').filter({ hasText: /./ }).and(page.locator('[data-value^="My server"]')).first().click()
+    await expect(page.getByText('你選的')).toBeVisible()
+    expect(config().models.main.provider).toBe('custom-my-server')
+
+    expect(jezo.errors).toEqual([])
+  })
 })
 
 test.describe('the morning plan', () => {
@@ -244,7 +388,7 @@ test.describe('installing methods in a conversation', () => {
     const origins = () => (parseYaml(readFileSync(join(root, 'skills/installed.yaml'), 'utf8')) as { skills: { name: string; by: string }[] }).skills
     expect(origins().find((s) => s.name === 'next-step')?.by).toBe('agent')
     await open(page, '更多')
-    await page.getByText('它用的方法', { exact: true }).click()
+    await page.getByText('已安裝', { exact: true }).click()
     await expect(page.locator('main')).toContainText('agent 裝的 · 來自 github.com/o/r')
     await page.getByRole('button', { name: '← 更多' }).click()
     await page.getByText('修改紀錄', { exact: true }).click()

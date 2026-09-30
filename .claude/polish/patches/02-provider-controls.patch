@@ -1,0 +1,60 @@
+Subject: fix(ui): Align provider controls and focus styles
+
+Co-Authored-By: Codex <noreply@openai.com>
+
+diff --git a/src/renderer/src/plugins/settings/Providers.tsx b/src/renderer/src/plugins/settings/Providers.tsx
+index e10de6d..8e6961a 100644
+--- a/src/renderer/src/plugins/settings/Providers.tsx
++++ b/src/renderer/src/plugins/settings/Providers.tsx
+@@ -45,7 +45,7 @@ export function Providers() {
+       onMouseDown={(e) => e.preventDefault()}
+       onClick={() => setSelected(p.id)}
+       className={cn(
+-        'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13.5px] transition-colors duration-150 hover:bg-muted/70',
++        'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13.5px] outline-none transition-colors duration-150 hover:bg-muted/70 active:bg-foreground/8 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+         p.id === current && 'bg-muted',
+       )}
+     >
+@@ -73,9 +73,9 @@ export function Providers() {
+         </div>
+         <div className="flex min-h-0 flex-1 overflow-hidden rounded-2xl border border-card-border bg-card">
+           <nav className="flex w-60 shrink-0 flex-col gap-3 overflow-auto border-r border-card-border p-2.5">
+-            <label className="flex items-center gap-2 rounded-lg bg-muted/70 px-2.5 py-1.5">
+-              <Search className="size-3.5 text-muted-foreground" />
+-              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('providers.search')} className="min-w-0 flex-1 bg-transparent text-[13px] outline-none" />
++            <label className="relative flex items-center">
++              <Search className="pointer-events-none absolute left-2.5 size-3.5 text-muted-foreground" />
++              <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('providers.search')} className="h-8 bg-muted/70 pl-8 text-[13px] md:text-[13px] dark:bg-muted/70" />
+             </label>
+             {working.length > 0 && <Group label={t('providers.working')}>{working.map(item)}</Group>}
+             {popular.length > 0 && <Group label={t('providers.notSetUp')}>{popular.map(item)}</Group>}
+@@ -215,11 +215,11 @@ function Provider({ id, onRemoved }: { id: string; onRemoved: () => void }) {
+       <section className="flex flex-col gap-2">
+         <div className="flex items-center gap-2">
+           <h3 className="text-sm font-medium">
+-            {t('providers.models')} <span className="text-muted-foreground">{p.models.length}</span>
++            {t('providers.models')} <span className="text-muted-foreground tabular-nums">{p.models.length}</span>
+           </h3>
+           <span className="flex-1" />
+           {p.models.length > 8 && (
+-            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('models.search')} className="w-40 rounded-md bg-muted/70 px-2.5 py-1 text-[12.5px] outline-none" />
++            <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('models.search')} className="h-7 w-40 bg-muted/70 text-[13px] md:text-[13px] dark:bg-muted/70" />
+           )}
+           {p.canRefresh && (
+             <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => run('refresh', window.jezo.providers.refresh(p.id))}>
+@@ -306,13 +306,13 @@ function KeyInput({ detail, onChange }: { detail: ProviderDetail; onChange: (d:
+   }
+   return (
+     <form
+-      className="flex gap-2"
++      className="flex items-center gap-2"
+       onSubmit={(e) => {
+         e.preventDefault()
+         save()
+       }}
+     >
+-      <Input type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder={t('providers.keyPlaceholder')} className="h-8 flex-1" autoComplete="off" autoFocus={replacing} />
++      <Input type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder={t('providers.keyPlaceholder')} className="h-7 flex-1" autoComplete="off" autoFocus={replacing} />
+       <Button type="submit" size="sm" disabled={!key.trim()}>
+         {t('providers.keySave')}
+       </Button>

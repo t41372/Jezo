@@ -1,4 +1,4 @@
-# Handoff: where the work stands (2026-09-30, night)
+# Handoff: where the work stands (2026-09-30, evening)
 
 This is a working note, not a design doc. It holds what the agent building
 Jezo was in the middle of, and the decisions waiting on Tim. Delete it once
@@ -12,19 +12,15 @@ Tim, 2026-09-30: decide about the phone later; the desktop app comes first. No p
 - Times are written as local time with no zone (backend.md). That's fine on one Mac, but ambiguous once a phone in another zone writes.
 - Some config is per device (EventKit sources, hidden calendars), some per user (ICS subscriptions). calendar.md marks which is which. A subscription's address is in each device's keychain, so a phone would ask for it again.
 
-### Bash, search and the browser
+### Decided on 2026-09-30 (kept here until the work lands)
 
-Tim, 2026-09-30: turning bash off leaves the agent unable to do much (skills that wrap CLIs, the point of using pi), and it also needs search and a browser. Two Codex reports: `.claude/research/2026-09-30/bash-sol.md` and `web-sol.md`. The proposal sent to Tim the same day:
-- **Bash** through pi's `BashOperations`, run by `@anthropic-ai/sandbox-runtime` (pinned, 0.0.78 today). Writes only in the workspace and a tool directory; the home directory unreadable apart from the workspace. General bash has no network. A skill that needs the network runs in its own runner with the hosts the user granted for it, since the runtime's policy is global to a process and a union of every skill's hosts would be one big exit. Grants live in app data, set in the GUI, never in a SKILL.md the agent can edit. If the sandbox can't start, the call fails; it never falls back to plain bash.
-- **Undo for shell writes** has to come first. `UndoLog` only sees `Workspace.writeFile`, so a bash write can't be undone today.
-- **Search and fetch** as Jezo tools, not through bash: one search provider the user picks (Tavily's free tier needs no card, Brave needs one, SearXNG for self-hosters), and fetch run locally.
-- **Browser**: a visible Electron view with its own sessions, one signed out for reading and one for accounts the user connects there. The user's own Chrome later, as a separate choice.
-- **Exit check**: every search query, fetched URL and text typed into a page is a possible leak. A reviewer model sees the user's messages and the proposed action (not tool results, so a page can't argue with it) and allows, blocks or asks. Run it in shadow mode with the local model first and measure.
-Questions for Tim: which CLI must work first; search default (key or keyless); how far the reviewer can go without asking.
-
-### Chat UI
-
-Codex's report: `.claude/research/2026-09-30/chatui-sol.md`. Proposal: Streamdown (with its code, math and CJK plugins) for markdown, shadcn's Base UI `MessageScroller` for scrolling, keep pi, IPC and the composer ours. Before any of it, the session projection needs stable message ids and the active branch (`host.ts` `view()`/`toMessages()`). Edit makes a branch, retry makes another version with arrows, Enter while running queues (`followUp`) and a second action steers. Questions for Tim: single-dollar inline math (clashes with prices) or `$$`/`\(…\)` only.
+- **Trust model rewritten** (AGENTS.md): outside content is data, marked and checked on the way in; defend against leaks and irreversible harm, not against the owner. "Guard the exits, not the inputs" is gone: it read as "lock everything down".
+- **Bash is on**, in the OS sandbox with the network open (backend.md, "Tools"). Done.
+- **Outside content** is screened once on the way in (backend.md, "Outside content"). Done for the calendar and MCP tool results; red-team E2E in `e2e/outside.spec.ts`. More payloads could come from AgentDojo, promptfoo's red-team plugins or Spikee.
+- **Extensions, not built-ins.** Search, the browser and similar are plugins the user installs (skills, MCP servers, pi packages) through one install entry, built on pi's package manager and MCP. Jezo recommends, the user picks. Built and merged (docs/design/extensions.md). The research: `.claude/research/2026-09-30/pipkg-sol.md`.
+- **Chat UI on assistant-ui** with its pi adapter over IPC, and Streamdown. Built and merged (frontend.md, "Chat").
+- **這輪沒有改動 under a run that changed nothing, with 請它動手** (frontend.md, "Chat"). Done.
+- **No checks that read the reply's words, and no extra model calls per run** to rescue weak models.
 
 ### Connectors
 
@@ -38,18 +34,15 @@ Google through EventKit won't be tested separately (Tim, 2026-09-30: every accou
 
 ## Work in progress, in order
 
-1. **Skills: adding and installing** is done (docs/design/skills.md), built by Codex from a spec and reviewed. Left over:
-   - 「這個方法附了程式。Jezo 的 agent 目前不能執行程式」 has to change when bash lands.
-   - Undoing an install leaves binary files behind (undo only keeps text).
-2. **Sync design doc.** Write `docs/design/sync.md` from `.claude/research/2026-09-30/sync-astra.md`:
-   - the recommendation: one replication document per item, Automerge 3 as the first candidate, iroh as transport;
-   - the cheap changes to make now: stronger ids, a committed-change feed, undo through the write service, a workspace id and format version, and one device that runs automations;
-   - eight questions only Tim can answer (see the report's last section). Ask him.
-3. **Stress model.** Tim, 2026-09-30: test with `google/gemma-4-e4b`, about the least capable model a computer user runs in 2026. No outside observability tools: read traces with `bun scripts/trace.ts` and fix what they show.
-4. **Prompt: act, don't ask.** In the calendar planning test the model once asked "18:15 or after 21:00?" instead of scheduling. todos_update already marks the time as a proposal the user can drag, so the system prompt should say to pick one and let the user move it. Also check once, by logging, that pi doesn't fire `before_agent_start` again on a `continue: true` from `agent_before_settle`; the memory extension resets its held-back list there.
-5. **Slash commands.** A "/" menu in the composer for skills, prompt templates and extension commands. `/model`, `/new` and similar become UI actions.
-6. **更多 → 自動化 list UI.**
-7. Later:
+1. **Left over from merged work:**
+   - Undoing a method install leaves binary files behind (undo only keeps text).
+   - The install entry isn't verified in the packaged app, with a native addon, or with a live OAuth sign-in (extensions.md). The pi directory (packages, MCP config) isn't in the workspace backup.
+   - The GUI doesn't show an item's problems yet; the agent sees them in the digest.
+2. **Sync:** designed (docs/design/sync.md); its eight questions are for Tim. The cheap changes are done; the rest waits for sync itself, with reasons in the doc.
+3. **Test model.** `qwen3.6-35b-a3b-splash` (Tim, 2026-09-30, replacing gemma-4-e4b). Read traces with `bun scripts/trace.ts` and fix the input first (AGENTS.md, "How we work"). It sometimes repeats a line in its thinking until it runs out of tokens (3 of ~20 runs); the chat now says so and offers a retry. The agent tests pass most runs; single failures are usually that loop.
+4. **Slash commands.** A "/" menu in the composer for skills, prompt templates and extension commands. `/model`, `/new` and similar become UI actions.
+5. **更多 → 自動化 list UI.**
+6. Later:
    - memory cards in the check-in, and a memory preview
    - the rework card
    - experiments and the non-calendar connections, which are still mock
@@ -68,6 +61,12 @@ Google through EventKit won't be tested separately (Tim, 2026-09-30: every accou
   `--disable-features=AudioServiceOutOfProcess,AudioServiceSandbox`.
 - **Node strip-only TS** (the memory package tests) rejects constructor
   parameter properties.
+- **The agent tests' model** is pinned: `e2e/jezo.ts` writes it into each test's own config.json (`JEZO_TEST_MODEL`, default `qwen3.6-35b-a3b-splash`; Tim, 2026-09-30: gemma-4-e4b is too weak, stop optimizing for it, since what helps it may cost a stronger model latency and money), and `e2e/setup.ts` loads it with `lms`. Unpinned, Jezo used whatever LM Studio had loaded, so the developer's own model choice leaked into the tests, and each side's just-in-time loads could unload the other's model.
 - **Codex runs:** calling the codex companion directly from Bash worked
   when the subagent path didn't. Codex's sandbox can't commit or launch
-  Electron, so ask it for patches.
+  Electron, so its work arrives untested in the real app: both branches
+  on 2026-09-30 had bugs only the E2E run showed (cards not registered as
+  assistant-ui data parts; `require.resolve` of pi's ESM-only package
+  crashing the main process).
+- **E2E evaluate in the main process** can't use dynamic `import()`; use
+  `process.getBuiltinModule('node:fs')` and the electron modules passed in.

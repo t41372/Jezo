@@ -1,6 +1,7 @@
 import { MotionConfig } from 'motion/react'
 import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
 import { useStore } from '@/data/store'
 import { DndProvider } from './Dnd'
@@ -12,6 +13,7 @@ import { useTheme } from './theme'
 export function App() {
   useTheme()
   useQuickWindow()
+  useEffect(() => window.jezo.agent.onNotice(({ message, type }) => toast[type](message)), [])
   const { i18n } = useTranslation()
   const pageId = useStore((s) => s.nav.page)
   const page = getPage(pageId)

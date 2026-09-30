@@ -28,15 +28,15 @@ test('adding, replacing, writing, removing and updating methods keeps their file
   const origins = () => (parseYaml(readFileSync(join(root, 'skills/installed.yaml'), 'utf8')) as { skills: SkillOrigin[] }).skills
   const manifest = join(root, 'skills/next-step/SKILL.md')
   await open(page, '更多')
-  await main.getByText('它用的方法', { exact: true }).click()
+  await main.getByText('已安裝', { exact: true }).click()
   const add = async () => {
-    await main.getByRole('button', { name: '新增方法' }).click()
+    await main.getByRole('button', { name: '安裝' }).click()
     return page.getByRole('dialog')
   }
   const find = async (address: string) => {
     const dialog = await add()
-    await dialog.getByLabel('網址', { exact: true }).fill(address)
-    await dialog.getByRole('button', { name: '找方法' }).click()
+    await dialog.getByLabel('網址、指令或 JSON', { exact: true }).fill(address)
+    await dialog.getByRole('button', { name: '查看內容' }).click()
     return dialog
   }
   const finish = async () => {
@@ -70,8 +70,8 @@ test('adding, replacing, writing, removing and updating methods keeps their file
   await expect(main).toContainText('來自 github.com/o/r')
   await expect(main.getByRole('switch', { name: '下一步方法' })).toBeChecked()
   await main.getByRole('button', { name: /下一步方法/ }).click()
-  await expect(main).toContainText('這個方法附了程式。Jezo 的 agent 目前不能執行程式')
-  await main.getByRole('button', { name: '← 它用的方法' }).click()
+  await expect(main).toContainText('這個方法附了程式')
+  await main.getByRole('button', { name: '← 已安裝' }).click()
 
   // The second install writes nothing until replacement is agreed to.
   dialog = await find(`${SKILL_ADDRESS}/blob/main/methods/next-step/SKILL.md`)
@@ -125,7 +125,7 @@ test('adding, replacing, writing, removing and updating methods keeps their file
   await expect.poll(() => existsSync(join(root, 'skills/my-method/SKILL.md'))).toBe(true)
   expect(origins().some((s) => s.name === 'my-method')).toBe(true)
   await main.getByRole('button', { name: '← 更多' }).click()
-  await main.getByText('它用的方法', { exact: true }).click()
+  await main.getByText('已安裝', { exact: true }).click()
 
   // Updating uses the recorded ref and path, checks the current hash, and removes old files.
   await github.version(2)
