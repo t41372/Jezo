@@ -10,15 +10,16 @@ import {
   type AgentSessionEvent,
   createAgentSession,
   DefaultResourceLoader,
+  type ExtensionAPI,
   SessionManager,
   SettingsManager,
 } from '@earendil-works/pi-coding-agent'
+import type { ThinkingLevel } from '@earendil-works/pi-agent-core'
 import type { SessionMessage, SessionView, Step, Trigger } from '../../shared/session'
-import type { Config } from '../config'
 import { skillRoots } from '../workspace/skills'
 import type { Workspace } from '../workspace/workspace'
-import { createModels, type Models } from './models'
-import { digest, REQUESTS, SYSTEM_PROMPT } from './prompt'
+import type { Providers } from './providers'
+import { CLAIMED_WITHOUT_CHANGE, CLAIMS_ACTION, digest, REQUESTS, SYSTEM_PROMPT } from './prompt'
 import { type CardDetails, createTools, type RunContext, TOOL_NAMES } from './tools'
 import type { UndoLog } from './undo'
 
@@ -38,12 +39,13 @@ interface Conversation {
 }
 
 const TRIGGER_ENTRY = 'jezo.session'
+const CHECK_MESSAGE = 'jezo.check'
 const REQUEST_MESSAGE = 'jezo.request'
 
 export class AgentHost {
   private conversations = new Map<string, Conversation>()
-  private models: Models | null = null
   private listeners = new Set<(view: SessionView) => void>()
+  private finishedListeners = new Set<(id: string, trigger: Trigger) => void>()
   private timers = new Map<string, NodeJS.Timeout>()
   private settings = SettingsManager.inMemory(
     { compaction: { enabled: true }, retry: { enabled: true, maxRetries: 2 }, cacheWarming: 'off', enableInstallTelemetry: false },
@@ -53,7 +55,7 @@ export class AgentHost {
   constructor(
     private workspace: Workspace,
     private undo: UndoLog,
-    private modelConfig: () => Config['model'],
+    private providers: Providers,
   ) {}
 
   private get dir() {
@@ -92,6 +94,12 @@ export class AgentHost {
     return () => this.listeners.delete(listener)
   }
 
+  /** Called when a run ends with an answer. */
+  onFinished(listener: (id: string, trigger: Trigger) => void) {
+    this.finishedListeners.add(listener)
+    return () => this.finishedListeners.delete(listener)
+  }
+
   list(): SessionView[] {
     return [...this.conversations.values()].map((c) => this.view(c)).sort((a, b) => (a.date + a.time < b.date + b.time ? 1 : -1))
   }
@@ -117,17 +125,6 @@ export class AgentHost {
 
   async abort(id: string) {
     await this.conversations.get(id)?.session?.abort()
-  }
-
-  /** The model settings changed; the next message uses the new model. */
-  resetModels() {
-    this.models = null
-    for (const c of this.conversations.values()) {
-      if (!c.running) {
-        c.session?.dispose()
-        c.session = null
-      }
-    }
   }
 
   private async create(trigger: Trigger): Promise<Conversation> {
@@ -170,6 +167,7 @@ export class AgentHost {
       await prompt(session)
       await session.waitForIdle()
       await this.undo.finish(c.context.run, firstSentence(session.getLastAssistantText() ?? ''))
+      for (const listener of this.finishedListeners) listener(c.id, c.trigger)
     } catch (error) {
       console.error(error)
       this.note(c, { kind: 'error', text: String(error instanceof Error ? error.message : error) })
@@ -186,12 +184,22 @@ export class AgentHost {
   }
 
   private async sessionFor(c: Conversation): Promise<AgentSession | null> {
-    if (c.session) return c.session
-    this.models ??= await createModels(this.modelConfig())
-    // Nothing reachable a moment ago may be running now.
-    if (!this.models.model) this.models = await createModels(this.modelConfig())
-    const { runtime, model } = this.models
+    // What the user starts uses the main model; what Jezo starts on its own uses the background one.
+    const role = c.trigger === 'user' || c.trigger === 'hotkey' ? 'main' : 'background'
+    let model = this.providers.model(role)
+    // A local server that wasn't running a moment ago may be now.
+    if (!model) {
+      await this.providers.refreshServers()
+      model = this.providers.model(role)
+    }
     if (!model) return null
+    if (c.session) {
+      // The user may have picked another model, or another thinking level, since this conversation started.
+      if (c.session.model?.provider !== model.provider || c.session.model?.id !== model.id) await c.session.setModel(model)
+      c.session.setThinkingLevel(this.providers.thinking(model) as ThinkingLevel)
+      return c.session
+    }
+    const runtime = this.providers.runtime
 
     const loader = new DefaultResourceLoader({
       cwd: this.workspace.root,
@@ -205,6 +213,7 @@ export class AgentHost {
       additionalSkillPaths: await this.skillDirs(),
       systemPromptOverride: () => SYSTEM_PROMPT,
       appendSystemPromptOverride: () => [digest(this.workspace.list())],
+      extensionFactories: [{ name: 'jezo-checks', factory: (pi) => this.checks(pi, c) }],
     })
     await loader.reload()
     const { session } = await createAgentSession({
@@ -214,7 +223,7 @@ export class AgentHost {
       settingsManager: this.settings,
       resourceLoader: loader,
       model,
-      thinkingLevel: 'medium',
+      thinkingLevel: this.providers.thinking(model) as ThinkingLevel,
       tools: TOOL_NAMES,
       customTools: createTools(this.workspace, () => c.context),
       sessionManager: c.manager,
@@ -223,6 +232,23 @@ export class AgentHost {
     session.subscribe((event) => this.onEvent(c, event))
     c.session = session
     return session
+  }
+
+  /**
+   * Checks at the end of a run, before it settles (AGENTS.md, principle 7). A
+   * reply that says something was done when no file changed goes back to the
+   * agent once, to do it or to say it didn't.
+   */
+  private checks(pi: ExtensionAPI, c: Conversation) {
+    let sentBack = ''
+    pi.on('agent_before_settle', () => {
+      const run = c.context.run
+      const text = c.session?.getLastAssistantText() ?? ''
+      if (sentBack === run || this.undo.changed(run) || !CLAIMS_ACTION.test(text)) return
+      sentBack = run
+      this.undo.claimedWithoutChange(run)
+      return { entries: [{ type: 'custom_message', customType: CHECK_MESSAGE, content: CLAIMED_WITHOUT_CHANGE, display: false }], continue: true }
+    })
   }
 
   /** Skills live in the workspace: its own skills/, and each plugin directory's. */

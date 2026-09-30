@@ -1,13 +1,12 @@
 // The ⌥X window. A press opens it for typing; holding ⌥X shows it for voice
 // without taking focus from the app the user is in, until the key is released.
 
-import { BrowserWindow, systemPreferences, type BrowserWindowConstructorOptions } from 'electron'
+import { BrowserWindow, screen, systemPreferences, type BrowserWindowConstructorOptions } from 'electron'
 import type { QuickCommand } from '../shared/bridge'
 
-const SIZE = {
-  type: { width: 640, height: 380 },
-  voice: { width: 680, height: 168 },
-}
+/** The window is as tall as what it shows (the page says, through quick:resize), up to this. */
+const WIDTH = 680
+const MAX_HEIGHT = 560
 
 let window: BrowserWindow | null = null
 let mode: 'type' | 'voice' = 'type'
@@ -16,7 +15,8 @@ let holding = false
 
 export function createQuickWindow(options: BrowserWindowConstructorOptions, load: (w: BrowserWindow) => void) {
   window = new BrowserWindow({
-    ...SIZE.type,
+    width: WIDTH,
+    height: 132,
     show: false,
     frame: false,
     transparent: process.platform !== 'darwin',
@@ -38,10 +38,18 @@ function send(command: QuickCommand) {
 function setMode(next: 'type' | 'voice') {
   if (!window) return
   mode = next
-  window.setSize(SIZE[next].width, SIZE[next].height)
-  // Voice is a dark capsule; typing uses the light or dark popover material.
-  if (process.platform === 'darwin') window.setVibrancy(next === 'voice' ? 'hud' : 'popover')
-  window.center()
+  // Placed when it opens, a third of the way down the screen the pointer is on, like Spotlight.
+  // As it grows with an answer, its top stays put.
+  if (window.isVisible()) return
+  const { workArea } = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+  window.setPosition(Math.round(workArea.x + (workArea.width - WIDTH) / 2), Math.round(workArea.y + workArea.height * 0.22))
+}
+
+/** The page's height changed. */
+export function resizeQuick(height: number) {
+  if (!window) return
+  const [, y] = window.getPosition()
+  window.setBounds({ width: WIDTH, height: Math.min(MAX_HEIGHT, Math.max(60, height)), y })
 }
 
 export function hideQuick() {

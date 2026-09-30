@@ -92,10 +92,7 @@
   },
   "quick": {
     "placeholder": "Tell Jezo…",
-    "ask": "Ask Jezo: “{{text}}”",
-    "note": "Add to Notes: \"{{text}}\"",
     "noted": "Added to Notes",
-    "common": "Suggestions",
     "planTomorrow": "Plan tomorrow for me",
     "badDay": "Today isn't going well",
     "freeEvenings": "Which evenings are free this week?",
@@ -108,7 +105,10 @@
     "thinking": "Thinking…",
     "noModel": "No model to use. Open LM Studio or Ollama, or switch to a cloud model in Settings.",
     "speechMissing": "Speech recognition isn't installed yet. Install it in Settings to talk instead of typing.",
-    "listening": "Listening…"
+    "listening": "Listening…",
+    "followUp": "Reply…",
+    "hintAsk": "Ask Jezo",
+    "hintNote": "File in Notes"
   },
   "undo": {
     "action": "Undo",
@@ -123,5 +123,29 @@
   },
   "workspace": {
     "writeFailed": "Couldn't save that, so the files were read again."
+  },
+  "thinking": {
+    "label": "Thinking",
+    "off": "No thinking",
+    "minimal": "Minimal",
+    "low": "Low",
+    "medium": "Medium",
+    "high": "High",
+    "xhigh": "Extra high",
+    "max": "Max",
+    "back": "Back to thinking",
+    "searchModels": "Search models",
+    "noModels": "No matching models",
+    "slowest": "Thinks longest, answers slowest"
+  },
+  "composer": {
+    "attach": "Attach",
+    "voice": "Talk",
+    "listening": "Listening…",
+    "stopListening": "Done talking",
+    "send": "Send",
+    "stop": "Stop",
+    "micDenied": "Jezo can't use the microphone. Allow it in System Settings, Privacy & Security.",
+    "speechMissing": "Speech recognition isn't installed yet. Install it in Settings to talk instead of typing."
   }
 }

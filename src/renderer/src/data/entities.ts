@@ -2,7 +2,7 @@
 // fields to write. The file formats are in docs/design/backend.md.
 
 import type { Fields, Item } from '../../../shared/workspace'
-import type { ISODate, Note, Todo } from './types'
+import type { Goal, ISODate, Note, Todo } from './types'
 
 // ─── Local times ───
 // On disk a time is local, with no zone: "2026-09-29T09:30". The UI keeps a
@@ -55,6 +55,8 @@ export function toTodo(item: Item): Todo {
     why: str(d.why),
     startedAt: toEpoch(d.started),
     rank: str(d.rank),
+    amount: typeof d.amount === 'number' ? d.amount : undefined,
+    completedAt: toEpoch(d.completed),
   }
 }
 
@@ -74,7 +76,62 @@ export function todoFields(change: Partial<Todo>): Fields {
   if ('why' in change) f.why = change.why ?? null
   if ('startedAt' in change) f.started = change.startedAt ? stamp(new Date(change.startedAt)) : null
   if ('rank' in change) f.rank = change.rank ?? null
+  if ('amount' in change) f.amount = change.amount ?? null
+  if ('completedAt' in change) f.completed = change.completedAt ? stamp(new Date(change.completedAt)) : null
   return f
+}
+
+// ─── Goals ───
+
+/**
+ * A goal from its file and the todos that serve it. Done todos add their
+ * amount to the progress; a rule was tried when a todo with its cue was
+ * scheduled before today, and it worked when that todo got done.
+ */
+export function toGoal(item: Item, todos: Todo[], today: ISODate): Goal {
+  const d = item.data
+  const measure = (d.measure ?? {}) as { unit?: string; total?: number; start?: number }
+  const mine = todos.filter((t) => t.goalId === item.id && t.state !== 'draft')
+  const amount = (t: Todo) => t.amount ?? 1
+  const done = mine.filter((t) => t.state === 'done')
+  const [monday, sunday] = weekOf(today)
+  const thisWeek = (t: Todo) => t.slot && t.slot.date >= monday && t.slot.date <= sunday
+  const rules = Array.isArray(d.rules) ? (d.rules as { cue: string; action: string }[]) : []
+  const proposal = d.rule_proposal as { rule: number; cue: string; action: string; why: string } | undefined
+  return {
+    id: item.id,
+    name: str(d.name) ?? '',
+    hue: typeof d.hue === 'number' ? d.hue : 255,
+    state: d.state === 'paused' || d.state === 'done' ? d.state : 'active',
+    why: item.body.trim() || undefined,
+    due: str(d.due),
+    dueNote: str(d.due_note),
+    progress: { done: (measure.start ?? 0) + done.reduce((sum, t) => sum + amount(t), 0), total: measure.total ?? 1, unit: measure.unit ?? '' },
+    week: {
+      done: done.filter(thisWeek).reduce((sum, t) => sum + amount(t), 0),
+      planned: mine.filter((t) => t.state === 'open' && thisWeek(t)).reduce((sum, t) => sum + amount(t), 0),
+    },
+    agentNote: str(d.note),
+    rules: rules.map((r) => {
+      const tried = mine.filter((t) => t.cue === r.cue && t.slot && (t.slot.date < today || t.state === 'done'))
+      return { cue: r.cue, action: r.action, tries: tried.length, hits: tried.filter((t) => t.state === 'done').length }
+    }),
+    samples: done
+      .filter((t) => t.startedAt && t.completedAt)
+      .sort((a, b) => a.completedAt! - b.completedAt!)
+      .slice(-8)
+      .map((t) => ({ estimated: t.estimateMinutes, actual: Math.round((t.completedAt! - t.startedAt!) / 60_000) })),
+    report: d.report as Goal['report'],
+    ruleProposal: proposal && { ruleIndex: proposal.rule, cue: proposal.cue, action: proposal.action, why: proposal.why },
+  }
+}
+
+/** Monday and Sunday of the week a date is in. */
+export function weekOf(date: ISODate): [ISODate, ISODate] {
+  const [y, m, day] = date.split('-').map(Number)
+  const d = new Date(y, m - 1, day)
+  const monday = new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7))
+  return [localDate(monday), localDate(new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6))]
 }
 
 // ─── Notes ───

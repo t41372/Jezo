@@ -39,11 +39,11 @@ export function App() {
   )
 }
 
-/** A conversation from the ⌥X window continues here. */
+/** A conversation continues here: from the ⌥X window, or a notification. */
 function useQuickWindow() {
   useEffect(
     () =>
-      window.jezo.quick.onContinue((session) => {
+      window.jezo.onOpenSession((session) => {
         useStore.getState().openSession(session)
       }),
     [],

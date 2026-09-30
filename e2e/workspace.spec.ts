@@ -1,7 +1,7 @@
 // What the user does in the GUI ends up in the workspace's files, and what
 // changes in the files shows up in the GUI (docs/design/backend.md).
 
-import { rmSync, writeFileSync, readFileSync } from 'node:fs'
+import { readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { drag, expect, open, test } from './jezo'
 import { writeSortSession } from './sessions'
@@ -174,6 +174,28 @@ test('skills come from the workspace, and turning one off writes it to its file'
   await page.locator('main').getByText('用紀錄估時間').click()
   await expect(page.locator('main')).toContainText('人估時間通常偏樂觀')
   await expect(page.locator('main')).toContainText('skills/estimate-from-records/SKILL.md')
+
+  expect(jezo.errors).toEqual([])
+})
+
+test("a goal's progress is counted from its todos, and a rule change is decided on its page", async ({ jezo }) => {
+  const { page, root, read } = jezo
+  await open(page, '目標')
+  await page.locator('main button', { hasText: 'Q4 升等 doc' }).click()
+  const progress = page.locator('main .text-\\[40px\\]')
+  await expect(progress).toHaveText('4')
+
+  // A todo for the goal gets done (here, in another editor): the goal counts it.
+  const leadership = readdirSync(join(root, 'todos/items')).find((f) => readFileSync(join(root, 'todos/items', f), 'utf8').includes('Leadership'))!
+  const path = join(root, 'todos/items', leadership)
+  writeFileSync(path, readFileSync(path, 'utf8').replace('state: open', 'state: done'))
+  await expect(progress).toHaveText('5')
+
+  // The agent's proposed rewrite of the failing rule: accepting it rewrites the rule and clears the proposal.
+  await expect(page.getByText('週三 19:30 → 寫 doc 60 分')).toBeVisible()
+  await page.getByRole('button', { name: '改成這樣' }).click()
+  await expect.poll(() => read('goals/items/g-1.md').data.rule_proposal).toBeUndefined()
+  expect((read('goals/items/g-1.md').data.rules as { cue: string }[])[1]).toEqual({ cue: '週三 19:30', action: '寫 doc 60 分' })
 
   expect(jezo.errors).toEqual([])
 })

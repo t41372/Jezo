@@ -11,6 +11,7 @@ schema:
     goal: { type: string }
     cue: { type: string }
     estimate: { type: integer, minimum: 1 }
+    amount: { type: number, minimum: 0 }
     scheduled: { type: string, pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$" }
     proposed: { type: boolean }
     rank: { type: string }

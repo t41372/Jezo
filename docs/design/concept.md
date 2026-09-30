@@ -71,7 +71,7 @@ Session 模型
 - 上次用 dsh 搭的那版爛就爛在這：一個長聊天室撐整個實驗，沒記憶、沒排程、context fetch 不到、fetch 到下一輪就忘、compaction 出問題。
 
 功能
-- 目標（第一個插件，抄 Muse）：進度條、把任務丟進每天的 todo、定期 report。Dashboard 由 agent 填 layout schema 生成。
+- 目標（第一個插件，抄 Muse）：進度條、把任務丟進每天的 todo、定期 report。Dashboard 由 agent 填 layout schema 生成。進度從做完的待辦算，不寫在檔案裡，見 goals.md。
 - Todo list，給人和 AI。
 - 隨手記（第一方插件）：想到什麼先丟進來，不分類。按一下交給 agent 整理，它提議每一則變成待辦、目標想法、要記住的事，還是留著；看不懂就問。你說好才算。⌥X 裡按 ⌥↵ 直接記進來。見 notes.md。
 - 行事曆 connector、各種 connector、MCP、skills。

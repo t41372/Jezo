@@ -5,31 +5,31 @@ import type { DiffLine, HistoryEntry, ISODate, SessionMessage, SessionView, Step
 
 export type { DiffLine, HistoryEntry, ISODate, Step, Trigger }
 
+/**
+ * A goal as the UI draws it: what its file says, and what the app counts from
+ * the todos. Progress is never written by hand (docs/design/goals.md).
+ */
 export interface Goal {
   id: string
   name: string
   /** Hue for the goal's color, in oklch. */
   hue: number
-  /** When the goal is due, as the user would say it: "11/15 送出 · 還有 7 週". */
-  dueLabel: string
+  state: 'active' | 'paused' | 'done'
+  /** Why it matters and what done means, in the user's words. */
+  why?: string
+  due?: ISODate
+  /** What happens on the due date: "送出", "台北馬". */
+  dueNote?: string
   progress: { done: number; total: number; unit: string }
-  /** Short progress line for the goal card: "這週 1 / 2 段". */
-  weekShort: string
-  /** Longer progress line for the goal page. */
-  weekLong: string
+  /** This week, in the goal's unit: what was done, and what's scheduled and not done yet. */
+  week: { done: number; planned: number }
   /** The agent's own read on how the goal is going. */
-  agentNote: string
+  agentNote?: string
   /** The if-then rules the agent schedules by, with how often they worked. */
   rules: { cue: string; action: string; hits: number; tries: number }[]
-  /** How much is scheduled this week but not done yet, in the same unit as progress. */
-  plannedThisWeek: number
-  estimates: {
-    summary: string
-    lines: Finding[]
-    /** Recent times, in minutes: what the user estimated and what it actually took. */
-    samples?: { estimated: number; actual: number }[]
-  }
-  report: { range: string; lines: Finding[] }
+  /** Recent times, in minutes: what was planned and what it actually took. */
+  samples: { estimated: number; actual: number }[]
+  report?: { range: string; lines: Finding[] }
   /** A change to a rule the agent proposes because the rule keeps failing. The user decides. */
   ruleProposal?: { ruleIndex: number; cue: string; action: string; why: string }
 }
@@ -68,6 +68,10 @@ export interface Todo {
   startedAt?: number
   /** Where it sits in the backlog, as a fractional index. Lower comes first. */
   rank?: string
+  /** How much of its goal's measure it moves when done. 1 if not set. */
+  amount?: number
+  /** When it was done, in milliseconds since the epoch. */
+  completedAt?: number
 }
 
 /**

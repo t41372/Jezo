@@ -40,6 +40,7 @@ export function applyLanguage(setting: LanguageSetting) {
   }
   const language = setting === 'system' ? systemLanguage() : setting
   document.documentElement.lang = language
+  window.jezo.setLanguage(language)
   return i18n.changeLanguage(language)
 }
 
@@ -53,6 +54,7 @@ i18n.use(initReactI18next).init({
   returnNull: false,
 })
 document.documentElement.lang = i18n.language
+window.jezo.setLanguage(i18n.language)
 
 /** Adds a plugin's strings, one file per language, under the plugin's id. */
 export function addPluginStrings(pluginId: string, locales: Record<string, object>) {

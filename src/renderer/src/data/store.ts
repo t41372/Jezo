@@ -9,7 +9,7 @@ import { create } from 'zustand'
 import type { ThemeSource } from '../../../shared/bridge'
 import type { Fields, Item, ItemChanges } from '../../../shared/workspace'
 import i18n, { applyLanguage, storedLanguage, type LanguageSetting } from '@/i18n'
-import { entities, localDate, stamp, toNote, toTodo, todoFields } from './entities'
+import { entities, localDate, stamp, toGoal, toNote, toTodo, todoFields } from './entities'
 import * as mock from './mock'
 import type { CalendarEvent, CalendarViewName, Connection, Energy, Experiment, Goal, HistoryEntry, ISODate, Memory, Message, Note, NoteKind, NoteOutcome, NoteProposal, Session, Skill, Todo, Trigger } from './types'
 
@@ -178,11 +178,18 @@ function upsert<T extends { id: string }>(list: T[], changed: T[], removed: stri
   return [...next.values()].sort(order)
 }
 
+/** Goal files, kept as they are: a goal is counted again whenever its todos change. */
+let goalItems = new Map<string, Item>()
+
+const deriveGoals = (todos: Todo[], today: ISODate) => [...goalItems.values()].map((item) => toGoal(item, todos, today)).sort((a, b) => a.id.localeCompare(b.id))
+
 function applyChanges({ changed, removed }: ItemChanges) {
-  useStore.setState((s) => ({
-    todos: upsert(s.todos, entities(changed, 'todo', toTodo), removed, byRank),
-    notes: upsert(s.notes, entities(changed, 'note', toNote), removed, byCreated),
-  }))
+  for (const id of removed) goalItems.delete(id)
+  for (const item of changed) if (item.kind === 'goal' && !item.id.startsWith('?')) goalItems.set(item.id, item)
+  useStore.setState((s) => {
+    const todos = upsert(s.todos, entities(changed, 'todo', toTodo), removed, byRank)
+    return { todos, notes: upsert(s.notes, entities(changed, 'note', toNote), removed, byCreated), goals: deriveGoals(todos, s.now.date) }
+  })
 }
 
 const newestFirst = (a: Session, b: Session) => (a.date + a.time < b.date + b.time ? 1 : -1)
@@ -207,7 +214,9 @@ function storedClosed(): string[] {
 
 async function loadWorkspace() {
   const items: Item[] = await workspace().list()
-  useStore.setState({ todos: entities(items, 'todo', toTodo).sort(byRank), notes: entities(items, 'note', toNote).sort(byCreated) })
+  goalItems = new Map(items.filter((i) => i.kind === 'goal' && !i.id.startsWith('?')).map((i) => [i.id, i]))
+  const todos = entities(items, 'todo', toTodo).sort(byRank)
+  useStore.setState((s) => ({ todos, notes: entities(items, 'note', toNote).sort(byCreated), goals: deriveGoals(todos, s.now.date) }))
 }
 
 /** Reads the workspace and follows its changes. Called once, when the window opens. */
@@ -227,7 +236,10 @@ export async function connectWorkspace() {
 
 /** Changes a todo right away and writes it. */
 function writeTodo(id: string, change: Partial<Todo>) {
-  useStore.setState((s) => ({ todos: mapTodo(s.todos, id, (t) => ({ ...t, ...change })).sort(byRank) }))
+  useStore.setState((s) => {
+    const todos = mapTodo(s.todos, id, (t) => ({ ...t, ...change })).sort(byRank)
+    return { todos, goals: deriveGoals(todos, s.now.date) }
+  })
   workspace().update(id, todoFields(change)).catch(failed)
 }
 
@@ -263,7 +275,7 @@ function mapMessage(sessions: Session[], sessionId: string, index: number, f: (m
 
 export const useStore = create<State>()((set, get) => ({
   now: clock(),
-  goals: mock.goals,
+  goals: [],
   todos: [],
   events: mock.events,
   sessions: [],
@@ -307,9 +319,9 @@ export const useStore = create<State>()((set, get) => ({
     window.jezo.agent.send(sessionId, option).catch(failed)
   },
 
+  // A done todo keeps when it was started, so how long it took can be counted against its estimate.
   setDone: (id, done) => {
-    writeTodo(id, { state: done ? 'done' : 'open', startedAt: undefined })
-    workspace().update(id, { completed: done ? stamp() : null }).catch(failed)
+    writeTodo(id, done ? { state: 'done', completedAt: Date.now() } : { state: 'open', startedAt: undefined, completedAt: undefined })
   },
   accept: (ids) => {
     for (const t of get().todos) {
@@ -494,15 +506,14 @@ export const useStore = create<State>()((set, get) => ({
           : k,
       ),
     })),
-  decideRuleProposal: (goalId, accept) =>
-    set((s) => ({
-      goals: s.goals.map((g) => {
-        const p = g.ruleProposal
-        if (g.id !== goalId || !p) return g
-        const rules = accept ? g.rules.map((r, i) => (i === p.ruleIndex ? { cue: p.cue, action: p.action, hits: 0, tries: 0 } : r)) : g.rules
-        return { ...g, rules, ruleProposal: undefined }
-      }),
-    })),
+  // Accepting rewrites the rule; either way the proposal is gone. How often the new rule works is counted from here.
+  decideRuleProposal: (goalId, accept) => {
+    const goal = get().goals.find((g) => g.id === goalId)
+    const p = goal?.ruleProposal
+    if (!goal || !p) return
+    const rules = goal.rules.map((r, i) => (accept && i === p.ruleIndex ? { cue: p.cue, action: p.action } : { cue: r.cue, action: r.action }))
+    workspace().update(goalId, { rules, rule_proposal: null }).catch(failed)
+  },
   connect: (id) =>
     set((s) => ({ connections: s.connections.map((c) => (c.id === id ? { ...c, connected: true, detail: undefined } : c)) })),
   undo: (id) => {

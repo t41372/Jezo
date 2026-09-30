@@ -1,0 +1,50 @@
+# What a goal is. The app checks every file in items/ against this schema.
+kind: goal
+prefix: g
+schema:
+  type: object
+  required: [id, name, state, measure]
+  properties:
+    id: { type: string, pattern: "^g-" }
+    name: { type: string, minLength: 1 }
+    hue: { type: number, minimum: 0, maximum: 360 }
+    state: { enum: [active, paused, done] }
+    due: { type: string, pattern: "^\\d{4}-\\d{2}-\\d{2}$" }
+    due_note: { type: string }
+    measure:
+      type: object
+      required: [unit, total]
+      properties:
+        unit: { type: string }
+        total: { type: number, exclusiveMinimum: 0 }
+        start: { type: number, minimum: 0 }
+    rules:
+      type: array
+      items:
+        type: object
+        required: [cue, action]
+        properties:
+          cue: { type: string }
+          action: { type: string }
+    note: { type: string }
+    rule_proposal:
+      type: object
+      required: [rule, cue, action, why]
+      properties:
+        rule: { type: integer, minimum: 0 }
+        cue: { type: string }
+        action: { type: string }
+        why: { type: string }
+    report:
+      type: object
+      required: [range, lines]
+      properties:
+        range: { type: string }
+        lines:
+          type: array
+          items:
+            type: object
+            required: [text]
+            properties:
+              text: { type: string }
+              basis: {}

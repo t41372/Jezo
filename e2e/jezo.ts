@@ -2,7 +2,7 @@
 // own: the mockup's sample data, dated to today (scripts/fixture.ts).
 
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readdirSync, readFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -29,6 +29,8 @@ export interface Jezo {
 interface Prepare {
   /** Changes the workspace before the app opens it. */
   workspace?(root: string): void
+  /** Changes the app's data (config.json and the like) before the app starts. */
+  data?(dir: string): void
   /** Extra Chromium switches, like a fake microphone. */
   args?: string[]
 }
@@ -40,6 +42,8 @@ export const test = base.extend<{ jezo: Jezo; prepare: Prepare }>({
     const root = join(dir, 'workspace')
     execFileSync('bun', ['scripts/fixture.ts', root], { cwd: repo })
     prepare.workspace?.(root)
+    mkdirSync(join(dir, 'data'), { recursive: true })
+    prepare.data?.(join(dir, 'data'))
     const app = await electron.launch({
       executablePath: electronPath,
       args: [join(repo, 'out/main/index.js'), ...(prepare.args ?? [])],

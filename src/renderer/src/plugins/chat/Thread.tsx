@@ -1,7 +1,7 @@
-import { ArrowUp, Mic, Plus, Square } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useRef } from 'react'
 import { getMessageView } from '@/app/registry'
+import { Composer } from '@/components/composer/Composer'
 import { Disclosure } from '@/components/Disclosure'
 import { PlanCard } from '@/components/todo/PlanCard'
 import { Button } from '@/components/ui/button'
@@ -56,7 +56,7 @@ export function Thread() {
           )}
         </div>
       </div>
-      <Composer />
+      <ChatComposer />
     </div>
   )
 }
@@ -122,7 +122,7 @@ function MessageView({ message: m, sessionId, index }: { message: Message; sessi
   }
 }
 
-const LOOKING = new Set(['read', 'ls'])
+const LOOKING = new Set(['read', 'ls', 'todos_list'])
 const CHANGING = new Set(['write', 'edit', 'todos_propose', 'todos_update', 'notes_propose'])
 
 /** What the agent did, folded: "看了 3 個檔案，改了 1 個", and each step inside. */
@@ -186,60 +186,27 @@ function Empty() {
   )
 }
 
-function Composer() {
+function ChatComposer() {
   const { t } = useTranslation('chat')
   const text = useStore((s) => s.composer)
   const sessionId = useStore((s) => s.sessionId)
   const running = useStore((s) => s.sessions.find((x) => x.id === s.sessionId)?.running ?? false)
   const { setComposer, send, stop } = useStore.getState()
-  const input = useRef<HTMLTextAreaElement>(null)
-
-  // Focus when a conversation opens or someone prefills the box.
-  useEffect(() => {
-    input.current?.focus()
-  }, [sessionId, text === ''])
-
-  // While the agent works, a message waits in the box until it's done.
-  const submit = () => {
-    const t = text.trim()
-    if (t && !running) send(t)
-  }
-
   return (
     <div className="px-6 pt-2.5 pb-4.5">
-      <div className="mx-auto flex max-w-[700px] items-end gap-3 rounded-[26px] border border-card-border bg-card py-2 pr-2.5 pl-3 shadow-[0_4px_16px_rgb(10_14_40/0.06)]">
-        <Button variant="ghost" size="icon" className="size-9 rounded-full text-muted-foreground" aria-label={t('attach')}>
-          <Plus className="size-5" />
-        </Button>
-        <textarea
-          ref={input}
-          rows={1}
-          value={text}
-          onChange={(e) => setComposer(e.target.value)}
-          onKeyDown={(e) => {
-            // Enter while an input method is composing picks a candidate; it must not send.
-            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-              e.preventDefault()
-              submit()
-            }
-          }}
-          placeholder={t('placeholder')}
-          className="max-h-40 flex-1 resize-none self-center bg-transparent py-1.5 text-[14.5px] leading-relaxed outline-none [field-sizing:content] placeholder:text-muted-foreground"
-        />
-        {running ? (
-          <Button size="icon" className="size-9 rounded-full" aria-label={t('stop')} onClick={stop}>
-            <Square className="size-3.5 fill-current" />
-          </Button>
-        ) : text.trim() ? (
-          <Button size="icon" className="size-9 rounded-full" aria-label={t('send')} onClick={submit}>
-            <ArrowUp className="size-[18px]" />
-          </Button>
-        ) : (
-          <Button variant="ghost" size="icon" className="size-9 rounded-full text-muted-foreground" aria-label={t('voice')}>
-            <Mic className="size-[18px]" />
-          </Button>
-        )}
-      </div>
+      {/* Keyed so opening another conversation, or a prefilled message, focuses the box. */}
+      <Composer
+        key={`${sessionId}`}
+        value={text}
+        onChange={setComposer}
+        onSubmit={(t) => send(t)}
+        onStop={stop}
+        running={running}
+        placeholder={t('placeholder')}
+        autoFocus
+        attach
+        className="mx-auto max-w-[700px]"
+      />
     </div>
   )
 }

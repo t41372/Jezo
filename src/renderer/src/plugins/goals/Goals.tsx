@@ -12,6 +12,28 @@ import { useStore } from '@/data/store'
 import type { Finding, Goal } from '@/data/types'
 import { goalStyle } from '@/lib/goal-color'
 
+const n = (x: number) => Math.round(x * 10) / 10
+
+/** "11/15 送出 · 還有 7 週" */
+function useDueLabel(goal: Goal) {
+  const { t, i18n } = useTranslation('goals')
+  const today = useStore((s) => s.now.date)
+  if (!goal.due) return null
+  const days = Math.round((Date.parse(goal.due) - Date.parse(today)) / 86_400_000)
+  const date = new Date(`${goal.due}T00:00`).toLocaleDateString(i18n.language, { month: 'numeric', day: 'numeric' })
+  const left = days < 0 ? t('due.past') : days < 14 ? t('due.days', { count: days }) : t('due.weeks', { count: Math.round(days / 7) })
+  return `${date}${goal.dueNote ? ` ${goal.dueNote}` : ''} · ${left}`
+}
+
+/** How the estimates compare to what things actually took. Fewer than 3 finished todos say nothing yet. */
+function estimateSummary(samples: Goal['samples'], t: (key: string, options?: object) => string) {
+  if (samples.length < 3) return t('estimates.few')
+  const ratio = samples.reduce((sum, s) => sum + s.actual / s.estimated, 0) / samples.length
+  const percent = Math.round(Math.abs(ratio - 1) * 100)
+  return ratio > 1.15 ? t('estimates.under', { percent }) : ratio < 0.87 ? t('estimates.over', { percent }) : t('estimates.close')
+}
+
+
 /** The list of goals, or one goal when it's open. */
 export function Goals() {
   const goals = useStore((s) => s.goals)
@@ -43,7 +65,9 @@ function GoalList({ goals }: { goals: Goal[] }) {
                 {g.name}
               </span>
               <GoalProgress goal={g} className="h-1.5" />
-              <span className="text-[12.5px] text-muted-foreground">{g.weekShort}</span>
+              <span className="text-[12.5px] text-muted-foreground">
+                {t('weekShort', { done: n(g.week.done), total: n(g.week.done + g.week.planned), unit: g.progress.unit })}
+              </span>
             </Card>
           </button>
         ))}
@@ -84,6 +108,7 @@ function GoalList({ goals }: { goals: Goal[] }) {
 function GoalView({ goal }: { goal: Goal }) {
   const { t } = useTranslation('goals')
   const navigate = useStore((s) => s.navigate)
+  const dueLabel = useDueLabel(goal)
   const basis = (f: Finding) =>
     f.basis === 'stated' ? t('basis.stated') : f.basis ? t('basis.records', { count: f.basis.records }) : undefined
   const findings = (lines: Finding[]) => lines.map((f) => <Row key={f.text} text={f.text} basis={basis(f)} />)
@@ -97,15 +122,10 @@ function GoalView({ goal }: { goal: Goal }) {
     {
       id: 'estimates',
       title: t('sections.estimates'),
-      hint: goal.estimates.summary,
-      body: (
-        <>
-          {goal.estimates.samples && <EstimateChart samples={goal.estimates.samples} />}
-          {findings(goal.estimates.lines)}
-        </>
-      ),
+      hint: estimateSummary(goal.samples, t as (key: string, options?: object) => string),
+      body: goal.samples.length ? <EstimateChart samples={goal.samples} /> : <Row text={t('estimates.none')} />,
     },
-    { id: 'report', title: t('sections.report'), hint: goal.report.range, body: findings(goal.report.lines) },
+    ...(goal.report ? [{ id: 'report', title: t('sections.report'), hint: goal.report.range, body: findings(goal.report.lines) }] : []),
   ]
 
   return (
@@ -118,27 +138,29 @@ function GoalView({ goal }: { goal: Goal }) {
           <span className="size-3 rounded-[4px] bg-goal" />
           {goal.name}
         </h1>
-        <p className="mt-0.5 text-sm text-muted-foreground">{goal.dueLabel}</p>
+        {dueLabel && <p className="mt-0.5 text-sm text-muted-foreground">{dueLabel}</p>}
       </div>
 
       <Card className="gap-0 px-5.5 py-5">
         <div className="flex items-baseline gap-2">
-          <span className="text-[40px] leading-none font-medium tabular-nums">{goal.progress.done}</span>
+          <span className="text-[40px] leading-none font-medium tabular-nums">{n(goal.progress.done)}</span>
           <span className="text-sm text-muted-foreground">
             / {goal.progress.total} {goal.progress.unit}
           </span>
         </div>
         <GoalProgress goal={goal} showPlanned className="mt-3.5 h-2" />
         <div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-muted-foreground">
-          <span className="flex-1">{goal.weekLong}</span>
+          <span className="flex-1">{t('weekLong', { done: n(goal.week.done), planned: n(goal.week.planned), unit: goal.progress.unit })}</span>
           <span className="text-xs">{t('legendDone')}</span>
           <span className="text-xs">{t('legendPlanned')}</span>
         </div>
       </Card>
 
-      <p className="text-[15px] leading-[1.7] text-pretty" data-selectable>
-        {goal.agentNote}
-      </p>
+      {goal.agentNote && (
+        <p className="text-[15px] leading-[1.7] text-pretty" data-selectable>
+          {goal.agentNote}
+        </p>
+      )}
 
       {/* A proposal waits in the rules section, so that section starts open. */}
       <Accordion multiple defaultValue={goal.ruleProposal ? ['rules'] : []} className="border-t">
@@ -234,7 +256,7 @@ function EstimateChart({ samples }: { samples: { estimated: number; actual: numb
 function GoalProgress({ goal, className, showPlanned }: { goal: Goal; className?: string; showPlanned?: boolean }) {
   const { t } = useTranslation('goals')
   const done = (goal.progress.done / goal.progress.total) * 100
-  const planned = Math.min(100 - done, (goal.plannedThisWeek / goal.progress.total) * 100)
+  const planned = Math.min(100 - done, (goal.week.planned / goal.progress.total) * 100)
   return (
     <ProgressPrimitive.Root value={Math.round(done)} aria-label={t('progress', { goal: goal.name })}>
       <ProgressTrack className={cn('relative rounded-full bg-goal-tint', className)}>

@@ -13,24 +13,82 @@ export type QuickCommand =
   /** ⌥X was released: stop listening and send what was said. */
   | { kind: 'voice-end' }
 
-/** What 設定 shows about the model Jezo's agent uses. */
-export interface ModelStatus {
-  use: 'local' | 'cloud'
-  /** The local server found, or null when neither LM Studio nor Ollama answered. */
-  local: { server: string; models: { id: string; loaded: boolean }[]; id: string } | null
-  cloud: {
-    providers: { id: string; name: string; hasKey: boolean }[]
-    provider: string
-    models: string[]
-    id: string | null
-  }
+/** A provider of models, as the provider list shows it. */
+export interface ProviderSummary {
+  id: string
+  name: string
+  /** `local`: found on this machine (LM Studio, Ollama). `custom`: a server the user added. */
+  kind: 'local' | 'cloud' | 'custom'
+  /** `ready` can be used; `off` isn't set up or isn't running; `error` failed its last check. */
+  state: 'ready' | 'off' | 'error'
+  /** The last characters of the saved key. The key itself never comes back from the main process. */
+  keyHint?: string
+  /** One of the providers most people start with. */
+  popular?: boolean
 }
 
-export interface ModelChoice {
-  use?: 'local' | 'cloud'
-  localId?: string
-  provider?: string
-  cloudId?: string
+export interface ProviderModel {
+  id: string
+  name: string
+  /** Takes images. */
+  image: boolean
+  reasoning: boolean
+  contextWindow: number
+  /** Dollars per million tokens, when the provider charges. */
+  cost?: { input: number; output: number }
+  /** A local server has it in memory now. */
+  loaded?: boolean
+  /** Offered in the model pickers. */
+  enabled: boolean
+}
+
+export interface ProviderDetail extends ProviderSummary {
+  baseUrl?: string
+  /** For LM Studio and Ollama: the usual address, to go back to. */
+  defaultBaseUrl?: string
+  needsKey: boolean
+  keyUrl?: string
+  /** The model list comes from the server and can be asked for again. */
+  canRefresh: boolean
+  models: ProviderModel[]
+  lastCheck?: { ok: boolean; message?: string; ms?: number }
+}
+
+export interface ModelRef {
+  provider: string
+  id: string
+}
+
+export interface ModelChoices {
+  /** The model the agent uses now, with its provider's name. */
+  main: (ModelRef & { providerName: string }) | null
+  /** Jezo picked it because the user hasn't, or their pick can't be used. */
+  mainIsAutomatic: boolean
+  /** The model for work Jezo starts on its own; null means the main one. */
+  background: (ModelRef & { providerName: string }) | null
+  /** How hard the main model thinks, and the levels it supports, lowest first ("off" first when it can not think). */
+  thinking: string
+  thinkingLevels: string[]
+}
+
+/** What importing from the user's own pi setup brought over. */
+export interface PiImport {
+  providers: string[]
+  keys: number
+  model: string | null
+  /** Providers it couldn't bring over, with why. */
+  skipped: { name: string; why: 'api' | 'command' }[]
+}
+
+export interface CustomProviderInput {
+  name: string
+  baseUrl: string
+  key?: string
+}
+
+export interface Schedule {
+  morning: string | null
+  evening: string | null
 }
 
 /** A skill as the 它用的方法 page shows it. `id` is its directory in the workspace. */
@@ -94,16 +152,37 @@ export interface JezoBridge {
     end(): Promise<string>
     onText(listener: (text: string) => void): () => void
   }
+  /** When Jezo starts the day's sessions on its own, as "08:00"; null is off. */
+  schedule: {
+    get(): Promise<Schedule>
+    set(change: Partial<Schedule>): Promise<Schedule>
+  }
   /** The agent's methods, from the workspace. */
   skills: {
     list(): Promise<SkillInfo[]>
     setEnabled(id: string, enabled: boolean): Promise<SkillInfo[]>
   }
-  /** Which model the agent uses. Keys go to the OS keychain and never come back to the window. */
-  models: {
-    status(): Promise<ModelStatus>
-    choose(choice: ModelChoice): Promise<ModelStatus>
-    setKey(provider: string, key: string | null): Promise<ModelStatus>
+  /** Model providers and which model the agent uses. Keys go to the OS keychain and never come back. */
+  providers: {
+    list(): Promise<ProviderSummary[]>
+    get(id: string): Promise<ProviderDetail>
+    setKey(id: string, key: string | null): Promise<ProviderDetail>
+    setBaseUrl(id: string, baseUrl: string): Promise<ProviderDetail>
+    /** Sends a one-word request with this model. */
+    check(id: string, model: string): Promise<ProviderDetail>
+    /** Asks the server for its models again. */
+    refresh(id: string): Promise<ProviderDetail>
+    setModelEnabled(id: string, model: string, enabled: boolean): Promise<ProviderDetail>
+    addCustom(input: CustomProviderInput): Promise<ProviderDetail>
+    remove(id: string): Promise<void>
+    /** The enabled models of every provider that's ready, for pickers. */
+    choosable(): Promise<{ provider: string; providerName: string; model: ProviderModel }[]>
+    choices(): Promise<ModelChoices>
+    choose(role: 'main' | 'background', ref: ModelRef | null): Promise<ModelChoices>
+    setThinking(level: string): Promise<ModelChoices>
+    /** Copies providers, keys and the default model from ~/.pi/agent. Only when the user asks. */
+    importFromPi(): Promise<PiImport>
+    onChange(listener: () => void): () => void
   }
   /** What the agent changed, run by run, and taking it back. */
   history: {
@@ -112,6 +191,10 @@ export interface JezoBridge {
     onChange(listener: () => void): () => void
   }
   setTheme(source: ThemeSource): void
+  /** Tells the main process the app's language, for what it shows itself, like notifications. */
+  setLanguage(language: string): void
+  /** Called with a conversation to open, from the ⌥X window or a notification. */
+  onOpenSession(listener: (session: string) => void): () => void
   /** Tells the ⌥X window which page the main window shows, so voice can bring it along as context. */
   setContext(pageTitle: string): void
   quick: {
@@ -124,8 +207,8 @@ export interface JezoBridge {
      */
     continue(session: string): void
     hide(): void
-    /** Called in the main window with the conversation to open. */
-    onContinue(listener: (session: string) => void): () => void
+    /** Fits the window's height to what it shows. */
+    resize(height: number): void
     /** Called in the ⌥X window. */
     onCommand(listener: (command: QuickCommand) => void): () => void
   }

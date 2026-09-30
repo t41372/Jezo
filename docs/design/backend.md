@@ -104,6 +104,7 @@ Each session is a pi session saved as JSONL in `<workspace>/sessions/`. Conversa
 ### Tools
 
 - **Files:** `read`, `ls`, `write` and `edit`. `write` and `edit` are pi's own tools with Jezo's file functions plugged in, so every agent write goes through the write service and is recorded for undo.
+- **`todos_list`** shows every todo in one compact table. Without it, a local model read each todo file one at a time; a morning plan took four minutes, most of it reading.
 - **Typed tools** for what the GUI shows as a card: proposing todos (a plan), proposing what notes become, and saving to memory. The result names the entities, and the chat draws the card from it. Typed tools make structured writes easier for any model, but the agent can still edit the files directly; the checks catch mistakes either way (AGENTS.md, principle 7).
 - **`bash` is off for now.** It's the exit a steered agent would use to send data out (AGENTS.md, trust model). The plan is to turn it on inside an OS sandbox that allows writing in the workspace and blocks the network (`sandbox-exec` on macOS, a network namespace on Linux), so a steered agent can still work but can't send anything out. Until that exists, it stays off.
 - **`grep` and `find`** call `rg` and `fd`, which a packaged app can't count on finding. They're off until Jezo ships the binaries or plugs in its own search.
@@ -112,11 +113,16 @@ Each session is a pi session saved as JSONL in `<workspace>/sessions/`. Conversa
 
 - **An item file is checked when the agent writes it.** If it wouldn't match its manifest, the write is refused and the tool result tells the agent what's wrong, so it fixes its own mistake in the next step; the history notes how many writes were refused. Checking at the write rather than after the turn means a broken file never reaches the disk or the GUI. pi's `turn_end` hook stays free for checks that need the whole turn, like the agent saying it did something the files don't show.
 - **Every file the agent writes is recorded** in the undo record in the app's data, with its content from before and what the agent wrote ([undo.md](undo.md)). One run of the agent (one message from the user, or one request Jezo makes) is one entry in 修改紀錄. The entry's summary is the first sentence of the agent's last reply.
+- **A reply that claims a change no file shows goes back to the agent.** When a run is about to end, if nothing in the workspace changed and the agent's last reply says something was done (排好, 加進, 改成, scheduled…), pi's `agent_before_settle` hook sends it one hidden message: make the change with the tools, or tell the user nothing was changed. It happened on 2026-09-29: asked by voice to schedule a call, a local model answered that it had, and called no tool. 修改紀錄 marks such a run. The words it looks for are in `prompt.ts`; a false alarm costs one extra step.
 - **Undo restores a file only if it still holds what the agent wrote.** Files changed since, by the user or by anything else, are left alone, and the toast says how many.
 
 ### Tool schemas
 
 Tool parameters are plain: strings, numbers, booleans and objects, with no regex patterns and no nullable unions. Local model servers turn tool schemas into grammars for sampling, and on 2026-09-29 a time field declared as "a string matching a pattern, or null" left LM Studio able to send only null: the agent called the tool sixteen times, was told "Updated" each time, and finally edited the file by hand. Formats are checked when the tool runs, with a message the model can act on, an empty string clears a field, and every result says what the item looks like now, so a call that didn't do what the model meant is visible to it.
+
+### Scheduled sessions
+
+Jezo starts two sessions a day on its own, at times set in 設定 (08:00 and 21:30 unless changed, or off): planning the day in the morning, and a check-in in the evening. Each runs once a day. If Jezo wasn't running at the time, the session starts when it opens, up to two hours late, and the morning plan until 2 p.m. It doesn't start without a usable model, which would only record a failure every day. When it's done, a system notification says so, and clicking it opens the conversation. The morning plan only proposes: todos it adds are drafts and times it suggests are proposals, which the E2E test checks. The weekly review isn't built yet. The times are per machine, in the app's data.
 
 ### Requests Jezo makes
 
@@ -124,7 +130,21 @@ A session Jezo starts on the user's behalf, like sorting 隨手記, begins with 
 
 ### Models
 
-Settings offers a local model or a cloud one. The local one is any OpenAI-compatible server on this machine: Jezo tries the configured address, then LM Studio's and Ollama's defaults, and asks the server which models it has. Unless the user picked one, it uses a model that's already loaded, so the first answer doesn't wait on loading. The cloud providers offered are Anthropic, OpenAI, Google and OpenRouter (which reaches most others with one key); their models come from pi's built-in catalog. Keys are encrypted with Electron's `safeStorage`, which uses the OS keychain, and handed to pi at runtime. They're never written to a file in the clear and never sent back to a window.
+There's one list of model providers, with no split between local and cloud: where a model runs doesn't matter to how it's chosen. 設定 → 模型服務商 follows LobeHub's layout, simplified for one person:
+
+- **The list** puts the providers that work on top, then the ones most people start with (Anthropic, OpenAI, Google, OpenRouter, DeepSeek, Mistral, xAI, Groq, and LM Studio and Ollama when they aren't running), then every other provider in pi's catalog, folded. Providers that need more than a key (Bedrock, Azure, Vertex, Cloudflare, sign-in-only Codex) aren't offered yet.
+- **LM Studio and Ollama are found without setup.** Jezo asks each at its usual address which models it has, and a server that answers is ready. The address can be changed.
+- **A provider's page** has its address (for servers), its key, a connection test that sends one word with a chosen model and says plainly whether it worked (the provider's own error folded under 詳細), and its models with what pi's catalog says they can do: images, reasoning, context size, price. A server's models only show what the server said. Each model can be turned off, which hides it from the pickers.
+- **Keys** are encrypted with Electron's `safeStorage`, which uses the OS keychain, and handed to pi at runtime. The window only ever sees the last four characters. A key is never written to a file in the clear and never sent back to a window.
+- **Any OpenAI-compatible server** can be added with a name, an address and an optional key.
+- **Which model the agent uses** is one choice in 設定, with a search picker over the enabled models of every ready provider. Until the user picks, Jezo uses a model that works: one a local server already has loaded, otherwise the first model of a provider that's set up, and says so. A second, folded choice sets the model for work Jezo starts on its own (sorting notes, and later the morning plan), which can be cheaper; by default it's the same model. A conversation that's already open switches to a newly picked model at its next message.
+- **Signing in with a subscription** (pi can do it for Anthropic, OpenAI and others) isn't offered: whether a subscription may be used from another app differs by provider.
+- **Not taken from LobeHub:** per-conversation models, a dozen task-specific model slots, client-side requests, reordering providers, and guessing a model's abilities from its name.
+
+Provider settings (addresses, models turned off, added servers, the choices) are per machine, in the app's data, not in the workspace.
+
+- **How hard the model thinks** is one setting next to the model (medium unless changed), offered as the levels pi says the model supports. A model without the chosen level uses the nearest one it has.
+- **Importing from pi.** A button on the providers page copies what the user set up for their own pi: keys from `~/.pi/agent/auth.json`, OpenAI-compatible servers from `models.json` (keys written as `$NAME` are read from the environment; ones that run a command are skipped and named), and the default model and thinking level from `settings.json`. It reads those files only when pressed. A server at LM Studio's or Ollama's address updates that entry rather than adding a second one.
 
 ## Speech
 
@@ -139,8 +159,8 @@ Speech recognition runs through [Standard ASR](https://github.com/standard-voice
 
 ## Not built yet
 
-- Scheduled sessions: the morning plan, the evening check-in, the weekly review. The conversation cards they use (reworking a bad day, what a check-in will write to memory) are still drawn only from mock data, which no conversation produces now.
-- Goals, memory, experiments and connections still come from mock data in the store.
+- The weekly review. The conversation cards the check-in and a bad day use (reworking a bad day, what a check-in will write to memory) are still drawn only from mock data, which no conversation produces now.
+- Memory, experiments and connections still come from mock data in the store.
 - A skill change the agent proposes for the user to review (the 它用的方法 page can show one); for now the agent edits a skill directly, and the change shows in 修改紀錄 like any other.
 
 ## Memory

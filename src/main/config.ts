@@ -1,5 +1,6 @@
 // Settings that belong to this machine rather than to the workspace: where the
-// workspace is, and which model to use. Kept as JSON in the app's data directory.
+// workspace is, and the model providers. Kept as JSON in the app's data
+// directory; keys are elsewhere, encrypted (agent/providers.ts).
 
 import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -9,17 +10,26 @@ import { writeAtomic } from './workspace/files'
 
 export interface Config {
   workspace: string
-  model: {
-    use: 'local' | 'cloud'
-    /** An OpenAI-compatible server on this machine, like LM Studio or Ollama. */
-    local: { baseUrl: string; id?: string }
-    cloud: { provider: string; id?: string }
+  models: {
+    /** The model the agent uses. Null lets Jezo pick one that works. */
+    main: { provider: string; id: string } | null
+    /** For work Jezo starts on its own, like sorting notes. Null uses the main model. */
+    background: { provider: string; id: string } | null
+    /** How hard the model thinks before answering, where the model supports it. */
+    thinking: string
+    /** Per provider: a different address, and models turned off in the pickers. */
+    providers: Record<string, { baseUrl?: string; disabledModels?: string[] }>
+    /** OpenAI-compatible servers the user added. */
+    custom: { id: string; name: string; baseUrl: string }[]
   }
+  /** When Jezo starts the day's sessions on its own, as "08:00"; null is off. */
+  schedule: { morning: string | null; evening: string | null }
 }
 
 const defaults = (): Config => ({
   workspace: join(homedir(), 'Jezo'),
-  model: { use: 'local', local: { baseUrl: 'http://localhost:1234/v1' }, cloud: { provider: 'anthropic' } },
+  models: { main: null, background: null, thinking: 'medium', providers: {}, custom: [] },
+  schedule: { morning: '08:00', evening: '21:30' },
 })
 
 const file = () => join(app.getPath('userData'), 'config.json')
@@ -35,7 +45,8 @@ export function getConfig(): Config {
     // No config yet, or an unreadable one: start from the defaults.
   }
   const base = defaults()
-  config = { ...base, ...stored, model: { ...base.model, ...stored.model } }
+  const { model: _older, ...rest } = stored as Partial<Config> & { model?: unknown }
+  config = { ...base, ...rest, models: { ...base.models, ...rest.models }, schedule: { ...base.schedule, ...rest.schedule } }
   // Tests and development point at a workspace of their own.
   if (process.env.JEZO_WORKSPACE) config.workspace = process.env.JEZO_WORKSPACE
   return config

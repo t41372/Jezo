@@ -1,6 +1,6 @@
 // Hold-to-talk between the ⌥X window and the speech server. One utterance at a time.
 
-import { BrowserWindow, ipcMain } from 'electron'
+import { BrowserWindow, ipcMain, systemPreferences } from 'electron'
 import type { Speech } from './speech'
 
 export function serveSpeech(speech: Speech) {
@@ -15,6 +15,8 @@ export function serveSpeech(speech: Speech) {
   ipcMain.handle('speech:start', async (event) => {
     // A new utterance ends one still open.
     void current?.end()
+    // The main window asks here; the ⌥X window has asked already, before it shows.
+    if (process.platform === 'darwin' && !(await systemPreferences.askForMediaAccess('microphone'))) return false
     current = await speech.listen((text) => event.sender.send('speech:text', text))
     return current !== null
   })

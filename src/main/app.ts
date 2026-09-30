@@ -1,14 +1,16 @@
 // The main process, loaded by index.ts once the environment is set.
 
 import { join } from 'node:path'
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme, type BrowserWindowConstructorOptions } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell, type BrowserWindowConstructorOptions } from 'electron'
 import type { ThemeSource } from '../shared/bridge'
 import { AgentHost } from './agent/host'
 import { serveAgent } from './agent/ipc'
+import { Providers } from './agent/providers'
+import { Schedule, setLanguage } from './agent/schedule'
 import { historyFile, UndoLog } from './agent/undo'
 import { getConfig } from './config'
 import { registerQuickKey, unregisterQuickKey } from './hotkey'
-import { createQuickWindow, endVoice, hideQuick, startVoice, toggleTyping } from './quick'
+import { createQuickWindow, endVoice, hideQuick, resizeQuick, startVoice, toggleTyping } from './quick'
 import { serveSpeech } from './speech/ipc'
 import { Speech } from './speech/speech'
 import { serveWorkspace } from './workspace/ipc'
@@ -62,6 +64,11 @@ function createMainWindow() {
     webPreferences,
   })
   mainWindow.once('ready-to-show', () => mainWindow?.show())
+  // Links, like where to get an API key, open in the browser, not in a Jezo window.
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//.test(url)) void shell.openExternal(url)
+    return { action: 'deny' }
+  })
   mainWindow.on('closed', () => {
     mainWindow = null
     // The hidden ⌥X window would otherwise keep the app running on Windows and Linux.
@@ -78,20 +85,28 @@ ipcMain.on('context:set', (_, pageTitle: string) => {
 })
 ipcMain.handle('quick:can-hold', () => canHold)
 ipcMain.on('quick:hide', hideQuick)
-ipcMain.on('quick:continue', (_, session: string) => {
-  hideQuick()
+ipcMain.on('quick:resize', (_, height: number) => resizeQuick(height))
+/** Brings the main window forward with a conversation open. */
+function openSession(session: string) {
   const fresh = !mainWindow
   if (fresh) createMainWindow()
   const window = mainWindow!
   window.show()
   window.focus()
-  // A window that was closed has to load its page before it can take the text.
-  const deliver = () => window.webContents.send('quick:continued', session)
+  // A window that was closed has to load its page before it can take the conversation.
+  const deliver = () => window.webContents.send('session:open', session)
   if (fresh) window.webContents.once('did-finish-load', deliver)
   else deliver()
+}
+
+ipcMain.on('quick:continue', (_, session: string) => {
+  hideQuick()
+  openSession(session)
 })
+ipcMain.on('language:set', (_, language: string) => setLanguage(language))
 
 let workspace: Workspace | null = null
+let schedule: Schedule | null = null
 const speech = new Speech()
 
 /** Opens the workspace, creating it on first run. The seeded skills follow the OS language. */
@@ -102,9 +117,13 @@ async function openWorkspace() {
   await workspace.open()
   serveWorkspace(workspace)
   const undo = new UndoLog(workspace, historyFile(app.getPath('userData')))
-  const host = new AgentHost(workspace, undo, () => getConfig().model)
+  const providers = new Providers()
+  await providers.open()
+  const host = new AgentHost(workspace, undo, providers)
   await host.open()
-  serveAgent(host, undo)
+  serveAgent(host, undo, providers)
+  schedule = new Schedule(host, providers, openSession)
+  schedule.start()
   serveSpeech(speech)
   // Start the speech server early, so the first hold of ⌥X doesn't wait for Python to start.
   setTimeout(() => void speech.start(), 3000)
@@ -144,5 +163,6 @@ app.whenReady().then(async () => {
 app.on('will-quit', () => {
   unregisterQuickKey()
   speech.stop()
+  schedule?.stop()
   workspace?.close()
 })

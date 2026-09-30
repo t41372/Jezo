@@ -168,10 +168,7 @@ function NowCard({ todo, onOpen }: { todo: Todo; onOpen: () => void }) {
             <>
               <Button
                 className="px-4"
-                onClick={() => {
-                  setStarted(todo.id, null)
-                  setDone(todo.id, true)
-                }}
+                onClick={() => setDone(todo.id, true)}
               >
                 {t('focus.done')}
               </Button>

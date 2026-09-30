@@ -35,6 +35,9 @@
   --border: oklch(0.9 0.01 265);
   --input: oklch(0.9 0.01 265);
   --ring: oklch(0.68 0.13 285);
+  /* A control's chosen amount, like the thinking slider's fill. The same blue in both themes. */
+  --brand: oklch(0.6 0.17 258);
+  --brand-high: oklch(0.63 0.2 300);
   --radius: 0.625rem;
 
   /* Agent proposals: anything the agent suggested that the user hasn't accepted. */
@@ -93,6 +96,8 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-brand: var(--brand);
+  --color-brand-high: var(--brand-high);
   --color-draft: var(--draft);
   --color-draft-bg: var(--draft-bg);
   --color-draft-chip: var(--draft-chip);
@@ -195,5 +200,20 @@ body[data-ec-outside]
 @layer base {
   :is(button, a, input, textarea, select, label, summary, [contenteditable], [role="button"], [role="option"], [role="menuitem"], [role="tab"], [role="checkbox"], [role="switch"], [role="slider"]) {
     -webkit-app-region: no-drag;
+  }
+}
+
+/* Specks drifting along the thinking slider's fill at its top level. */
+@keyframes jezo-drift {
+  from {
+    transform: translateX(0);
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  to {
+    transform: translateX(28px);
+    opacity: 0;
   }
 }

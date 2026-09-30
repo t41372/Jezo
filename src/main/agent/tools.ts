@@ -144,7 +144,9 @@ export function createTools(workspace: Workspace, context: () => RunContext): To
       title: Type.Optional(Type.String()),
       estimate: Type.Optional(Type.Integer({ minimum: 1 })),
       scheduled: Type.Optional(Type.String({ description: 'Local time, like 2026-09-29T09:30, or "" for the backlog.' })),
-      userAskedForThisTime: Type.Optional(Type.Boolean({ description: 'True when the user named this time themselves; then it is theirs, not a proposal.' })),
+      userAskedForThisTime: Type.Optional(
+        Type.Boolean({ description: 'Set true when the user told you this exact time, like "排到明天晚上八點". Then the time is theirs, not your proposal.' }),
+      ),
       goal: Type.Optional(Type.String({ description: 'A goal id, or "" for none.' })),
       cue: Type.Optional(Type.String({ description: 'The situation it gets done in, or "" for none.' })),
       why: Type.Optional(Type.String()),
@@ -192,6 +194,29 @@ export function createTools(workspace: Workspace, context: () => RunContext): To
     },
   })
 
+  const todosList = defineTool({
+    name: 'todos_list',
+    label: 'List todos',
+    description:
+      'Lists todos in one compact table, instead of reading their files one by one: everything not done, plus what was done in the given days. Read a todo file only when you need its steps or notes.',
+    parameters: Type.Object({
+      doneSince: Type.Optional(Type.String({ description: 'Also list todos done on or after this date, like 2026-09-22.' })),
+    }),
+    async execute(_id, params) {
+      const rows = workspace
+        .list()
+        .filter((i) => i.kind === 'todo')
+        .filter((i) => i.data.state !== 'done' || (params.doneSince && String(i.data.completed ?? i.data.scheduled ?? '') >= params.doneSince))
+        .sort((a, b) => String(a.data.scheduled ?? '~').localeCompare(String(b.data.scheduled ?? '~')))
+        .map((i) => {
+          const d = i.data
+          const extra = [d.goal && `goal ${d.goal}`, d.cue && `cue ${d.cue}`, d.amount !== undefined && `amount ${d.amount}`].filter(Boolean).join(', ')
+          return `- ${describe(d)}${extra ? ` (${extra})` : ''}`
+        })
+      return { content: text(rows.length ? rows.join('\n') : 'No todos.'), details: undefined }
+    },
+  })
+
   const askUser = defineTool({
     name: 'ask_user',
     label: 'Ask the user',
@@ -209,6 +234,7 @@ export function createTools(workspace: Workspace, context: () => RunContext): To
     createLsToolDefinition(root),
     createWriteToolDefinition(root, { operations: writeOps }),
     createEditToolDefinition(root, { operations: editOps }),
+    todosList,
     todosPropose,
     todosUpdate,
     notesPropose,
@@ -216,7 +242,7 @@ export function createTools(workspace: Workspace, context: () => RunContext): To
   ] as ToolDefinition[]
 }
 
-export const TOOL_NAMES = ['read', 'ls', 'write', 'edit', 'todos_propose', 'todos_update', 'notes_propose', 'ask_user']
+export const TOOL_NAMES = ['read', 'ls', 'write', 'edit', 'todos_list', 'todos_propose', 'todos_update', 'notes_propose', 'ask_user']
 
 function nowLocal(at = new Date()) {
   const pad = (n: number) => String(n).padStart(2, '0')

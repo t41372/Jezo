@@ -29,6 +29,8 @@ interface Run {
   files: FileChange[]
   /** Writes a check refused before the agent got them right. */
   retries: number
+  /** The agent said it changed something and hadn't; it was sent back to do it. */
+  claimed?: boolean
   finished: boolean
   undone?: boolean
 }
@@ -60,6 +62,16 @@ export class UndoLog {
   start(run: Omit<Run, 'files' | 'retries' | 'finished' | 'summary'>) {
     this.runs.unshift({ ...run, summary: '', files: [], retries: 0, finished: false })
     this.runs.length = Math.min(this.runs.length, KEEP)
+  }
+
+  /** Whether the run has changed any file so far. */
+  changed(runId: string) {
+    return Boolean(this.runs.find((r) => r.id === runId)?.files.length)
+  }
+
+  claimedWithoutChange(runId: string) {
+    const run = this.runs.find((r) => r.id === runId)
+    if (run) run.claimed = true
   }
 
   /** A check refused one of the agent's writes. */
@@ -122,7 +134,9 @@ export class UndoLog {
         source: r.trigger,
         session: r.session,
         summary: r.summary,
-        ...(r.retries > 0 && { check: { level: 'warn' as const, retries: r.retries } }),
+        ...(r.claimed
+          ? { check: { level: 'error' as const, kind: 'claimed-without-change' as const } }
+          : r.retries > 0 && { check: { level: 'warn' as const, retries: r.retries } }),
         files: r.files.map((f) => ({ path: f.path, lines: diff(f.before, f.after) })),
         ...(r.undone && { undone: true }),
       }))

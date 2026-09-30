@@ -32,5 +32,21 @@
   "minutes": "minutes",
   "ideas": "Goal ideas",
   "ideasHint": "From Notes. Pick one to talk it into a goal with the agent.",
-  "ideaPrefill": "I want to turn \"{{title}}\" into a goal"
+  "ideaPrefill": "I want to turn \"{{title}}\" into a goal",
+  "weekShort": "This week {{done}} / {{total}} {{unit}}",
+  "weekLong": "This week: {{done}} {{unit}} done, {{planned}} {{unit}} scheduled",
+  "due": {
+    "days_one": "{{count}} day left",
+    "days_other": "{{count}} days left",
+    "weeks_one": "{{count}} week left",
+    "weeks_other": "{{count}} weeks left",
+    "past": "Past due"
+  },
+  "estimates": {
+    "few": "Not enough records yet",
+    "under": "Often {{percent}}% under",
+    "over": "Often {{percent}}% over",
+    "close": "About right",
+    "none": "After a few todos you started with Start and finished, this compares your estimates with the time they took."
+  }
 }

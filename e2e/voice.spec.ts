@@ -46,7 +46,7 @@ function spoken(sentence: string) {
 
 test.describe('holding ⌥X', () => {
   test.skip(!ready, 'Needs macOS on Apple Silicon and uv.')
-  test.setTimeout(600_000)
+  test.describe.configure({ timeout: 600_000 })
   test.use({
     prepare: {
       args: [
@@ -80,7 +80,8 @@ test.describe('holding ⌥X', () => {
     await quick.waitForTimeout(1500)
     await hotkey('voice-end')
 
-    await expect(quick.locator('input')).toHaveValue(/打給媽.*明天晚上八點/, { timeout: 30_000 })
+    // What was said is sent as the question, and shows as one.
+    await expect(quick.locator('[data-selectable]').first()).toHaveText(/打給媽.*明天晚上八點/, { timeout: 30_000 })
     await expect.poll(() => read('todos/items/t-u2.md').data.scheduled, { timeout: 240_000 }).toMatch(/T20:00$/)
   })
 })

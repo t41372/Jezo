@@ -7,6 +7,7 @@ This directory is the user's life as Jezo keeps it: their todos, goals, notes, a
 Each top-level directory with a `manifest.yaml` holds one kind of item:
 
 - `todos/`: things to do, scheduled or in the backlog
+- `goals/`: what the user is working toward, with the rules that get it done
 - `notes/`: things the user jotted down without sorting (隨手記)
 - `sessions/`: conversations, written by the app. Read them if you need an earlier conversation; don't edit them.
 - `skills/`: methods that aren't one plugin's, like how to estimate time. A plugin's own methods are in its `skills/`. The user chose these; follow the ones that apply, and don't change a skill without telling them why.

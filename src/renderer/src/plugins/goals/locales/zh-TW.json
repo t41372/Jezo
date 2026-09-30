@@ -30,5 +30,19 @@
   "minutes": "分鐘",
   "ideas": "還在想的目標",
   "ideasHint": "從隨手記來的。點一個，跟 agent 聊聊怎麼變成目標。",
-  "ideaPrefill": "我想把「{{title}}」變成目標"
+  "ideaPrefill": "我想把「{{title}}」變成目標",
+  "weekShort": "這週 {{done}} / {{total}} {{unit}}",
+  "weekLong": "這週：做了 {{done}} {{unit}}，還有 {{planned}} {{unit}}排著",
+  "due": {
+    "days_other": "還有 {{count}} 天",
+    "weeks_other": "還有 {{count}} 週",
+    "past": "已經過了"
+  },
+  "estimates": {
+    "few": "紀錄還太少",
+    "under": "常少估 {{percent}}%",
+    "over": "常高估 {{percent}}%",
+    "close": "估得差不多",
+    "none": "做完幾件有按「開始」的待辦之後，這裡會比較你估的和實際花的時間。"
+  }
 }

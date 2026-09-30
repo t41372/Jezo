@@ -61,7 +61,8 @@
       "todos_propose": "提議待辦",
       "todos_update": "改待辦",
       "notes_propose": "提議怎麼整理",
-      "ask_user": "問你"
+      "ask_user": "問你",
+      "todos_list": "看待辦"
     }
   },
   "working": "正在想…",
