@@ -13,6 +13,7 @@ import { dayLabel, dayTime } from '@/lib/time'
 import { offerUndo } from '@/lib/undo'
 import { ListCard, Row } from '@/components/ListCard'
 import { CalendarConnections } from './CalendarConnections'
+import { AddSkillDialog, RemoveSkillDialog, SkillSource } from './SkillDialogs'
 import { SectionHeader } from './parts'
 
 export function Memories() {
@@ -66,7 +67,7 @@ export function Skills() {
   const { toggleSkill, navigate } = useStore.getState()
   return (
     <>
-      <SectionHeader title={t('sections.skills.title')}>{t('skills.intro')}</SectionHeader>
+      <SectionHeader title={t('sections.skills.title')} action={<AddSkillDialog />}>{t('skills.intro')}</SectionHeader>
       <ListCard>
         {skills.map((k) => (
           <div
@@ -79,6 +80,7 @@ export function Skills() {
                 {k.proposal && <Badge className="bg-draft-chip text-draft-ink">{t('skills.proposalBadge')}</Badge>}
               </div>
               <div className="mt-0.5 text-[12.5px] text-pretty text-muted-foreground">{k.description}</div>
+              <div className="mt-0.5 text-[12.5px] text-muted-foreground"><SkillSource skill={k} /></div>
             </button>
             <Switch checked={k.enabled} onCheckedChange={() => toggleSkill(k.id)} aria-label={k.title} />
           </div>
@@ -108,6 +110,18 @@ export function SkillView({ id }: { id: string }) {
         </div>
         <Switch checked={skill.enabled} onCheckedChange={() => toggleSkill(skill.id)} aria-label={skill.title} className="mt-2.5" />
       </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="flex-1 text-[13px] text-muted-foreground"><SkillSource skill={skill} /></span>
+        {skill.updatable && <AddSkillDialog update={skill} />}
+        {skill.removable && <RemoveSkillDialog skill={skill} />}
+      </div>
+      {skill.origin && /^https?:\/\//.test(skill.origin.source) && (
+        <a href={skill.origin.source} target="_blank" rel="noreferrer" className="self-start break-all text-[12.5px] text-muted-foreground underline underline-offset-2">
+          {skill.origin.source}
+        </a>
+      )}
+      {skill.programs && <p className="text-[13px] leading-relaxed text-muted-foreground">{t('skills.programs')}</p>}
 
       {skill.proposal && (
         <Card variant="draft" className="gap-3 px-4 py-3.5">
@@ -248,8 +262,7 @@ export function History() {
             {h.undone ? (
               <span className="text-[12.5px] text-muted-foreground">{t('history.undone')}</span>
             ) : (
-              // Only the agent's own changes can be undone, and a change that never landed has nothing to undo.
-              h.source !== 'you' &&
+              // A change that never landed has nothing to undo.
               h.check?.level !== 'error' && (
                 <Button variant="outline" size="sm" onClick={() => undo(h.id)}>
                   {t('history.undo')}

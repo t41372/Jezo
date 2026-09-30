@@ -46,6 +46,9 @@ const bridge: JezoBridge = {
     disconnectMac: () => ipcRenderer.invoke('calendar:disconnect-mac'),
     openMacSettings: () => ipcRenderer.invoke('calendar:open-mac-settings'),
     setHidden: (id, hidden) => ipcRenderer.invoke('calendar:set-hidden', id, hidden),
+    setGoogleClient: (id, secret) => ipcRenderer.invoke('calendar:set-google-client', id, secret),
+    connectGoogle: (page) => ipcRenderer.invoke('calendar:connect-google', page),
+    disconnectGoogle: (account) => ipcRenderer.invoke('calendar:disconnect-google', account),
     onChange: (listener) => listen<void>('calendar:changed', () => listener()),
   },
   schedule: {
@@ -55,6 +58,14 @@ const bridge: JezoBridge = {
   skills: {
     list: () => ipcRenderer.invoke('skills:list'),
     setEnabled: (id, enabled) => ipcRenderer.invoke('skills:set-enabled', id, enabled),
+    preview: (source) => ipcRenderer.invoke('skills:preview', source),
+    pick: () => ipcRenderer.invoke('skills:pick'),
+    previewUpdate: (id) => ipcRenderer.invoke('skills:preview-update', id),
+    install: (token, paths, replace, overwriteModified) => ipcRenderer.invoke('skills:install', token, paths, replace, overwriteModified),
+    write: (input, replace) => ipcRenderer.invoke('skills:write', input, replace),
+    discard: (token) => ipcRenderer.invoke('skills:discard', token),
+    remove: (id) => ipcRenderer.invoke('skills:remove', id),
+    onChange: (listener) => listen<void>('skills:changed', listener),
   },
   memory: {
     remember: (input) => ipcRenderer.invoke('memory:remember', input),

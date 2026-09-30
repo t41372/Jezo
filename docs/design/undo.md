@@ -10,7 +10,7 @@ The original concept made the whole workspace a git repo, with one commit per ag
 
 Undo exists so that when Jezo's agent makes a mistake, the user can roll it back right away.
 
-- **Only the agent's changes are undone.** Undo never reverts something the user did.
+- **The agent's changes are undone.** Ordinary GUI edits are not in history. Removing a top-level skill is one explicit exception: its dialog promises undo in 修改紀錄, so the removal is recorded as a user action ([skills.md](skills.md)).
 - **History is bounded.** It keeps the last 100 runs (`src/main/agent/undo.ts`), with each file's content before and after, so it holds private copies until they age out. Losing it, or being unable to rebuild it, is acceptable.
 - **Users never see git or a CLI.**
 
@@ -46,6 +46,8 @@ Follow Hermes' model, with storage outside the workspace. Built on 2026-09-29 (`
 2. **Undo checks before it reverts.** A file is restored only if its current hash still matches what the agent wrote. If the user has changed it since, it's left alone, and the preview says so, for example: "3 changes undone, 1 kept because you edited it afterward".
 3. **For structured data, go per field** if file-level checks turn out to be too coarse. Record `{entity id, field, old, new}`, so the agent's change to one field can be undone even when the user edited a different field in the same file.
 4. **Keep only recent turns.** History older than a short window is dropped. Losing it is fine.
+
+Skill installations and removals record text through the workspace. Binary companions are written and removed directly and are not covered by undo. Undoing an install can leave those files behind; undoing a removal restores only the text and provenance.
 
 ## Open questions
 

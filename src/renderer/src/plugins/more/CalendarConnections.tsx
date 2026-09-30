@@ -1,10 +1,11 @@
 // The calendars part of 連接: the Mac's own calendars, which bring every account
-// added to the Mac, and ICS subscriptions. Each calendar can be hidden
+// added to the Mac, Google accounts through the user's own client, and ICS
+// subscriptions. Each calendar can be hidden
 // (docs/design/calendar.md).
 
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { CalendarInfo, CalendarSource } from '../../../../shared/calendar'
+import type { CalendarInfo, CalendarSource, CalendarStatus } from '../../../../shared/calendar'
 import { ListCard } from '@/components/ListCard'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
@@ -117,6 +118,166 @@ function SubscriptionRow({ source, calendar }: { source: CalendarSource; calenda
   )
 }
 
+/**
+ * Setting up the user's own Google client, step by step. Each step links to
+ * the page in Google Cloud where it's done. It takes about five minutes, once.
+ */
+function GoogleSetupDialog({ again }: { again?: boolean }) {
+  const { t } = useTranslation('more')
+  const [open, setOpen] = useState(false)
+  const [id, setId] = useState('')
+  const [secret, setSecret] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const steps = [
+    ['project', 'https://console.cloud.google.com/projectcreate'],
+    ['api', 'https://console.cloud.google.com/apis/library/calendar-json.googleapis.com'],
+    ['consent', 'https://console.cloud.google.com/auth/overview'],
+    ['publish', 'https://console.cloud.google.com/auth/audience'],
+    ['client', 'https://console.cloud.google.com/auth/clients/create'],
+  ] as const
+  const save = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      await window.jezo.calendar.setGoogleClient(id, secret)
+      await window.jezo.calendar.connectGoogle({ done: t('calendars.googleDone'), failed: t('calendars.googleFailedPage') })
+      setOpen(false)
+    } catch (e) {
+      setError(reason(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger render={again ? <Button variant="ghost" size="sm" className="text-muted-foreground" /> : <Button variant="outline" size="sm" />}>
+        {again ? t('calendars.googleChangeClient') : t('calendars.googleSetUp')}
+      </DialogTrigger>
+      <DialogContent showCloseButton={false} className="gap-4 sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="text-base">{t('calendars.googleTitle')}</DialogTitle>
+          <DialogDescription className="text-[13px] leading-relaxed">{t('calendars.googleIntro')}</DialogDescription>
+        </DialogHeader>
+        <ol className="flex flex-col gap-2.5 text-[13px] leading-relaxed">
+          {steps.map(([step, url], i) => (
+            <li key={step} className="flex gap-2.5">
+              <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[11.5px] font-medium tabular-nums">{i + 1}</span>
+              <span>
+                <a href={url} target="_blank" rel="noreferrer" className="font-medium underline underline-offset-2">
+                  {t(`calendars.googleSteps.${step}.link`)}
+                </a>
+                {t(`calendars.googleSteps.${step}.then`)}
+              </span>
+            </li>
+          ))}
+        </ol>
+        <form
+          className="flex flex-col gap-3"
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (id.trim() && secret.trim()) void save()
+          }}
+        >
+          <label className="flex flex-col gap-1.5 text-[13px] font-medium">
+            {t('calendars.googleClientId')}
+            <Input value={id} onChange={(e) => setId(e.target.value)} placeholder="1234…apps.googleusercontent.com" autoComplete="off" spellCheck={false} />
+          </label>
+          <label className="flex flex-col gap-1.5 text-[13px] font-medium">
+            {t('calendars.googleClientSecret')}
+            <Input value={secret} onChange={(e) => setSecret(e.target.value)} type="password" placeholder="GOCSPX-…" autoComplete="off" />
+          </label>
+          <p className="text-[12.5px] leading-relaxed text-muted-foreground">{t('calendars.googleUnverified')}</p>
+          {error && <p className="text-[13px] text-destructive">{error}</p>}
+          <DialogFooter>
+            <DialogClose render={<Button type="button" variant="ghost" />}>{t('connections.cancel')}</DialogClose>
+            <Button type="submit" disabled={!id.trim() || !secret.trim() || busy}>
+              {busy ? t('calendars.googleWaiting') : t('calendars.googleConnect')}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function ConnectGoogle({ label }: { label: string }) {
+  const { t } = useTranslation('more')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const connect = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      await window.jezo.calendar.connectGoogle({ done: t('calendars.googleDone'), failed: t('calendars.googleFailedPage') })
+    } catch (e) {
+      setError(reason(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <span className="flex items-center gap-2">
+      {error && <span className="text-[12.5px] text-destructive">{error}</span>}
+      <Button variant="outline" size="sm" disabled={busy} onClick={() => void connect()}>
+        {busy ? t('calendars.googleWaiting') : label}
+      </Button>
+    </span>
+  )
+}
+
+function GoogleAccountRow({ source, calendars }: { source: CalendarSource; calendars: CalendarInfo[] }) {
+  const { t } = useTranslation('more')
+  const account = source.id.slice('google:'.length)
+  return (
+    <div>
+      <div className="flex items-center gap-3 px-4 py-3.5">
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[14.5px] font-medium">{source.name}</div>
+          <div className="mt-0.5 text-[12.5px] text-pretty text-muted-foreground">
+            {source.state === 'needs-access' ? <span className="text-destructive">{t('calendars.googleSignedOut', { error: source.error })}</span> : <SourceState source={source} />}
+          </div>
+        </div>
+        {source.state === 'needs-access' && <ConnectGoogle label={t('calendars.googleReconnect')} />}
+        <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => void window.jezo.calendar.disconnectGoogle(account)}>
+          {t('calendars.remove')}
+        </Button>
+      </div>
+      {calendars.length > 0 && (
+        <div className="px-4 pb-3">
+          {calendars.map((c) => (
+            <div key={c.id} className="flex items-center gap-2.5 py-1.5">
+              <Dot color={c.color} />
+              <span className="flex-1 truncate text-[13.5px]">{c.name}</span>
+              <Shown calendar={c} />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function GoogleRows({ status }: { status: CalendarStatus }) {
+  const { t } = useTranslation('more')
+  const accounts = status.sources.filter((s) => s.kind === 'google')
+  return (
+    <>
+      {accounts.map((a) => (
+        <GoogleAccountRow key={a.id} source={a} calendars={status.calendars.filter((c) => c.source === a.id)} />
+      ))}
+      <div className="flex items-center gap-3 px-4 py-3.5">
+        <div className="min-w-0 flex-1">
+          <div className="text-[14.5px] font-medium">{accounts.length ? t('calendars.googleAnother') : t('calendars.google')}</div>
+          <div className="mt-0.5 text-[12.5px] text-pretty text-muted-foreground">{status.googleClient ? t('calendars.googleReady') : t('calendars.googleDetail')}</div>
+        </div>
+        {status.googleClient && <GoogleSetupDialog again />}
+        {status.googleClient ? <ConnectGoogle label={t('calendars.googleConnect')} /> : <GoogleSetupDialog />}
+      </div>
+    </>
+  )
+}
+
 function SubscribeDialog() {
   const { t } = useTranslation('more')
   const [open, setOpen] = useState(false)
@@ -195,10 +356,10 @@ export function CalendarConnections() {
       </div>
       <ListCard>
         {mac && <MacRow source={mac} calendars={status.calendars.filter((c) => c.source === 'mac')} />}
+        <GoogleRows status={status} />
         {subscriptions.map((s) => (
           <SubscriptionRow key={s.id} source={s} calendar={status.calendars.find((c) => c.id === s.id)} />
         ))}
-        {!mac && !subscriptions.length && <div className="px-4 py-3.5 text-[13px] text-muted-foreground">{t('calendars.none')}</div>}
       </ListCard>
       <p className="px-1 text-[12.5px] text-muted-foreground">{t('calendars.readOnly')}</p>
     </section>

@@ -57,7 +57,7 @@ export interface HistoryEntry {
   id: string
   date: ISODate
   time: number
-  /** Who made the change. Only the agent's own changes are listed, since only they can be undone. */
+  /** What started the change. Explicit GUI skill removals are listed as 'you'. */
   source: Trigger | 'you'
   /** The session the change was made in. */
   session?: string

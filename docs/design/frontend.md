@@ -77,7 +77,7 @@ How a user's plugin code gets loaded at runtime is not decided.
 
 ## Data
 
-Todos and notes come from the workspace ([backend.md](backend.md)): the store applies a change at once, writes it through the main process, and takes the file as it comes back. Goals, sessions, memory, skills, experiments, history and connections are still the mockup's data in the store, shaped like the real entities so wiring them replaces the source without remodeling the UI. `bun scripts/fixture.ts <directory>` writes a workspace with the mockup's todos and notes, for development and tests. Its dates are moved so the mockup's "today" is the real today.
+Todos and notes come from the workspace ([backend.md](backend.md)): the store applies a change at once, writes it through the main process, and takes the file as it comes back. Experiments and connections are still the mockup's data in the store, shaped like the real entities so wiring them replaces the source without remodeling the UI. `bun scripts/fixture.ts <directory>` writes a workspace with the mockup's todos and notes, for development and tests. Its dates are moved so the mockup's "today" is the real today.
 
 - **Each window changes only the entities it's told about.** When a file comes back, the store replaces that entity and leaves the rest, which may have writes of their own on the way; re-reading the whole list would briefly undo a drag that hasn't reached the disk yet.
 
@@ -88,7 +88,7 @@ Todos and notes come from the workspace ([backend.md](backend.md)): the store ap
 - **A calendar event** comes from a connected calendar and is read-only in Jezo. An all-day event starts at 0 and its hours are whole days.
 - **The backlog has an order,** and a todo dropped on it goes where it was dropped. On disk the order is each todo's `rank`, a fractional index, so a move writes one file ([backend.md](backend.md)).
 - **Moving a todo on the calendar settles it:** a draft becomes a real todo and a proposed time becomes the user's. Resizing its block changes its estimate.
-- **The change history** is a list of agent actions with per-entry undo, following the semantics in [undo.md](undo.md). The mockup offered undo on the user's own edit too; that's removed, because undo only reverts what the agent did.
+- **The change history** is a list of agent actions with per-entry undo, following the semantics in [undo.md](undo.md). Ordinary GUI edits are not in history. Skill removal is an explicit exception: its dialog offers undo in 修改紀錄 ([skills.md](skills.md)).
 - **Conversations and the change history come from Jezo's agent** ([backend.md](backend.md)). The chat folds what the agent did into one line (「看了 3 個檔案，改了 1 個」) that opens to each step, shows a quiet 「正在想…」 until the first words arrive, and turns the send button into a stop button while the agent works. A message typed then waits in the box.
 
 ## Translation
@@ -164,6 +164,7 @@ v2 left some screens and states undrawn. These follow the older mockups (`Life A
 - **Steps** in a todo can be checked off.
 - **Reworking a bad day** (今天不太順) is a card in the chat: the user says how they're doing, the agent drafts what to keep, move, and drop, nothing changes until they accept, and accepting can be undone. The weekly report records it as a rework, not as missed work.
 - **Evening check-in** shows what the session will write to memory before writing it, including inferences left out for lack of evidence.
+- **Adding methods** uses the existing Dialog, Input, Button and ListCard styles. The list shows provenance; the view offers updates for remote sources and removal for top-level workspace methods. Replacement and updates over local edits ask inside the dialog ([skills.md](skills.md)). Both languages have the same controls and messages.
 - **A method (skill)** opens to its SKILL.md. When the agent wants to change it, the page shows why, the evidence, and the diff, and the user applies or rejects it.
 - **Change history** entries open to the files each change touched, as a diff, including changes a check blocked.
 - **A goal's page** draws what's scheduled this week but not done as a hatched segment after the solid progress, marks rules that work less than half the time, shows the agent's proposed rewrite of such a rule as a draft, and charts estimates against actual time.

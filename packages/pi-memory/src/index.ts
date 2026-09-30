@@ -64,22 +64,24 @@ export function memoryExtension(memory: Memory | ((cwd: string) => Memory)): Ext
       }
     })
 
+    const rememberParams = Type.Object({
+      text: Type.String({ description: 'One declarative sentence, like "週日不排工作".' }),
+      about: Type.Optional(Type.Union([Type.Literal('preference'), Type.Literal('fact'), Type.Literal('pattern'), Type.Literal('person'), Type.Literal('commitment')])),
+      epistemic: Type.Union([Type.Literal('stated'), Type.Literal('inferred')], { description: 'stated: the user said it. inferred: you concluded it.' }),
+      evidence: Type.Optional(Type.Array(Type.String(), { description: 'Files it rests on, relative to the workspace, like todos/items/t-1.md. Required for inferred.' })),
+      confidence: Type.Optional(Type.Union([Type.Literal('low'), Type.Literal('medium'), Type.Literal('high')], { description: 'Required for inferred.' })),
+      valid_until: Type.Optional(Type.String({ description: 'A date after which it no longer holds, like 2026-12-31.' })),
+      replaces: Type.Optional(Type.String({ description: 'The id of a memory this one replaces, like an older preference.' })),
+      again: Type.Optional(Type.Boolean({ description: 'Only when the user asked in this conversation to remember something they had deleted.' })),
+      separate: Type.Optional(Type.Boolean({ description: 'Only after a save was held back for related memories, when this is a separate fact and they should all stay.' })),
+    })
+
     pi.registerTool({
       name: 'memory_remember',
       label: 'Remember',
       description:
         'Saves one thing about the user to long-term memory, as one short declarative sentence. Returns its id; without that id, nothing was saved.',
-      parameters: Type.Object({
-        text: Type.String({ description: 'One declarative sentence, like "週日不排工作".' }),
-        about: Type.Optional(Type.Union([Type.Literal('preference'), Type.Literal('fact'), Type.Literal('pattern'), Type.Literal('person'), Type.Literal('commitment')])),
-        epistemic: Type.Union([Type.Literal('stated'), Type.Literal('inferred')], { description: 'stated: the user said it. inferred: you concluded it.' }),
-        evidence: Type.Optional(Type.Array(Type.String(), { description: 'Files it rests on, relative to the workspace, like todos/items/t-1.md. Required for inferred.' })),
-        confidence: Type.Optional(Type.Union([Type.Literal('low'), Type.Literal('medium'), Type.Literal('high')], { description: 'Required for inferred.' })),
-        valid_until: Type.Optional(Type.String({ description: 'A date after which it no longer holds, like 2026-12-31.' })),
-        replaces: Type.Optional(Type.String({ description: 'The id of a memory this one replaces, like an older preference.' })),
-        again: Type.Optional(Type.Boolean({ description: 'Only when the user asked in this conversation to remember something they had deleted.' })),
-        separate: Type.Optional(Type.Boolean({ description: 'Only after a save was held back for related memories, when this is a separate fact and they should all stay.' })),
-      }),
+      parameters: rememberParams,
       async execute(_id, params, _signal, _update, ctx) {
         const m = await ready(ctx.cwd)
         const key = `remember:${params.text.trim()}`
@@ -87,18 +89,19 @@ export function memoryExtension(memory: Memory | ((cwd: string) => Memory)): Ext
         // Any earlier hold counts, since a retry may be worded differently.
         const held = [...pending.keys()].some((k) => k.startsWith('remember:'))
         const input = params.separate && !held ? { ...params, separate: undefined } : params
+        const garbled = ignored(params, Object.keys(rememberParams.properties))
         try {
           const r = await m.remember(input)
           pending.delete(key)
           if (r.supersedes) for (const id of r.supersedes) pending.delete(`forget:${id}`)
-          return { content: text(`Saved ${r.id}${r.supersedes ? `, replacing ${r.supersedes.join(', ')}` : ''}.`), details: { id: r.id } }
+          return { content: text(`Saved ${r.id}${r.supersedes ? `, replacing ${r.supersedes.join(', ')}` : ''}.${garbled}`), details: { id: r.id } }
         } catch (error) {
           if (!(error instanceof MemoryError)) throw error
           if (error.message.startsWith('Not saved yet.')) {
             pending.set(key, `Save "${params.text.trim()}": call memory_remember with replaces, or with separate: true.`)
-            throw error
+            throw new Error(error.message + garbled)
           }
-          throw new Error(`Not saved: ${error.message}`)
+          throw new Error(`Not saved: ${error.message}${garbled}`)
         }
       },
     })
@@ -142,6 +145,15 @@ export function memoryExtension(memory: Memory | ((cwd: string) => Memory)): Ext
       },
     })
   }
+}
+
+/**
+ * Field names a small model garbled, like `"replaces id=\"m-1\""`. Saying so lets
+ * it correct them; otherwise it keeps sending the same call, sure it set them.
+ */
+function ignored(params: object, known: string[]) {
+  const unknown = Object.keys(params).filter((k) => !known.includes(k))
+  return unknown.length ? `\nIgnored ${unknown.map((k) => JSON.stringify(k)).join(', ')}: not a field, so it wasn't set. The fields are ${known.join(', ')}.` : ''
 }
 
 /** Standalone: memory in ./memory under the working directory; everything said in a session counts as the user's. */

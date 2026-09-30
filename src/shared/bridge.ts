@@ -3,6 +3,8 @@
 import type { CalendarEvent, CalendarSource, CalendarStatus } from './calendar'
 import type { HistoryEntry, SessionView, Trigger, UndoResult } from './session'
 import type { Fields, Item, ItemChanges } from './workspace'
+import type { SkillInfo, SkillInstallResult, SkillPreview } from './skills'
+export type { SkillInfo } from './skills'
 
 export type ThemeSource = 'system' | 'light' | 'dark'
 
@@ -92,20 +94,6 @@ export interface Schedule {
   evening: string | null
 }
 
-/** A skill as the 它用的方法 page shows it. `id` is its directory in the workspace. */
-export interface SkillInfo {
-  id: string
-  name: string
-  /** The title the user sees, from `metadata.title`, or its name. */
-  title: string
-  description: string
-  enabled: boolean
-  /** The body of SKILL.md. */
-  instructions: string
-  /** Its frontmatter doesn't parse. */
-  broken?: boolean
-}
-
 /** Speech recognition: whether it's installed, and where an install is. */
 export interface SpeechStatus {
   installed: boolean
@@ -168,6 +156,11 @@ export interface JezoBridge {
     /** Opens macOS's privacy settings for calendars, where access denied earlier is turned back on. */
     openMacSettings(): Promise<void>
     setHidden(calendar: string, hidden: boolean): Promise<void>
+    /** Keeps the user's own Google OAuth client (a Desktop client from their Google Cloud project) in the keychain. */
+    setGoogleClient(id: string, secret: string): Promise<void>
+    /** Signs in to a Google account in the browser; resolves to its email. `page` is what the browser tab says afterward. */
+    connectGoogle(page: { done: string; failed: string }): Promise<string>
+    disconnectGoogle(account: string): Promise<void>
     /** Called when anything changes: a calendar synced, one was added, an event moved on the Mac. */
     onChange(listener: () => void): () => void
   }
@@ -180,6 +173,14 @@ export interface JezoBridge {
   skills: {
     list(): Promise<SkillInfo[]>
     setEnabled(id: string, enabled: boolean): Promise<SkillInfo[]>
+    preview(source: string): Promise<SkillPreview>
+    pick(): Promise<SkillPreview | null>
+    previewUpdate(id: string): Promise<SkillPreview>
+    install(token: string, paths: string[], replace?: boolean, overwriteModified?: boolean): Promise<SkillInstallResult>
+    write(input: { name: string; description: string; instructions: string }, replace?: boolean): Promise<SkillInstallResult>
+    discard(token: string): Promise<void>
+    remove(id: string): Promise<void>
+    onChange(listener: () => void): () => void
   }
   /**
    * Long-term memory (docs/design/memory.md). Forgetting keeps the same words

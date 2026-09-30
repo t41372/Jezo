@@ -10,8 +10,8 @@ import { hashOf, newId, readIfExists, TEMP_SUFFIX, writeAtomic } from './files'
 import { FrontmatterError, parse, patch } from './frontmatter'
 import { compileSchema, type Check } from './schema'
 
-/** Who is writing, so the undo record knows which changes are the agent's (docs/design/undo.md). */
-export type Actor = { by: 'user' } | { by: 'agent'; run: string }
+/** Who is writing. An explicit user history action may carry a run too (docs/design/undo.md). */
+export type Actor = { by: 'user'; run?: string } | { by: 'agent'; run: string }
 
 /** A file about to change. `before` or `after` is null when the file is created or deleted. */
 export interface Write {
@@ -42,6 +42,7 @@ export class Workspace {
   private items = new Map<string, Item>()
   private byPath = new Map<string, string>()
   private listeners = new Set<(changes: ItemChanges) => void>()
+  private fileListeners = new Set<(path: string) => void>()
   private writeListeners = new Set<(write: Write) => void>()
   private watcher: FSWatcher | null = null
   private pending = new Set<string>()
@@ -121,6 +122,12 @@ export class Workspace {
     return () => this.writeListeners.delete(listener)
   }
 
+  /** File changes, including skills, which aren't indexed as items. */
+  onFileChange(listener: (path: string) => void) {
+    this.fileListeners.add(listener)
+    return () => this.fileListeners.delete(listener)
+  }
+
   abs(path: string) {
     return join(this.root, path)
   }
@@ -180,6 +187,7 @@ export class Workspace {
       if (text === null) return
       for (const listener of this.writeListeners) listener({ path, before: text, after: null, actor })
       await rm(this.abs(path), { force: true })
+      for (const listener of this.fileListeners) listener(path)
       const id = this.drop(path)
       if (id) this.emit({ changed: [], removed: [id] })
     })
@@ -200,6 +208,7 @@ export class Workspace {
   private async writeNow(path: string, text: string, actor: Actor, before: string | null) {
     for (const listener of this.writeListeners) listener({ path, before, after: text, actor })
     await writeAtomic(this.abs(path), text)
+    for (const listener of this.fileListeners) listener(path)
     const changes = await this.reread(path, text)
     if (changes) this.emit(changes)
   }
@@ -308,6 +317,7 @@ export class Workspace {
   /** A file changed on disk. Batches events, since one save can fire several. */
   private hint(path: string) {
     if (path.endsWith(TEMP_SUFFIX) || path.startsWith('sessions/') || path.startsWith('.')) return
+    for (const listener of this.fileListeners) listener(path)
     if (MANIFEST.test(path)) {
       void this.loadKinds().then(() => this.rescan())
       return

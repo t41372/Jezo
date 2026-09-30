@@ -30,19 +30,26 @@ const knownZone = (name: string) => {
   }
 }
 
-/** The instant a wall-clock time in an IANA zone names. */
+/** How far a zone is from UTC at an instant, in milliseconds. */
+function offsetAt(zone: string, at: number) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: zone, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric',
+  }).formatToParts(new Date(at))
+  const get = (type: string) => Number(parts.find((p) => p.type === type)!.value)
+  return Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'), get('second')) - at
+}
+
+/**
+ * The instant a wall-clock time in an IANA zone names. Around a daylight-saving
+ * change, RFC 5545 decides: a time that happens twice is the first one, and a
+ * time that doesn't happen (the skipped hour) uses the offset from before the change.
+ */
 function inZone(t: ICAL.Time, zone: string): Date {
-  const asUtc = Date.UTC(t.year, t.month - 1, t.day, t.hour, t.minute, t.second)
-  // How far the zone is from UTC at about that time; then once more, in case the first guess crossed a change.
-  const offset = (at: number) => {
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: zone, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric',
-    }).formatToParts(new Date(at))
-    const get = (type: string) => Number(parts.find((p) => p.type === type)!.value)
-    return Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'), get('second')) - at
-  }
-  const first = asUtc - offset(asUtc)
-  return new Date(asUtc - offset(first))
+  const wall = Date.UTC(t.year, t.month - 1, t.day, t.hour, t.minute, t.second)
+  const before = offsetAt(zone, wall - 86_400_000)
+  const after = offsetAt(zone, wall + 86_400_000)
+  const fits = [...new Set([before, after])].map((o) => wall - o).filter((at) => offsetAt(zone, at) === wall - at)
+  return new Date(fits.length ? Math.min(...fits) : wall - before)
 }
 
 export function readIcs(text: string, from: string, to: string): IcsCalendar {
@@ -77,6 +84,9 @@ export function readIcs(text: string, from: string, to: string): IcsCalendar {
   const rangeStart = new Date(`${from}T00:00`)
   const rangeEnd = new Date(`${to}T00:00`)
 
+  /** A UID for events that have none, from what they say: the same on every read. */
+  const uidOf = (e: ICAL.Event) => e.uid || `no-uid:${e.summary ?? ''}:${e.startDate?.toString() ?? ''}`
+
   // Moved or cancelled occurrences arrive as separate VEVENTs with the series' UID and a RECURRENCE-ID.
   const series = new Map<string, ICAL.Event>()
   const exceptions: ICAL.Component[] = []
@@ -87,7 +97,7 @@ export function readIcs(text: string, from: string, to: string): IcsCalendar {
       else {
         const e = new ICAL.Event(vevent)
         if (!e.startDate) continue
-        if (e.isRecurring()) series.set(e.uid, e)
+        if (e.isRecurring()) series.set(uidOf(e), e)
         else singles.push(e)
       }
     } catch {
@@ -144,7 +154,7 @@ export function readIcs(text: string, from: string, to: string): IcsCalendar {
   for (const e of singles) {
     try {
       const recurrenceId = e.component.getFirstPropertyValue('recurrence-id') as ICAL.Time | null
-      add(e, e.startDate, e.endDate, `${e.uid}@${(recurrenceId ?? e.startDate).toString()}`, false)
+      add(e, e.startDate, e.endDate, `${uidOf(e)}@${(recurrenceId ?? e.startDate).toString()}`, false)
     } catch {
       // As above.
     }
@@ -164,7 +174,7 @@ export function readIcs(text: string, from: string, to: string): IcsCalendar {
         if (next.compare(stop) >= 0) break
         if (next.compare(earliest) < 0) continue
         const d = e.getOccurrenceDetails(next)
-        add(d.item, d.startDate, d.endDate, `${e.uid}@${d.recurrenceId.toString()}`, true)
+        add(d.item, d.startDate, d.endDate, `${uidOf(e)}@${d.recurrenceId.toString()}`, true)
       }
     } catch {
       // As above.
@@ -172,5 +182,12 @@ export function readIcs(text: string, from: string, to: string): IcsCalendar {
   }
 
   events.sort((a, b) => a.start.localeCompare(b.start) || a.title.localeCompare(b.title))
+  // Feeds repeat UIDs they shouldn't; every event still needs its own id.
+  const seen = new Map<string, number>()
+  for (const e of events) {
+    const n = seen.get(e.id) ?? 0
+    seen.set(e.id, n + 1)
+    if (n) e.id = `${e.id}#${n}`
+  }
   return { name: String(root.getFirstPropertyValue('x-wr-calname') ?? '') || undefined, events }
 }

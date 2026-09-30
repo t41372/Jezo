@@ -8,8 +8,9 @@ import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { diffLines } from 'diff'
 import type { DiffLine, HistoryEntry, Trigger, UndoResult } from '../../shared/session'
-import { hashOf, readIfExists, writeAtomic } from '../workspace/files'
+import { hashOf, newId, readIfExists, writeAtomic } from '../workspace/files'
 import type { Workspace, Write } from '../workspace/workspace'
+import { acting } from './acting'
 
 interface FileChange {
   path: string
@@ -22,7 +23,7 @@ interface FileChange {
 interface Run {
   id: string
   session: string
-  trigger: Trigger
+  trigger: Trigger | 'you'
   /** Local time the run started, "2026-09-29T09:30". */
   at: string
   summary: string
@@ -88,9 +89,23 @@ export class UndoLog {
     await this.save()
   }
 
+  /** Skill removal is an explicit GUI action the user can undo in history. */
+  async userChange(summary: string, work: () => Promise<void>) {
+    const id = newId('r')
+    const now = new Date()
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const at = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`
+    this.start({ id, session: '', trigger: 'you', at })
+    try {
+      await acting.run({ actor: { by: 'user', run: id }, source: 'user' }, work)
+    } finally {
+      await this.finish(id, summary)
+    }
+  }
+
   private record(write: Write) {
-    if (write.actor.by !== 'agent') return
     const runId = write.actor.run
+    if (!runId) return
     const run = this.runs.find((r) => r.id === runId)
     if (!run) return
     const existing = run.files.find((f) => f.path === write.path)

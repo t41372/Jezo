@@ -59,7 +59,44 @@
     "basedOn": "Based on",
     "apply": "Apply",
     "reject": "No",
-    "file": "Contents"
+    "file": "Contents",
+    "add": "Add a method",
+    "addHint": "Add methods from GitHub, an archive, or this computer, or write your own.",
+    "choices": {
+      "url": "From a URL",
+      "local": "From this computer",
+      "write": "Write your own"
+    },
+    "url": "URL",
+    "name": "Name",
+    "description": "One-line description",
+    "content": "Instructions",
+    "find": "Find methods",
+    "reading": "Reading…",
+    "pick": "Choose a folder or archive",
+    "install": "Install",
+    "working": "Working…",
+    "replace": "Replace",
+    "replaceQuestion": "Replace “{{title}}”?",
+    "modified": "You edited this method. Updating will overwrite your changes.",
+    "update": "Update",
+    "updateTitle": "Update “{{title}}”",
+    "remove": "Remove",
+    "removeQuestion": "Remove “{{title}}”?",
+    "removeHint": "You can undo this in Change history.",
+    "binaryUndo": "Attached binary files are not covered by undo.",
+    "builtin": "Built into Jezo",
+    "written": "Written by you",
+    "localSource": "From this computer",
+    "from": "From {{source}}",
+    "agentSource": "Installed by the agent · {{source}}",
+    "programs": "This method includes programs. Jezo’s agent cannot run programs yet; it only follows the instructions.",
+    "skipped_one": "Skipped {{count}} file: {{reason}}",
+    "skipped_other": "Skipped {{count}} files: {{reason}}",
+    "installed_one": "Installed “{{title}}” with {{count}} file. The method is on.",
+    "installed_other": "Installed “{{title}}” with {{count}} files. The method is on.",
+    "nextConversation": "It will be used from the next conversation.",
+    "done": "Done"
   },
   "experiments": {
     "intro": "Want to know whether something works for you? The agent alternates two kinds of weeks and tells you what it found.",
@@ -82,7 +119,7 @@
     }
   },
   "history": {
-    "intro": "Everything the agent changed is here. Undo puts things back the way they were. Your own edits are never undone.",
+    "intro": "The agent’s changes and methods you removed are here. You can undo them.",
     "source": {
       "morning": "Morning plan",
       "evening": "Evening check-in",
@@ -137,12 +174,49 @@
     "url": "Address",
     "name": "Name",
     "namePlaceholder": "Leave empty to use the calendar's own name",
-    "google": "For Google Calendar, it's in Settings → your calendar → Integrate calendar → “Secret address in iCal format”. That address works like a password, so Jezo keeps it in the keychain.",
+    "google": "Google Calendar",
     "subscribeFailed": "No calendar at this address: {{error}}",
     "checking": "Reading…",
     "add": "Subscribe",
-    "none": "No calendars yet.",
     "readOnly": "Jezo only reads your calendars; it never changes them.",
-    "macLive": "Always up to date with this Mac"
+    "macLive": "Always up to date with this Mac",
+    "googleAnother": "Add another Google account",
+    "googleDetail": "Connects your Google account directly, not through this Mac's calendars. The first time takes about 5 minutes, making a key of your own at Google.",
+    "googleReady": "Connects with the key you made at Google; your calendar comes straight from Google to this computer.",
+    "googleSetUp": "Set up",
+    "googleChangeClient": "Use another key",
+    "googleTitle": "Connect Google Calendar",
+    "googleIntro": "Jezo doesn't go through any service in between, so it uses a key you make at Google (an OAuth client). You do it once; it takes about 5 minutes. Follow each link and do the step at Google:",
+    "googleSteps": {
+      "project": {
+        "link": "Create a project",
+        "then": ", with any name, like Jezo."
+      },
+      "api": {
+        "link": "Turn on the Google Calendar API",
+        "then": ": click Enable."
+      },
+      "consent": {
+        "link": "Set up the consent screen",
+        "then": ": click Get started, name the app Jezo, choose External, and give your own email."
+      },
+      "publish": {
+        "link": "Publish the app",
+        "then": ": under Audience, click Publish app so it's In production. Otherwise you'd have to connect again every 7 days. It doesn't need review."
+      },
+      "client": {
+        "link": "Create an OAuth client",
+        "then": ": choose Desktop app, then paste its client ID and secret below."
+      }
+    },
+    "googleClientId": "Client ID",
+    "googleClientSecret": "Client secret",
+    "googleUnverified": "Your browser opens next. Google will say the app isn't verified: it's your own app, so click Advanced, then Go to Jezo. The key and the sign-in stay in this Mac's keychain.",
+    "googleConnect": "Connect a Google account",
+    "googleReconnect": "Connect again",
+    "googleWaiting": "Waiting for the browser…",
+    "googleSignedOut": "Needs connecting again: {{error}}",
+    "googleDone": "You're connected. Close this tab and go back to Jezo.",
+    "googleFailedPage": "That didn't connect. Go back to Jezo to see what happened."
   }
 }

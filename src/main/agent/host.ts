@@ -42,6 +42,8 @@ interface Conversation {
   running: boolean
   /** Messages shown for this conversation that pi doesn't record, like "no model", and where they go. */
   extra: { at: number; message: SessionMessage }[]
+  /** Tools whose last call in this run failed, with the error, until a later call of the same tool works. */
+  failed: Map<string, string>
 }
 
 const TRIGGER_ENTRY = 'jezo.session'
@@ -93,6 +95,7 @@ export class AgentHost {
           partial: null,
           running: false,
           extra: [],
+          failed: new Map(),
         })
       } catch (error) {
         console.error(`Can't read the conversation ${name}:`, error)
@@ -143,7 +146,7 @@ export class AgentHost {
   }
 
   async start(trigger: Trigger) {
-    const request = REQUESTS[trigger]
+    const request = REQUESTS[trigger]?.(this.workspace.list())
     if (!request) throw new Error(`Nothing starts a session for ${trigger}.`)
     const conversation = await this.create(trigger)
     void this.run(conversation, (session) =>
@@ -171,13 +174,14 @@ export class AgentHost {
       partial: null,
       running: false,
       extra: [],
+      failed: new Map(),
     }
     this.conversations.set(id, conversation)
     return conversation
   }
 
   private contextFor(session: string): RunContext {
-    const context: RunContext = { run: '', session, refused: () => this.undo.refused(context.run) }
+    const context: RunContext = { run: '', session, said: '', refused: () => this.undo.refused(context.run) }
     return context
   }
 
@@ -193,9 +197,11 @@ export class AgentHost {
         return
       }
       c.context.run = `r-${Date.now().toString(36)}`
+      c.context.said = userText ?? ''
+      c.failed.clear()
       this.undo.start({ id: c.context.run, session: c.id, trigger: c.trigger, at: localTime(new Date()) })
       // Everything this run does, however deep, is the agent's, acting on the user's words or on what Jezo asked.
-      const source = c.trigger === 'user' || c.trigger === 'hotkey' ? 'user' : 'agent'
+      const source = userText !== undefined ? 'user' : 'agent'
       const file = c.manager.getSessionFile()
       const sessionPath = file ? `sessions/${basename(file)}` : undefined
       await acting.run({ actor: { by: 'agent', run: c.context.run }, source, session: sessionPath }, async () => {
@@ -286,8 +292,21 @@ export class AgentHost {
    */
   private checks(pi: ExtensionAPI, c: Conversation) {
     let sentBack = ''
+    let failedSentBack = ''
     pi.on('agent_before_settle', () => {
       const run = c.context.run
+      // A call that failed and was never made to work, whatever the reply says about it.
+      // A small model answered "I've proposed the plan" after two failed calls.
+      // Only when nothing changed: a failed call is often followed by the right one (todos_update after a refused todos_propose).
+      if (c.failed.size && failedSentBack !== run && !this.undo.changed(run)) {
+        failedSentBack = run
+        const content = [
+          "Before you finish: these tool calls failed and weren't made to work, so nothing they were for happened.",
+          ...[...c.failed].map(([tool, error]) => `- ${tool}: ${error.split('\n')[0]}`),
+          'Fix the call and make it again, or tell the user plainly that it wasn\'t done.',
+        ].join('\n')
+        return { entries: [{ type: 'custom_message', customType: CHECK_MESSAGE, content, display: false }], continue: true }
+      }
       const text = c.session?.getLastAssistantText() ?? ''
       if (sentBack === run || this.undo.changed(run) || !CLAIMS_ACTION.test(text)) return
       sentBack = run
@@ -310,6 +329,13 @@ export class AgentHost {
   }
 
   private onEvent(c: Conversation, event: AgentSessionEvent) {
+    if (event.type === 'tool_execution_end') {
+      if (!event.isError) c.failed.delete(event.toolName)
+      else {
+        const content = (event.result as { content?: { type: string; text?: string }[] } | undefined)?.content
+        c.failed.set(event.toolName, content?.map((b) => b.text ?? '').join('') || 'failed')
+      }
+    }
     if (event.type === 'message_update' && event.message.role === 'assistant') c.partial = event.message
     if (event.type === 'message_end') c.partial = null
     if (event.type === 'message_update' || event.type === 'message_end' || event.type === 'tool_execution_end' || event.type === 'tool_execution_start') {
@@ -412,6 +438,7 @@ export function toMessages(entries: unknown[], root: string): SessionMessage[] {
 
 /** What a tool call touched, for the steps list. */
 function target(tool: string, args: Record<string, unknown>, root: string): { target?: string } {
+  if (tool === 'skill_install' && typeof args.source === 'string') return { target: args.source }
   if (typeof args.path === 'string') return { target: args.path.startsWith(root) ? args.path.slice(root.length + 1) : args.path }
   if (typeof args.id === 'string') return { target: args.id }
   for (const key of ['todos', 'items'] as const) if (Array.isArray(args[key])) return { target: String((args[key] as unknown[]).length) }

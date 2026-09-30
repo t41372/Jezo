@@ -17,12 +17,16 @@ import { Type } from 'typebox'
 import type { SessionMessage } from '../../shared/session'
 import type { Fields } from '../../shared/workspace'
 import { FrontmatterError, parse } from '../workspace/frontmatter'
+import { currentActing } from './acting'
+import { skillInstaller } from '../workspace/skill-install'
 import { insideWorkspace, type Workspace } from '../workspace/workspace'
 
 /** The run the tools are working for. The session updates it before each prompt. */
 export interface RunContext {
   run: string
   session: string
+  /** What the user said to start this run, or '' when Jezo started it. */
+  said: string
   /** A check refused a write; the history counts these. */
   refused(): void
 }
@@ -47,6 +51,15 @@ function checkTime(value: string | undefined) {
 function describe(data: Record<string, unknown>) {
   const when = typeof data.scheduled === 'string' ? `scheduled ${data.scheduled}${data.proposed ? ' (proposed)' : ''}` : 'in the backlog'
   return `${data.id} "${data.title}": ${data.state}, ${when}, ${data.estimate ?? '?'} min`
+}
+
+/** Whether the user's message names this time of day, like 20:00 or 8:30 for 2026-10-01T20:00. */
+export function saidTime(said: string, scheduled: string) {
+  const [hour, minute] = scheduled.slice(11, 16).split(':').map(Number)
+  if (Number.isNaN(hour)) return false
+  const forms = [`${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`, `${hour}:${String(minute).padStart(2, '0')}`]
+  if (hour > 12) forms.push(`${hour - 12}:${String(minute).padStart(2, '0')}`)
+  return forms.some((f) => new RegExp(`(^|[^0-9])${f}($|[^0-9])`).test(said))
 }
 
 /** Calendar events that overlap a todo's slot, described for the agent. */
@@ -135,7 +148,7 @@ export function createTools(workspace: Workspace, context: () => RunContext, blo
     description:
       'Proposes new todos as drafts, shown to the user as one plan they can accept, tweak, or turn down. Nothing counts until they accept. Returns the new ids.',
     parameters: Type.Object({
-      title: Type.String({ description: "The plan's name as the user would say it, like 今天的安排." }),
+      title: Type.Optional(Type.String({ description: "The plan's name as the user would say it, like 今天的安排." })),
       todos: Type.Array(todoInput, { minItems: 1 }),
     }),
     async execute(_id, params) {
@@ -144,6 +157,15 @@ export function createTools(workspace: Workspace, context: () => RunContext, blo
         .filter((i) => i.kind === 'todo')
         .reduce<string | null>((max, i) => (typeof i.data.rank === 'string' && (!max || i.data.rank > max) ? i.data.rank : max), null)
       for (const todo of params.todos) checkTime(todo.scheduled)
+      // Asked to schedule a todo from the backlog, a small model proposed a new one with the same name.
+      const same = (a: string) => a.replace(/\s+/g, '').toLowerCase()
+      const open = workspace.list().filter((i) => i.kind === 'todo' && i.data.state !== 'done')
+      const existing = params.todos.flatMap((t) => open.filter((i) => same(String(i.data.title)) === same(t.title)))
+      if (existing.length) {
+        throw new Error(
+          `Not proposed: ${existing.map((i) => `"${i.data.title}" is already a todo (${i.id}${i.data.scheduled ? '' : ', in the backlog'})`).join('; ')}. To schedule or change it, use todos_update with its id. Propose only todos that don't exist yet.`,
+        )
+      }
       let rank = lastRank
       const ids: string[] = []
       const lines: string[] = []
@@ -156,7 +178,8 @@ export function createTools(workspace: Workspace, context: () => RunContext, blo
         ids.push(item.id)
         lines.push(`- ${describe(item.data)}${await overlaps(item.data)}${unknownFields(todo, Object.keys(todoInput.properties))}`)
       }
-      const details: CardDetails = { card: { kind: 'plan', title: params.title, todoIds: ids } }
+      // A small model left the plan's name out; the first todo names it then.
+      const details: CardDetails = { card: { kind: 'plan', title: params.title || params.todos[0].title, todoIds: ids } }
       return { content: text(`Proposed ${ids.length} drafts. The user sees them as one plan and decides:\n${lines.join('\n')}`), details }
     },
   })
@@ -190,7 +213,9 @@ export function createTools(workspace: Workspace, context: () => RunContext, blo
       checkTime(change.scheduled)
       // An empty string clears the field.
       const fields: Fields = Object.fromEntries(Object.entries(change).map(([k, v]) => [k, v === '' ? null : v]))
-      if (change.scheduled !== undefined) fields.proposed = change.scheduled && !userAskedForThisTime ? true : null
+      // The user's own words settle it too: a small model left out userAskedForThisTime after "排到明天晚上 20:00".
+      const named = !!change.scheduled && saidTime(context().said, change.scheduled)
+      if (change.scheduled !== undefined) fields.proposed = change.scheduled && !userAskedForThisTime && !named ? true : null
       const updated = await workspace.update(id, fields, actor())
       return { content: text(`Now: ${describe(updated.data)}${change.scheduled || change.estimate ? await overlaps(updated.data) : ''}${ignored}`), details: undefined }
     },
@@ -205,7 +230,8 @@ export function createTools(workspace: Workspace, context: () => RunContext, blo
       items: Type.Array(
         Type.Object({
           note: Type.String({ description: 'The note id.' }),
-          as: Type.Union([Type.Literal('todo'), Type.Literal('goal'), Type.Literal('memory'), Type.Literal('keep'), Type.Literal('ask')]),
+          // A plain string, read leniently: a small model wrote "Todo" and "Goal Idea".
+          as: Type.String({ description: 'One of: todo, goal, memory, keep, ask.' }),
           title: Type.String({ description: 'The todo, goal idea or memory as you would write it; for ask, your question.' }),
         }),
         { minItems: 1 },
@@ -213,16 +239,25 @@ export function createTools(workspace: Workspace, context: () => RunContext, blo
     }),
     async execute(_id, params) {
       const { session } = context()
-      for (const item of params.items) {
-        if (workspace.get(item.note)?.kind !== 'note') throw new Error(`There is no note ${item.note}.`)
-      }
-      for (const item of params.items) {
+      const kinds = ['todo', 'goal', 'memory', 'keep', 'ask'] as const
+      const notes = workspace.list().filter((i) => i.kind === 'note' && i.data.state === 'new')
+      const items = params.items.map((item) => {
+        const as = kinds.find((k) => item.as.toLowerCase().includes(k))
+        if (!as) throw new Error(`"${item.as}" for ${item.note} isn't a kind. Use one of: ${kinds.join(', ')}. Nothing was proposed.`)
+        // The note's file path works as well as its id; a small model sent paths.
+        const note = item.note.replace(/^.*\//, '').replace(/\.md$/, '')
+        if (workspace.get(note)?.kind !== 'note') {
+          throw new Error(`There is no note ${item.note}. The notes waiting are ${notes.map((n) => n.id).join(', ')}. Nothing was proposed.`)
+        }
+        return { ...item, note, as }
+      })
+      for (const item of items) {
         await workspace.update(item.note, { state: 'sorting', proposal: { as: item.as, title: item.title, session }, became: null }, actor())
       }
       const details: CardDetails = {
-        card: { kind: 'plugin', plugin: 'notes', type: 'sort', data: { items: params.items.map((i) => ({ noteId: i.note, as: i.as, title: i.title })) } },
+        card: { kind: 'plugin', plugin: 'notes', type: 'sort', data: { items: items.map((i) => ({ noteId: i.note, as: i.as, title: i.title })) } },
       }
-      return { content: text(`Proposed how to sort ${params.items.length} notes. The user decides on the card.`), details }
+      return { content: text(`Proposed how to sort ${items.length} notes. The user decides on the card.`), details }
     },
   })
 
@@ -266,6 +301,31 @@ export function createTools(workspace: Workspace, context: () => RunContext, blo
     },
   })
 
+  const skillInstall = defineTool({
+    name: 'skill_install',
+    label: 'Install a skill',
+    description: 'Installs a method from a GitHub address or archive link when the user asks in the conversation. If several methods are found, returns their paths without installing; call again with path. Use replace only when the user asked to replace an existing method.',
+    parameters: Type.Object({
+      source: Type.String({ description: 'A GitHub repository, tree or SKILL.md address, or a .zip, .skill, .tar.gz or .tgz link.' }),
+      path: Type.Optional(Type.String({ description: 'The method directory in the source, from the list returned by this tool. An empty string selects the root.' })),
+      replace: Type.Optional(Type.Boolean()),
+    }),
+    async execute(_id, params) {
+      // A skill is lasting instructions. Outside content, such as email or a
+      // calendar invite, must not get an unattended run to install one.
+      const acting = currentActing()
+      if (acting.actor.by !== 'agent' || acting.source !== 'user') throw new Error('Skills can only be installed when the user asks in the conversation.')
+      const outcome = await skillInstaller(workspace).agentInstall(params.source, params.path, params.replace)
+      const skipped = outcome.skipped ?? outcome.result?.skipped ?? []
+      const warnings = skipped.map((s) => `${s.count} skipped: ${s.reason}`).join('; ')
+      if (outcome.choices) return { content: text(`Nothing installed. Choose a method and call skill_install again with its path:\n${outcome.choices.map((s) => `- path: ${JSON.stringify(s.path)}, name: ${s.name}, description: ${s.description}`).join('\n')}${warnings ? `\n${warnings}` : ''}`), details: undefined }
+      return {
+        content: text(`${outcome.result!.installed.map((s) => `Installed "${s.title}" at ${s.directory}/ (${s.files} files). The skill is on.`).join('\n')}${warnings ? `\n${warnings}` : ''}\nIt will be used from the next conversation.${outcome.result!.installed.some((s) => s.binary) ? ' Binary files are not covered by undo.' : ''}`),
+        details: undefined,
+      }
+    },
+  })
+
   const askUser = defineTool({
     name: 'ask_user',
     label: 'Ask the user',
@@ -299,10 +359,11 @@ export function createTools(workspace: Workspace, context: () => RunContext, blo
     notesPropose,
     itemLinks,
     askUser,
+    skillInstall,
   ] as ToolDefinition[]
 }
 
-export const TOOL_NAMES = ['read', 'ls', 'write', 'edit', 'todos_list', 'todos_propose', 'todos_update', 'notes_propose', 'item_links', 'ask_user', 'memory_remember', 'memory_recall', 'memory_forget', 'calendar_events']
+export const TOOL_NAMES = ['read', 'ls', 'write', 'edit', 'todos_list', 'todos_propose', 'todos_update', 'notes_propose', 'item_links', 'ask_user', 'memory_remember', 'memory_recall', 'memory_forget', 'calendar_events', 'skill_install']
 
 function nowLocal(at = new Date()) {
   const pad = (n: number) => String(n).padStart(2, '0')

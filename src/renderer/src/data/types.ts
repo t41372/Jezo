@@ -1,6 +1,7 @@
 // Entities the UI works with. They follow docs/design/storage.md, so the mock
 // store can later be replaced by the real index without reshaping the UI.
 
+import type { SkillInfo } from '../../../shared/skills'
 import type { DiffLine, HistoryEntry, ISODate, SessionMessage, SessionView, Step, Trigger } from '../../../shared/session'
 
 export type { DiffLine, HistoryEntry, ISODate, Step, Trigger }
@@ -198,13 +199,7 @@ export interface Memory {
   record?: Record<string, unknown>
 }
 
-export interface Skill {
-  id: string
-  title: string
-  description: string
-  enabled: boolean
-  /** The skill's instructions to the agent: its SKILL.md. */
-  instructions: string
+export interface Skill extends SkillInfo {
   /** A change the agent wants to make to the skill, with its reasons. The user decides. */
   proposal?: { why: string; evidence: string[]; diff: DiffLine[]; after: string }
   /** Set once the user has looked at and accepted the agent's change. */

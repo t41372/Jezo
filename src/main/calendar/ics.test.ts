@@ -1,5 +1,6 @@
 // Written before ics.ts, from the ways reading a real calendar feed goes wrong.
-// Every case is something Google, Outlook or Apple feeds actually do.
+// Every case is something Google, Outlook, Apple or school (Canvas) feeds
+// actually do. The second batch came from icsfeed's test catalog (2026-09-30).
 // Times are checked in Taipei (UTC+8, no daylight saving) so they're exact.
 process.env.TZ = 'Asia/Taipei'
 
@@ -157,5 +158,57 @@ describe('what counts as in range, and what is kept', () => {
   test('one broken event doesn’t hide the rest', () => {
     const text = feed(...event('UID:bad', 'SUMMARY:Bad', 'DTSTART:not-a-date'), ...event('UID:ok', 'SUMMARY:Ok', 'DTSTART:20261001T040000Z', 'DURATION:PT1H'))
     expect(read(text).events.map((e) => e.title)).toEqual(['Ok'])
+  })
+})
+
+describe('what school and hand-made feeds do', () => {
+  test('a deadline with only DTSTART is an instant, not missing, even right at the start of the range', () => {
+    const text = feed(...event('UID:due', 'SUMMARY:Essay due', 'DTSTART:20260927T160000Z'))
+    const [e] = read(text).events
+    expect([e.start, e.end]).toEqual(['2026-09-28T00:00', '2026-09-28T00:00'])
+  })
+
+  test('two events with the same UID and no RECURRENCE-ID are both kept, with different ids', () => {
+    const text = feed(...event('UID:same', 'SUMMARY:One', 'DTSTART:20261001T010000Z', 'DURATION:PT1H'), ...event('UID:same', 'SUMMARY:Two', 'DTSTART:20261002T010000Z', 'DURATION:PT1H'))
+    const ids = read(text).events.map((e) => e.id)
+    expect(ids.length).toBe(2)
+    expect(new Set(ids).size).toBe(2)
+  })
+
+  test('an event with no UID gets an id that is the same on every read', () => {
+    const text = feed(...event('SUMMARY:No uid', 'DTSTART:20261001T010000Z', 'DURATION:PT1H'), ...event('SUMMARY:Also none', 'DTSTART:20261001T010000Z', 'DURATION:PT1H'))
+    const ids = read(text).events.map((e) => e.id)
+    expect(new Set(ids).size).toBe(2)
+    expect(read(text).events.map((e) => e.id)).toEqual(ids)
+  })
+
+  test('a zone nobody defines is read as local time, not dropped', () => {
+    const text = feed(...event('UID:cz', 'SUMMARY:Custom', 'DTSTART;TZID=Customized Time Zone:20261001T090000', 'DURATION:PT1H'))
+    expect(read(text).events[0].start).toBe('2026-10-01T09:00')
+  })
+
+  test('RDATE adds occurrences to a series', () => {
+    const text = feed(...event('UID:rd', 'SUMMARY:Extra', 'DTSTART:20261001T010000Z', 'DURATION:PT1H', 'RRULE:FREQ=WEEKLY;COUNT=1', 'RDATE:20261003T010000Z'))
+    expect(titled(text, 'Extra').map((e) => e.start)).toEqual(['2026-10-01T09:00', '2026-10-03T09:00'])
+  })
+
+  test('THISANDFUTURE moves that occurrence and every later one', () => {
+    const text = feed(
+      ...event('UID:tf', 'SUMMARY:Class', 'DTSTART:20260928T010000Z', 'DURATION:PT1H', 'RRULE:FREQ=DAILY;COUNT=5'),
+      ...event('UID:tf', 'RECURRENCE-ID;RANGE=THISANDFUTURE:20260930T010000Z', 'SUMMARY:Class', 'DTSTART:20260930T020000Z', 'DURATION:PT1H'),
+    )
+    expect(titled(text, 'Class').map((e) => e.start)).toEqual(['2026-09-28T09:00', '2026-09-29T09:00', '2026-09-30T10:00', '2026-10-01T10:00', '2026-10-02T10:00'])
+  })
+
+  test('a time that doesn’t exist, in the hour skipped for daylight saving, uses the offset from before the gap', () => {
+    // 02:30 on 2026-03-08 doesn't happen in New York; RFC 5545 reads it as 02:30 EST, 07:30 UTC.
+    const text = feed(...event('UID:gap', 'SUMMARY:Gap', 'DTSTART;TZID=America/New_York:20260308T023000', 'DURATION:PT1H'))
+    expect(read(text, '2026-03-01', '2026-03-15').events[0].start).toBe('2026-03-08T15:30')
+  })
+
+  test('a time that happens twice, when the clocks go back, is the first one', () => {
+    // 01:30 on 2026-11-01 happens twice in New York; the first is EDT, 05:30 UTC.
+    const text = feed(...event('UID:twice', 'SUMMARY:Twice', 'DTSTART;TZID=America/New_York:20261101T013000', 'DURATION:PT1H'))
+    expect(read(text, '2026-10-25', '2026-11-08').events[0].start).toBe('2026-11-01T13:30')
   })
 })

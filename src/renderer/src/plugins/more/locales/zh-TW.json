@@ -55,7 +55,42 @@
     "basedOn": "根據",
     "apply": "套用",
     "reject": "不要",
-    "file": "內容"
+    "file": "內容",
+    "add": "新增方法",
+    "addHint": "從 GitHub、方法的壓縮檔，或這台電腦加入，也可以自己寫。",
+    "choices": {
+      "url": "從網址",
+      "local": "從這台電腦",
+      "write": "自己寫"
+    },
+    "url": "網址",
+    "name": "名稱",
+    "description": "一句話說明",
+    "content": "內容",
+    "find": "找方法",
+    "reading": "讀取中⋯",
+    "pick": "選擇資料夾或壓縮檔",
+    "install": "安裝",
+    "working": "處理中⋯",
+    "replace": "取代",
+    "replaceQuestion": "取代「{{title}}」？",
+    "modified": "你改過這個方法，更新會蓋掉你的修改。",
+    "update": "更新",
+    "updateTitle": "更新「{{title}}」",
+    "remove": "移除",
+    "removeQuestion": "移除「{{title}}」？",
+    "removeHint": "可以在「修改紀錄」撤銷。",
+    "binaryUndo": "附帶的二進位檔案不在撤銷範圍內。",
+    "builtin": "Jezo 內建",
+    "written": "你寫的",
+    "localSource": "來自這台電腦",
+    "from": "來自 {{source}}",
+    "agentSource": "agent 裝的 · {{source}}",
+    "programs": "這個方法附了程式。Jezo 的 agent 目前不能執行程式，只會照著說明做。",
+    "skipped_other": "略過 {{count}} 個檔案：{{reason}}",
+    "installed_other": "已安裝「{{title}}」，共 {{count}} 個檔案。方法已開啟。",
+    "nextConversation": "下一個對話開始就會用到。",
+    "done": "完成"
   },
   "experiments": {
     "intro": "想知道某個做法對你有沒有用？agent 會輪流排兩種週，最後告訴你結果。",
@@ -77,7 +112,7 @@
     }
   },
   "history": {
-    "intro": "agent 每次動過什麼都在這裡。撤銷之後就回到那之前的樣子。你自己改的不會被撤銷。",
+    "intro": "agent 的修改和你移除的方法都在這裡，可以撤銷。",
     "source": {
       "morning": "早上排程",
       "evening": "晚上 check-in",
@@ -129,12 +164,49 @@
     "url": "網址",
     "name": "名稱",
     "namePlaceholder": "不填就用行事曆自己的名字",
-    "google": "Google 行事曆的網址在：設定 → 點你的行事曆 → 整合日曆 →「iCal 格式的私人網址」。這個網址等於密碼，Jezo 會把它存在鑰匙圈裡。",
+    "google": "Google 行事曆",
     "subscribeFailed": "這個網址讀不到行事曆：{{error}}",
     "checking": "讀取中⋯",
     "add": "訂閱",
-    "none": "還沒有行事曆。",
     "readOnly": "Jezo 只會讀，不會改你的行事曆。",
-    "macLive": "跟這台 Mac 即時同步"
+    "macLive": "跟這台 Mac 即時同步",
+    "googleAnother": "再加一個 Google 帳號",
+    "googleDetail": "直接連你的 Google 帳號，不經過這台 Mac 的行事曆。第一次要花大約 5 分鐘，在 Google 那邊建一組自己的鑰匙。",
+    "googleReady": "用你自己在 Google 建的鑰匙連接，資料直接從 Google 到這台電腦。",
+    "googleSetUp": "設定",
+    "googleChangeClient": "換一組鑰匙",
+    "googleTitle": "連接 Google 行事曆",
+    "googleIntro": "Jezo 不經過任何中間的服務，所以要用你自己在 Google 建的一組鑰匙（OAuth 用戶端）。只要做一次，大約 5 分鐘。每一步都點連結，在 Google 那邊做：",
+    "googleSteps": {
+      "project": {
+        "link": "建立一個專案",
+        "then": "，名字隨意，例如 Jezo。"
+      },
+      "api": {
+        "link": "打開 Google Calendar API",
+        "then": "，按「啟用」。"
+      },
+      "consent": {
+        "link": "設定同意畫面",
+        "then": "：按「開始」，應用程式名稱填 Jezo，對象選「外部」，信箱填你自己的。"
+      },
+      "publish": {
+        "link": "發布應用程式",
+        "then": "：在「目標對象」按「發布應用程式」，改成「正式版」。不改的話，每 7 天就要重新連一次。不需要送審。"
+      },
+      "client": {
+        "link": "建立 OAuth 用戶端",
+        "then": "：類型選「電腦版應用程式」，建立後把用戶端 ID 和密鑰貼到下面。"
+      }
+    },
+    "googleClientId": "用戶端 ID",
+    "googleClientSecret": "用戶端密鑰",
+    "googleUnverified": "接著會打開瀏覽器。Google 會說「這個應用程式未經驗證」：這是你自己的應用程式，按「進階」→「前往 Jezo」就好。鑰匙和登入都只存在這台 Mac 的鑰匙圈。",
+    "googleConnect": "連接 Google 帳號",
+    "googleReconnect": "重新連接",
+    "googleWaiting": "等瀏覽器⋯",
+    "googleSignedOut": "要重新連接：{{error}}",
+    "googleDone": "已經連好了，可以關掉這個分頁，回到 Jezo。",
+    "googleFailedPage": "沒有連上。回到 Jezo 看看發生了什麼。"
   }
 }

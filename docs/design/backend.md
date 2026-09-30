@@ -26,6 +26,8 @@ A directory the user picks, `~/Jezo` by default. It isn't under `~/Documents`, w
 
 **Skills** are the methods concept.md lists as built in (plan in "when X, do Y", estimate from records, track progress, rework a bad day, anchor habits, small experiments), plus each plugin's own, like 隨手記's sort-notes. Their directory names follow the Agent Skills naming rule (lowercase ASCII, which pi checks); the title the user sees is `metadata.title`. Turning a skill off in 它用的方法 sets pi's own `disable-model-invocation: true` in its SKILL.md, so pi leaves it out of the agent's prompt and no list of switched-off skills lives anywhere else.
 
+Adding, updating and removing skills, their provenance, and the source checks are described in [skills.md](skills.md).
+
 Each built-in plugin that stores data owns a directory like the ones above. The files Jezo ships (AGENTS.md, manifest, skills) are copied in when the workspace is created. They're the user's from then on, and the agent may edit them (AGENTS.md, principle 6). What happens to them when a new version of Jezo changes its copy isn't decided yet.
 
 ### Reading
@@ -114,7 +116,14 @@ Each session is a pi session saved as JSONL in `<workspace>/sessions/`. Conversa
 
 - **Files:** `read`, `ls`, `write` and `edit`. `write` and `edit` are pi's own tools with Jezo's file functions plugged in, so every agent write goes through the write service and is recorded for undo.
 - **`todos_list`** shows every todo in one compact table. Without it, a local model read each todo file one at a time; a morning plan took four minutes, most of it reading.
+- **`skill_install`** installs a method from a GitHub address or archive link when the user asks in chat or ⌥X. Multiple methods are listed for a second call with `path`; unattended runs cannot install lasting instructions. Files and provenance are written through the workspace for undo. Methods take effect in the next conversation ([skills.md](skills.md)).
 - **`calendar_events`** lists the user's calendar events for any range ([calendar.md](calendar.md)). Scheduling a todo with `todos_propose` or `todos_update` reports any timed event the slot overlaps.
+- **Made for the smallest models.** These were found by running the E2E tests with gemma-4-e4b, about the least capable model a computer user runs locally in 2026, and reading the traces:
+  - `todos_propose` refuses a todo whose title is already an open todo and says to use `todos_update` with its id. Asked to schedule a backlog todo, the model had proposed a copy of it.
+  - A time the user's message names (20:00, 8:30) counts as theirs even when the model leaves out `userAskedForThisTime`.
+  - The plan's name in `todos_propose` is optional; the first todo names it.
+  - `notes_propose` reads the kind leniently ("Todo", "Goal Idea") and takes a note's path as well as its id. When it can't, the error lists the kinds or the waiting notes' ids.
+  - Sorting notes lists the waiting notes in the request. Told only how many there were, the model asked the user for them.
 - **Garbled field names are reported, not refused.** A local model sometimes sends a key like `"estimate /"`. `todos_update` and `todos_propose` apply the fields they know and say in the result which ones they ignored and what the fields are called. Refusing the whole call made the same model send the same garbled name 149 times.
 - **Typed tools** for what the GUI shows as a card: proposing todos (a plan), proposing what notes become, and saving to memory. The result names the entities, and the chat draws the card from it. Typed tools make structured writes easier for any model, but the agent can still edit the files directly; the checks catch mistakes either way (AGENTS.md, principle 8).
 - **`bash` is off for now.** It's the exit a steered agent would use to send data out (AGENTS.md, trust model). The plan is to turn it on inside an OS sandbox that allows writing in the workspace and blocks the network (`sandbox-exec` on macOS, a network namespace on Linux), so a steered agent can still work but can't send anything out. Until that exists, it stays off.
@@ -127,6 +136,15 @@ Each session is a pi session saved as JSONL in `<workspace>/sessions/`. Conversa
 - **A reply that claims a change no file shows goes back to the agent.** When a run is about to end, if nothing in the workspace changed and the agent's last reply says something was done (排好, 加進, 改成, scheduled…), pi's `agent_before_settle` hook sends it one hidden message: make the change with the tools, or tell the user nothing was changed. It happened on 2026-09-29: asked by voice to schedule a call, a local model answered that it had, and called no tool. 修改紀錄 marks such a run. The words it looks for are in `prompt.ts`; a false alarm costs one extra step.
 - **Undo restores a file only if it still holds what the agent wrote.** Files changed since, by the user or by anything else, are left alone, and the toast says how many.
 
+
+**A failed call that was never fixed goes back to the agent.** If a run changed nothing and some tool's last call failed, the agent is told before the run ends that nothing happened and why. It then fixes the call or tells the user plainly. This doesn't depend on the reply's wording: a small model said "已為您提出計畫" after two failed calls.
+
+**Reading a trace.** `bun scripts/trace.ts <session.jsonl | workspace>` prints a conversation as a timeline:
+- the prompt sections as they changed (`--sections memory,calendar` to pick);
+- each tool call with its result;
+- the hidden checks;
+- the replies.
+pi's session file already keeps all of this, so no tracing service is needed.
 ### Tool schemas
 
 Tool parameters are plain: strings, numbers, booleans and objects, with no regex patterns and no nullable unions. Local model servers turn tool schemas into grammars for sampling, and on 2026-09-29 a time field declared as "a string matching a pattern, or null" left LM Studio able to send only null: the agent called the tool sixteen times, was told "Updated" each time, and finally edited the file by hand. Formats are checked when the tool runs, with a message the model can act on, an empty string clears a field, and every result says what the item looks like now, so a call that didn't do what the model meant is visible to it.

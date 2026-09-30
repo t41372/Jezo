@@ -134,7 +134,8 @@ function toBlocks(
       id: e.id,
       title: e.title,
       start: atTime(e.date, e.start),
-      end: atTime(e.date, e.start + e.hours),
+      // A deadline has no length (a school feed's "due 23:59"); it still needs a block to show.
+      end: atTime(e.date, e.start + Math.max(e.hours, 0.25)),
       allDay: e.allDay,
       readOnly: true,
       color: 'var(--muted-foreground)',
@@ -255,9 +256,10 @@ function useSyncLine() {
   const status = useStore((s) => s.calendarStatus)
   // Say "2 minutes ago" again as time passes.
   useStore((s) => s.now)
-  const sources = status?.sources.filter((s) => s.state !== 'off' && s.state !== 'needs-access') ?? []
+  // The Mac's calendars waiting for macOS's question aren't connected yet; a Google account that needs signing in again is broken.
+  const sources = status?.sources.filter((s) => s.state !== 'off' && !(s.kind === 'mac' && s.state === 'needs-access')) ?? []
   if (!sources.length) return null
-  const broken = sources.filter((s) => s.state === 'error' || s.state === 'denied')
+  const broken = sources.filter((s) => s.state === 'error' || s.state === 'denied' || s.state === 'needs-access')
   if (broken.length) return { ok: false, text: t('syncFailed', { source: broken.map(nameOf).join('、') }) }
   // The Mac's calendars are always current; only subscriptions have a time they were last read.
   const latest = sources.filter((s) => s.kind !== 'mac').map((s) => s.syncedAt ?? '').sort().at(-1)

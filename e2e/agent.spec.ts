@@ -201,8 +201,9 @@ test('the agent plans around the calendar, reading days it wasn’t shown', asyn
     await box.press('Enter')
     await settled(page)
 
-    const todo = items('todos').find((t) => String(t.data.title).includes('住宿'))!
-    const scheduled = String(todo.data.scheduled)
+    // The todo already in the backlog is the one scheduled, not a copy of it.
+    expect(items('todos').filter((t) => String(t.data.title).includes('住宿')).map((t) => t.data.id)).toEqual(['t-u3'])
+    const scheduled = String(items('todos').find((t) => t.data.id === 't-u3')!.data.scheduled)
     expect(scheduled.slice(0, 10)).toBe(date)
     // 45 minutes that don't touch 19:00–21:00, in the evening.
     const [h, m] = scheduled.slice(11).split(':').map(Number)
@@ -213,4 +214,47 @@ test('the agent plans around the calendar, reading days it wasn’t shown', asyn
     server.close()
   }
   expect(jezo.errors).toEqual([])
+})
+
+test.describe('installing methods in a conversation', () => {
+  let github: Awaited<ReturnType<typeof import('./skill-server').skillServer>>
+  test.beforeAll(async () => {
+    github = await (await import('./skill-server')).skillServer()
+    process.env.JEZO_GITHUB_API = github.base
+    process.env.JEZO_GITHUB_CODELOAD = github.base
+  })
+  test.afterAll(() => {
+    github?.close()
+    delete process.env.JEZO_GITHUB_API
+    delete process.env.JEZO_GITHUB_CODELOAD
+  })
+
+  test('the user asks for an install, and undo removes its text files', async ({ jezo }) => {
+    const { page, root } = jezo
+    const { existsSync } = await import('node:fs')
+    const { parse: parseYaml } = await import('yaml')
+    const address = 'https://github.com/o/r/tree/main/methods/next-step'
+    const box = page.locator('main textarea').first()
+    await box.fill(`幫我安裝這個 skill：${address}`)
+    await box.press('Enter')
+    await settled(page)
+
+    expect(existsSync(join(root, 'skills/next-step/SKILL.md'))).toBe(true)
+    expect(jezo.read('skills/next-step/SKILL.md').data['disable-model-invocation']).not.toBe(true)
+    const origins = () => (parseYaml(readFileSync(join(root, 'skills/installed.yaml'), 'utf8')) as { skills: { name: string; by: string }[] }).skills
+    expect(origins().find((s) => s.name === 'next-step')?.by).toBe('agent')
+    await open(page, '更多')
+    await page.getByText('它用的方法', { exact: true }).click()
+    await expect(page.locator('main')).toContainText('agent 裝的 · 來自 github.com/o/r')
+    await page.getByRole('button', { name: '← 更多' }).click()
+    await page.getByText('修改紀錄', { exact: true }).click()
+    await page.getByRole('button', { name: '撤銷' }).first().click()
+    await expect.poll(() => existsSync(join(root, 'skills/next-step/SKILL.md'))).toBe(false)
+    expect(existsSync(join(root, 'skills/next-step/scripts/run.sh'))).toBe(false)
+    expect(existsSync(join(root, 'skills/next-step/old.txt'))).toBe(false)
+    expect(existsSync(join(root, 'skills/installed.yaml'))).toBe(false)
+    // Binary companions remain because they are not covered by text undo.
+    expect(existsSync(join(root, 'skills/next-step/picture.bin'))).toBe(true)
+    expect(jezo.errors).toEqual([])
+  })
 })

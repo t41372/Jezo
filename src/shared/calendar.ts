@@ -35,9 +35,9 @@ export type SourceState = 'ok' | 'syncing' | 'error' | 'needs-access' | 'denied'
 
 /** A place calendars come from: the Mac's calendars, or one subscription. */
 export interface CalendarSource {
-  /** "mac", or the subscription's id. */
+  /** "mac", the subscription's id, or "google:" and the account's email. */
   id: string
-  kind: 'mac' | 'ics'
+  kind: 'mac' | 'ics' | 'google'
   name: string
   state: SourceState
   /** When it last read the calendar successfully, as an ISO instant. */
@@ -49,4 +49,6 @@ export interface CalendarSource {
 export interface CalendarStatus {
   sources: CalendarSource[]
   calendars: CalendarInfo[]
+  /** Whether the user has given Jezo their own Google client (docs/design/calendar.md, "Google"). */
+  googleClient: boolean
 }

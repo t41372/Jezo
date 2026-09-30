@@ -245,6 +245,7 @@ async function loadWorkspace() {
 export async function connectWorkspace() {
   workspace().onChange(applyChanges)
   window.jezo.agent.onChange(applySession)
+  window.jezo.skills.onChange(() => useStore.getState().loadSkills())
   window.jezo.history.onChange(() => void loadHistory())
   await Promise.all([
     loadWorkspace(),

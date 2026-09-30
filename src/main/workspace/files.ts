@@ -8,7 +8,7 @@ export const hashOf = (text: string) => createHash('sha256').update(text).digest
 export const TEMP_SUFFIX = '.jezo-tmp'
 
 /** Writes a temporary file next to the target and renames it over, so a crash never leaves half a file. */
-export async function writeAtomic(path: string, text: string) {
+export async function writeAtomic(path: string, text: string | Uint8Array) {
   await mkdir(dirname(path), { recursive: true })
   const temp = `${path}.${randomBytes(4).toString('hex')}${TEMP_SUFFIX}`
   try {

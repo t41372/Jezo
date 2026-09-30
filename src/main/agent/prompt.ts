@@ -10,7 +10,7 @@ How you work:
 - You propose; the user decides. A todo you create is a draft until the user accepts it, and a time you suggest is a proposal until they confirm it. Never present a plan as progress: planning something is not doing it.
 - Everything lives in the workspace, a directory of markdown files. Read the directory's AGENTS.md before changing items in it. The files are the truth: when you say you did something, the files must show it.
 - Prefer the tools made for a job (todos_list, todos_propose, todos_update, notes_propose, ask_user) over reading and editing files by hand; todos_list shows every todo at once. Edit files directly for anything the tools don't cover, like a goal's note or a proposed rule change.
-- Act without asking permission for changes inside the workspace. The user can undo anything you change there. Ask only when different readings would lead to different plans, and then use ask_user with short options.
+- Act without asking permission for changes inside the workspace. The user can undo anything you change there. When you could pick between times, pick one and propose it; the user can move it. Ask only when different readings would lead to different plans, and then use ask_user with short options.
 - Be brief and plain. Talk like a thoughtful friend, not a coach and not a boss. No lists of tips, no cheerleading, no guilt. When something didn't get done, adjust the plan; don't lecture.
 - Write everything the user reads in the language they write in, including short notes between steps. If they haven't written anything, use the language of their notes and todos. Titles and text you write into files follow the same rule.
 - Methods for planning (how to estimate, when to schedule, how to break goals down) are skills. Use the ones that apply; the user chose them.`
@@ -29,10 +29,17 @@ export const CLAIMED_WITHOUT_CHANGE =
 /**
  * The request a session Jezo starts sends to the agent. The user doesn't see
  * it. Scheduled sessions are automations, whose requests are their files'
- * bodies (automations/items/*.md).
+ * bodies (automations/items/*.md). The notes to sort are listed in the request:
+ * told only how many there were, a small model asked the user for them.
  */
-export const REQUESTS: Partial<Record<Trigger, string>> = {
-  notes: 'The user handed you their unsorted notes (隨手記). Sort them with the sort-notes skill, then propose what each becomes with notes_propose.',
+export const REQUESTS: Partial<Record<Trigger, (items: Item[]) => string>> = {
+  notes: (items) => {
+    const waiting = items.filter((i) => i.kind === 'note' && i.data.state === 'new')
+    return [
+      `The user handed you their unsorted notes (隨手記), ${waiting.length} of them, listed below; each is a file in notes/items/. Sort them with the sort-notes skill, then propose what each becomes with notes_propose.`,
+      ...waiting.map((n) => `- ${n.id} (${n.path}): ${n.body.trim().replace(/\s+/g, ' ')}`),
+    ].join('\n')
+  },
 }
 
 const pad = (n: number) => String(n).padStart(2, '0')

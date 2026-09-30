@@ -26,6 +26,24 @@ function lines(events: CalendarEvent[], names: Map<string, string>, withNotes: b
   })
 }
 
+/**
+ * Events just outside a range, by time only. School feeds put Friday's homework
+ * at 03:00 Saturday, and a range ending Friday misses it. Showing only when,
+ * not what, lets the agent decide to look without widening what it was asked
+ * (from icsfeed's "boundary hints").
+ */
+function hints(outside: CalendarEvent[], starts: string, ends: string) {
+  const hour = 3_600_000
+  const near = outside.filter((e) =>
+    e.allDay
+      ? true
+      : new Date(e.end).getTime() > new Date(starts).getTime() - 24 * hour && new Date(e.start).getTime() < new Date(ends).getTime() + 24 * hour,
+  )
+  if (!near.length) return ''
+  const when = near.map((e) => (e.allDay ? `${e.start} (all day)` : e.start.replace('T', ' ')))
+  return `\n\nJust outside this range, not part of the answer: ${near.length} event${near.length > 1 ? 's' : ''} at ${when.join(', ')}. If one might belong to what the user asked (a deadline just after midnight, say), look at that day with calendar_events.`
+}
+
 export function calendarExtension(calendars: Calendars): ExtensionFactory {
   const names = async () => new Map((await calendars.status()).calendars.map((c) => [c.id, c.name]))
 
@@ -63,9 +81,15 @@ export function calendarExtension(calendars: Calendars): ExtensionFactory {
           throw new Error('from and to are dates like 2026-09-29.')
         }
         if (params.to < params.from) throw new Error('to is before from.')
-        const events = await calendars.events(params.from, addDays(params.to, 1))
+        const end = addDays(params.to, 1)
+        // A day either side too, for the hints below.
+        const around = await calendars.events(addDays(params.from, -1), addDays(end, 1))
+        const starts = `${params.from}T00:00`
+        const ends = `${end}T00:00`
+        const inRange = (e: CalendarEvent) => (e.allDay ? e.end > params.from && e.start < end : e.start < ends && (e.end > starts || e.start >= starts))
+        const events = around.filter(inRange)
         const text = events.length ? lines(events, await names(), !!params.notes).join('\n') : `Nothing on the calendar from ${params.from} to ${params.to}.`
-        return { content: [{ type: 'text' as const, text }], details: undefined }
+        return { content: [{ type: 'text' as const, text: text + hints(around.filter((e) => !inRange(e)), starts, ends) }], details: undefined }
       },
     })
   }
