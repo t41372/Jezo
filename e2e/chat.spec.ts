@@ -73,8 +73,14 @@ test.describe('saved chat, without a model', () => {
     await expect(page.locator('main img[src^="http"]')).toHaveCount(0)
     await expect(page.locator('main')).not.toContainText('HIDDEN-')
     await expect(page.getByRole('link', { name: '外部連結' })).toHaveAttribute('target', '_blank')
-    await page.getByRole('button', { name: '複製訊息' }).last().click()
-    expect(await jezo.app.evaluate(({ clipboard }) => clipboard.readText())).toContain('| 待辦 | 分鐘 |')
+    // The clipboard is the developer's own: what was on it goes back right after.
+    const theirs = await jezo.app.evaluate(({ clipboard }) => clipboard.readText())
+    try {
+      await page.getByRole('button', { name: '複製訊息' }).last().click()
+      await expect.poll(() => jezo.app.evaluate(({ clipboard }) => clipboard.readText())).toContain('| 待辦 | 分鐘 |')
+    } finally {
+      await jezo.app.evaluate(({ clipboard }, text) => clipboard.writeText(text), theirs)
+    }
     await artifact(page, info, 'markdown')
     expect(jezo.errors).toEqual([])
   })

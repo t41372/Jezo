@@ -10,6 +10,7 @@ Each top-level directory with a `manifest.yaml` holds one kind of item:
 - `goals/`: what the user is working toward, with the rules that get it done
 - `notes/`: things the user jotted down without sorting (隨手記)
 - `automations/`: things Jezo starts on its own at set times, like the morning plan
+- `experiments/`: small experiments that try one way of doing things against another on the user's own days
 - `memory/`: what you remember about the user; use the memory tools to change it
 - `sessions/`: conversations, written by the app. Read them if you need an earlier conversation; don't edit them.
 - `skills/`: methods that aren't one plugin's, like how to estimate time. A plugin's own methods are in its `skills/`. The user chose these; follow the ones that apply, and don't change a skill without telling them why.

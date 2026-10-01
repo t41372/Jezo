@@ -2,7 +2,7 @@
 // fields to write. The file formats are in docs/design/backend.md.
 
 import type { Fields, Item } from '../../../shared/workspace'
-import type { Goal, ISODate, Memory, Note, Todo } from './types'
+import type { Experiment, Goal, ISODate, Memory, Note, Todo } from './types'
 
 // ─── Local times ───
 // On disk a time is local, with no zone: "2026-09-29T09:30". The UI keeps a
@@ -46,6 +46,8 @@ export function toTodo(item: Item): Todo {
   return {
     id: item.id,
     title: str(d.title) ?? '',
+    notes: item.body,
+    path: item.path,
     goalId: str(d.goal) ?? null,
     state: d.state === 'draft' || d.state === 'done' ? d.state : 'open',
     cue: str(d.cue),
@@ -173,6 +175,23 @@ export function toNote(item: Item): Note {
 }
 
 /** Items of one kind, as the UI's entities. */
+// ─── Experiments ───
+
+export function toExperiment(item: Item): Experiment {
+  const d = item.data
+  const arms = Array.isArray(d.arms) ? (d.arms as Experiment['arms']) : []
+  return {
+    id: item.id,
+    title: str(d.title) ?? '',
+    question: item.body.trim(),
+    state: d.state === 'finished' ? 'finished' : 'running',
+    measure: str(d.measure) ?? '',
+    arms: arms.map((a) => ({ ...a, periods: Array.isArray(a.periods) ? a.periods : [] })),
+    conclusion: str(d.conclusion),
+    decision: d.decision === 'adopt' || d.decision === 'rerun' || d.decision === 'drop' ? d.decision : undefined,
+  }
+}
+
 export function entities<T>(items: Iterable<Item>, kind: string, convert: (item: Item) => T): T[] {
   const out: T[] = []
   for (const item of items) if (item.kind === kind && !item.id.startsWith('?')) out.push(convert(item))

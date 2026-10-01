@@ -35,19 +35,12 @@ Google through EventKit won't be tested separately (Tim, 2026-09-30: every accou
 ## Work in progress, in order
 
 1. **Left over from merged work:**
-   - Undoing a method install leaves binary files behind (undo only keeps text).
    - The install entry isn't verified in the packaged app, with a native addon, or with a live OAuth sign-in (extensions.md). The pi directory (packages, MCP config) isn't in the workspace backup.
-   - The GUI doesn't show an item's problems yet; the agent sees them in the digest.
 2. **Sync:** designed (docs/design/sync.md); its eight questions are for Tim. The cheap changes are done; the rest waits for sync itself, with reasons in the doc.
 3. **Test model.** `qwen3.6-35b-a3b-splash` (Tim, 2026-09-30, replacing gemma-4-e4b). Read traces with `bun scripts/trace.ts` and fix the input first (AGENTS.md, "How we work"). It sometimes repeats a line in its thinking until it runs out of tokens (3 of ~20 runs); the chat now says so and offers a retry. The agent tests pass most runs; single failures are usually that loop.
-4. **Slash commands.** A "/" menu in the composer for skills, prompt templates and extension commands. `/model`, `/new` and similar become UI actions.
-5. **更多 → 自動化 list UI.**
-6. Later:
-   - memory cards in the check-in, and a memory preview
-   - the rework card
-   - experiments and the non-calendar connections, which are still mock
+4. Later:
+   - an experiment's arm isn't checked against the morning plan in a test (the digest line is there, the effect isn't measured)
    - bundling uv for the packaged app
-   - the connection icon tiles are blank (noted by Codex in the polish pass)
    - trying the packaged app's EventKit permission
 
 ## Things that bit us (keep in mind)
@@ -68,5 +61,6 @@ Google through EventKit won't be tested separately (Tim, 2026-09-30: every accou
   on 2026-09-30 had bugs only the E2E run showed (cards not registered as
   assistant-ui data parts; `require.resolve` of pi's ESM-only package
   crashing the main process).
+- **The clipboard is Tim's.** A test that copies must put back what was there (chat.spec.ts); one failed when Tim copied something mid-run, and every run overwrote his clipboard.
 - **E2E evaluate in the main process** can't use dynamic `import()`; use
   `process.getBuiltinModule('node:fs')` and the electron modules passed in.

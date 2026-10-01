@@ -222,6 +222,101 @@ test('automations are files, and the settings rows edit the built-in ones', asyn
   expect(jezo.errors).toEqual([])
 })
 
+test.describe('the automations page', () => {
+  // Without a model, running one still starts its conversation, which says no model is set up.
+  test.use({ prepare: { model: null } })
+  test('lists them in words, and switching, the time, the request, running and deleting all go through their files', async ({ jezo }) => {
+    const { page, read } = jezo
+    const main = page.locator('main')
+    await open(page, '更多')
+    await page.getByText('自動化', { exact: true }).click()
+    const row = (id: string) => main.locator(`[data-automation="${id}"]`)
+    await expect(row('a-morning')).toContainText('每天 08:00')
+    await expect(row('a-evening')).toContainText('每天 21:30')
+    await expect(row('a-weekly')).toContainText('每週日 20:00')
+
+    // The fixture has them off; the switch writes the file.
+    await row('a-weekly').getByRole('switch').click()
+    await expect.poll(() => read('automations/items/a-weekly.md').data.state).toBe('on')
+
+    // Its page: a new time keeps the days, and the request is the file's body.
+    await row('a-morning').getByRole('button').first().click()
+    await main.locator('input[type=time]').fill('07:30')
+    await expect.poll(() => read('automations/items/a-morning.md').data.schedule).toBe('30 7 * * *')
+    await expect(main).toContainText('每天 07:30')
+    const request = main.getByRole('textbox', { name: '要 agent 做的事' })
+    await expect(request).toHaveValue(/跟用戶一起排今天/)
+    await request.fill('一天開始了。只看今天的行事曆，用一句話說今天最重要的事。')
+    await main.getByRole('heading', { name: '早上排程' }).click()
+    await expect.poll(() => read('automations/items/a-morning.md').body.trim()).toBe('一天開始了。只看今天的行事曆，用一句話說今天最重要的事。')
+
+    // Running it now starts its conversation, and the page links to it.
+    await main.getByRole('button', { name: '現在跑一次' }).click()
+    await expect(page.getByRole('button', { name: /早上排程/ }).first()).toBeVisible()
+    await open(page, '更多')
+    await page.getByText('自動化', { exact: true }).click()
+    await row('a-morning').getByRole('button').first().click()
+    await expect(main).toContainText('上次：今天')
+
+    // Deleting removes the file; undo puts it back as it was.
+    const before = read('automations/items/a-morning.md').data
+    await main.getByRole('button', { name: '刪掉' }).click()
+    await expect(row('a-morning')).toHaveCount(0)
+    await page.getByRole('button', { name: '撤銷' }).click()
+    await expect(row('a-morning')).toBeVisible()
+    await expect.poll(() => read('automations/items/a-morning.md').body.trim()).toBe('一天開始了。只看今天的行事曆，用一句話說今天最重要的事。')
+    expect(read('automations/items/a-morning.md').data).toEqual(before)
+    expect(jezo.errors).toEqual([])
+  })
+})
+
+test('a file that breaks its format shows in 更多, can go to the agent, and leaves once fixed', async ({ jezo }) => {
+  const { page, root } = jezo
+  const main = page.locator('main')
+  const file = join(root, 'todos/items/t-u3.md')
+  const good = readFileSync(file, 'utf8')
+  await open(page, '更多')
+  await expect(main.getByText('有問題的檔案')).toHaveCount(0)
+
+  // Changed by hand to a state todos don't have.
+  writeFileSync(file, good.replace('state: open', 'state: someday'))
+  await main.getByText('有問題的檔案').click()
+  const row = main.locator('[data-problem="todos/items/t-u3.md"]')
+  await expect(row).toContainText('訂 12 月比賽的住宿')
+  await row.getByText('1 個問題').click()
+  await expect(row).toContainText('state must be one of draft, open, done')
+
+  // One tap puts the request in the chat's box; the user sends it.
+  await row.getByRole('button', { name: '請 Jezo 修' }).click()
+  await expect(main.locator('textarea').first()).toHaveValue('幫我修好 todos/items/t-u3.md 的問題。')
+
+  writeFileSync(file, good)
+  await open(page, '更多')
+  await expect(main.getByText('有問題的檔案')).toHaveCount(0)
+  expect(jezo.errors).toEqual([])
+})
+
+test("a todo's drawer on the calendar sits above everything the calendar draws, and Escape closes it", async ({ jezo }) => {
+  const { page } = jezo
+  await open(page, '行事曆')
+  await page.locator('[data-slot=event-calendar-event]').filter({ hasText: '晨跑' }).first().click()
+  const drawer = page.locator('aside')
+  await expect(drawer).toContainText('晨跑 5 km')
+  // Every point of the drawer belongs to it: the calendar's sticky toolbar and raised chips stay underneath.
+  const covered = await page.evaluate(() => {
+    // Where the drawer shows: inside main, which clips it, and below the window's drag strip.
+    const r = document.querySelector('aside')!.getBoundingClientRect()
+    const m = document.querySelector('main')!.getBoundingClientRect()
+    const points: [number, number][] = []
+    for (let x = r.left + 4; x < Math.min(r.right, m.right); x += 40) for (let y = Math.max(r.top, 44); y < Math.min(r.bottom, m.bottom); y += 40) points.push([x, y])
+    return points.filter(([x, y]) => !document.elementFromPoint(x, y)?.closest('aside')).map(([x, y]) => `${x},${y} ${document.elementFromPoint(x, y)?.outerHTML.slice(0, 120)}`)
+  })
+  expect(covered).toEqual([])
+  await page.keyboard.press('Escape')
+  await expect(drawer).toHaveCount(0)
+  expect(jezo.errors).toEqual([])
+})
+
 test('a markdown link between two todos shows on both, and opens the other', async ({ jezo }) => {
   const { page, root } = jezo
   // Written in another editor: a standard markdown link from 打給媽 to 回 3 封卡住的信.
@@ -234,7 +329,7 @@ test('a markdown link between two todos shows on both, and opens the other', asy
 
   // The other todo shows it's linked from here, and the link opens it.
   await related.getByRole('button', { name: /回 3 封卡住的信/ }).click()
-  await expect(page.locator('h2', { hasText: '回 3 封卡住的信' })).toBeVisible()
+  await expect(page.getByRole('textbox', { name: '標題' })).toHaveValue('回 3 封卡住的信')
   await expect(page.locator('section').filter({ hasText: '相關' }).getByRole('button', { name: /打給媽/ })).toBeVisible()
   expect(jezo.errors).toEqual([])
 })

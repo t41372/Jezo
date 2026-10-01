@@ -5,9 +5,6 @@
 // to them), so it isn't translated. Labels the app derives from it are.
 
 import type {
-  Energy,
-  Connection,
-  Experiment,
   Note,
   Todo,
 } from './types'
@@ -23,7 +20,7 @@ const day = (offset: number) => {
 const at = (h: number, m = 0) => h + m / 60
 
 let n = 0
-const todo = (t: Omit<Todo, 'id'> & { id?: string }): Todo => ({ id: `t-x${n++}`, ...t })
+const todo = (t: Omit<Todo, 'id' | 'notes'> & { id?: string; notes?: string }): Todo => ({ id: `t-x${n++}`, notes: '', ...t })
 
 export const todos: Todo[] = [
   // Today. The morning session proposed everything except the run, which was already done.
@@ -80,12 +77,6 @@ export const todos: Todo[] = [
 ]
 
 /** Where the agent would put backlog items if asked to find time, and why. */
-export const suggestedSlots: Record<string, { date: string; start: number; why: string }> = {
-  't-u1': { date: day(1), start: at(13), why: '午餐後 13:00 到 Design review 之前有一小時空檔。' },
-  't-u2': { date: day(2), start: at(20, 30), why: '週三晚上 19:00 後全空。你們通常聊 25 分，後面我不塞東西。' },
-  't-u3': { date: day(4), start: at(20), why: '週五晚上比較鬆，訂房要比價。' },
-  't-u4': { date: day(5), start: at(15), why: '週六下午沒排東西，這件需要一整段時間。' },
-}
 
 /** Things jotted down in 隨手記, one of each kind the agent sorts into. */
 export const notes: Note[] = [
@@ -96,65 +87,6 @@ export const notes: Note[] = [
   { id: 'n-5', text: '那本講習慣的書，書名好像叫 Tiny Habits', date: day(1), time: at(8, 31), source: 'page', state: 'new' },
 ]
 
-export const experiments: Experiment[] = [
-  {
-    id: 'x1',
-    title: '早上先做最難的事',
-    weeks: 4,
-    finished: true,
-    arms: [
-      { label: '照平常排的兩週', value: '58%', metric: '升等 doc 有寫的天數' },
-      { label: '先做最難的兩週', value: '74%', metric: '升等 doc 有寫的天數', highlight: true },
-    ],
-    conclusion: '看起來可能有用。不過「先做難的」那兩週剛好少了 3 場會議，差距有一部分可能是因為這個。',
-  },
-  { id: 'x2', title: '單字卡：睡前背 vs 早上背', weeks: 4, week: 2, finished: false },
-]
 
-export const connections: Connection[] = [
-  { id: 'c2', name: 'Strava', connected: true, detail: '跑步紀錄會自動算成「做了」' },
-  { id: 'c3', name: 'Anki', connected: true, detail: '背卡紀錄會自動算成「做了」' },
-  { id: 'c6', name: 'Gmail', connected: false, detail: '讓它知道哪些信卡住了', access: { reads: '信件的標題、寄件人和日期，用來找出你還沒回的信。不讀內文。' } },
-]
 
-/** One change in a reworked day. `change` is applied to the todo when the user accepts. */
-export interface ReworkItem {
-  todoId: string
-  title: string
-  note: string
-  change: Partial<Todo>
-}
-
-/** What the agent would do with today, depending on how the user is doing. */
-export const reworkPlans: Record<Energy, { keep: ReworkItem[]; move: ReworkItem[]; drop: ReworkItem[] }> = {
-  low: {
-    keep: [{ todoId: 't-7', title: '背 5 張單字卡', note: '原本 15 張', change: { title: '背 5 張單字卡', estimateMinutes: 5 } }],
-    move: [
-      { todoId: 't-2', title: '寫升等 doc 的「Impact」那段', note: '→ 明天 09:10 咖啡後', change: { slot: { date: day(2), start: at(9, 10) } } },
-      { todoId: 't-6', title: '去健身房，只做 20 分鐘', note: '→ 週四 18:30', change: { slot: { date: day(3), start: at(18, 30) } } },
-      { todoId: 't-5', title: 'N3 聽力 1 回', note: '→ 明天通勤', change: { slot: { date: day(2), start: at(19, 10) } } },
-    ],
-    drop: [{ todoId: 't-u1', title: '回 3 封卡住的信', note: '不排，明天早上再問你', change: { slot: null } }],
-  },
-  some: {
-    keep: [
-      { todoId: 't-2', title: '升等 doc：只寫 3 個重點', note: '15 分，原本 70 分', change: { title: '升等 doc：只寫 3 個重點', estimateMinutes: 15 } },
-      { todoId: 't-7', title: '背 15 張單字卡', note: '照原本', change: {} },
-    ],
-    move: [
-      { todoId: 't-6', title: '去健身房，只做 20 分鐘', note: '→ 週四 18:30', change: { slot: { date: day(3), start: at(18, 30) } } },
-      { todoId: 't-5', title: 'N3 聽力 1 回', note: '→ 明天通勤', change: { slot: { date: day(2), start: at(19, 10) } } },
-    ],
-    drop: [{ todoId: 't-u1', title: '回 3 封卡住的信', note: '不排', change: { slot: null } }],
-  },
-  plenty: {
-    keep: [
-      { todoId: 't-2', title: '寫升等 doc 的「Impact」那段', note: '縮成 45 分', change: { estimateMinutes: 45 } },
-      { todoId: 't-5', title: 'N3 聽力 1 回', note: '19:10 通勤', change: {} },
-      { todoId: 't-7', title: '背 15 張單字卡', note: '22:30', change: {} },
-    ],
-    move: [{ todoId: 't-6', title: '去健身房，只做 20 分鐘', note: '→ 週四 18:30，今天來不及', change: { slot: { date: day(3), start: at(18, 30) } } }],
-    drop: [{ todoId: 't-u1', title: '回 3 封卡住的信', note: '不排', change: { slot: null } }],
-  },
-}
 

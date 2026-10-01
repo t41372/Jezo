@@ -51,6 +51,10 @@ export type TodoState = 'draft' | 'open' | 'done'
 export interface Todo {
   id: string
   title: string
+  /** The notes under the frontmatter, markdown: the file's body. */
+  notes: string
+  /** The file, relative to the workspace, so links and attachments in the notes resolve from it. */
+  path?: string
   goalId: string | null
   state: TodoState
   /** The situation it gets done in: "到公司倒完咖啡". */
@@ -157,27 +161,8 @@ export interface CalendarEvent {
   url?: string
 }
 
-/**
- * What a conversation shows. Most kinds come from the agent's session
- * (src/shared/session.ts); the rest are still drawn from mock data.
- */
-export type Message =
-  | SessionMessage
-  /** Something the agent saved to memory. */
-  | { kind: 'memory'; text: string }
-  /**
-   * The agent reworking a day that went badly. The user says how they're doing,
-   * the agent drafts what to keep, move, and drop, and nothing changes until
-   * they accept. `before` holds the todos as they were, for undo.
-   */
-  | { kind: 'rework'; energy?: Energy; applied?: boolean; before?: Todo[] }
-  /**
-   * What a session is about to write to memory, shown before it's written.
-   * Inferences without enough evidence are listed as not written.
-   */
-  | { kind: 'memory-preview'; stated: string[]; skipped: { text: string; why: string }[]; plan: string[]; saved?: boolean }
-
-export type Energy = 'low' | 'some' | 'plenty'
+/** What a conversation shows (src/shared/session.ts). */
+export type Message = SessionMessage
 
 export interface Session extends Omit<SessionView, 'messages'> {
   messages: Message[]
@@ -206,24 +191,16 @@ export interface Skill extends SkillInfo {
   reviewed?: boolean
 }
 
-export interface Connection {
-  id: string
-  name: string
-  connected: boolean
-  /** What the connector says about itself, like when it last synced. */
-  detail?: string
-  /** What connecting lets Jezo read and write, as the connector describes it. */
-  access?: { reads: string; writes?: string }
-}
-
+/** A small experiment, from `experiments/items/` (experiments/AGENTS.md in the workspace). */
 export interface Experiment {
   id: string
   title: string
-  weeks: number
-  /** The week it's in, while running. */
-  week?: number
-  finished: boolean
-  arms?: { label: string; value: string; metric: string; highlight?: boolean }[]
+  /** What the user wants to find out, in their words: the file's body. */
+  question: string
+  state: 'running' | 'finished'
+  /** What's counted, in words: 升等 doc 有寫的天數. */
+  measure: string
+  arms: { label: string; condition?: string; periods: { from: ISODate; to: ISODate }[]; value?: string; basis?: string }[]
   conclusion?: string
   decision?: 'adopt' | 'rerun' | 'drop'
 }

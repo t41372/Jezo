@@ -2,7 +2,7 @@
 // branches and the cards its tools return. Keep the adapter's index IDs here.
 import { ExportedMessageRepository, type ThreadMessageLike } from '@assistant-ui/react'
 import { projectPiThreadMessages, type PiAgentMessage, type PiThreadState, type PiToolResultMessage, type PiUserMessage } from '@assistant-ui/react-pi'
-import { shownCustom, type ChatTree } from '../../../../shared/chat'
+import { shownCustom, typedText, type ChatTree } from '../../../../shared/chat'
 import type { SessionMessage } from '../../../../shared/session'
 
 export type IdentifiedMessage = PiAgentMessage & { jezoEntryId?: string; jezoLeafId?: string }
@@ -19,7 +19,11 @@ const identityKey = (m: PiAgentMessage) => m.role === 'toolResult'
   : `${m.role}:${m.timestamp}`
 
 function project(messages: IdentifiedMessage[], state?: PiThreadState, aliases = new Map<string, string>()) {
-  const canonical = messages.filter(visible)
+  const canonical = messages.filter(visible).map((m) => {
+    if (m.role !== 'user') return m
+    const { content } = m as PiUserMessage
+    return { ...m, content: typeof content === 'string' ? typedText(content) : content.map((p) => (p.type === 'text' ? { ...p, text: typedText(p.text) } : p)) } as IdentifiedMessage
+  })
   const results = new Map<string, { card: SessionMessage; entryId: string; picked?: boolean }>()
   canonical.forEach((m, i) => {
     if (m.role !== 'toolResult' || m.isError) return

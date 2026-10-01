@@ -56,6 +56,11 @@
       "title": "Automation",
       "short": "Automatic",
       "started": "Started automatically"
+    },
+    "backlog": {
+      "title": "Finding times",
+      "short": "Times",
+      "started": "Handed over from the backlog"
     }
   },
   "todo": {
@@ -78,7 +83,11 @@
     "ask": "Ask the agent",
     "askPrefill": "About “{{title}}”, ",
     "close": "Close",
-    "subtasks": "Steps"
+    "subtasks": "Steps",
+    "title": "Title",
+    "cuePlaceholder": "When it gets done, like: back at my desk after lunch",
+    "at": "Time",
+    "minutes": "minutes"
   },
   "event": {
     "readOnly": "From {{source}}. Change the time there.",
@@ -165,11 +174,49 @@
     "steer": "Steer current work",
     "queued": "Up next",
     "steering": "Steering",
-    "takeBack": "Take back pending messages"
+    "takeBack": "Take back pending messages",
+    "commands": {
+      "label": "Commands",
+      "new": "New conversation",
+      "model": "Change the model",
+      "source": {
+        "skill": "Method",
+        "prompt": "Template",
+        "extension": "Extension",
+        "app": "Jezo"
+      }
+    }
   },
   "related": {
     "title": "Related",
     "linksTo": "Links to",
     "linkedFrom": "Linked from"
+  },
+  "editor": {
+    "upload": "Upload",
+    "imageLink": "or paste an image link",
+    "caption": "Write a caption…",
+    "confirm": "OK",
+    "linkPlaceholder": "Paste a link",
+    "notesPlaceholder": "Write notes; type / for headings, lists, images…",
+    "menu": {
+      "text": "Text",
+      "paragraph": "Text",
+      "h1": "Heading 1",
+      "h2": "Heading 2",
+      "h3": "Heading 3",
+      "quote": "Quote",
+      "divider": "Divider",
+      "lists": "Lists",
+      "bullets": "Bulleted list",
+      "numbers": "Numbered list",
+      "tasks": "To-do list",
+      "more": "More",
+      "image": "Image",
+      "code": "Code",
+      "table": "Table"
+    },
+    "attach": "Attach a file",
+    "files": "Attached files"
   }
 }

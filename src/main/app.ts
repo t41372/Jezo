@@ -17,11 +17,15 @@ import { registerQuickKey, unregisterQuickKey } from './hotkey'
 import { createQuickWindow, endVoice, hideQuick, resizeQuick, startVoice, toggleTyping } from './quick'
 import { serveSpeech } from './speech/ipc'
 import { Speech } from './speech/speech'
+import { registerFileScheme, serveFiles } from './workspace/attachments'
 import { serveWorkspace } from './workspace/ipc'
 import { seedWorkspace } from './workspace/seed'
 import { Workspace } from './workspace/workspace'
 import { installer } from './install/installer'
 
+
+// Before the app is ready: the windows load workspace files, like images in notes, from this scheme.
+registerFileScheme()
 
 const QUICK_KEY = 'Alt+X'
 
@@ -125,6 +129,7 @@ async function openWorkspace() {
   await installer(workspace).open()
   const undo = new UndoLog(workspace, historyFile(app.getPath('userData')))
   serveWorkspace(workspace, undo)
+  serveFiles(workspace)
   const providers = new Providers()
   await providers.open()
   const memory = createMemory(workspace)

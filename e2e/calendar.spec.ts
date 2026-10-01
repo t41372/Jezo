@@ -1,8 +1,7 @@
 // Calendar subscriptions, end to end: a real HTTP server serves feeds shaped
 // like the ones Outlook and Google publish, and the user subscribes, hides and
-// removes them in the GUI. Times are checked in Taipei, pinned here so the
-// test doesn't depend on the machine's zone.
-process.env.TZ = 'Asia/Taipei'
+// removes them in the GUI. Times are checked in Taipei, which
+// playwright.config.ts pins for every test.
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { createServer, type Server } from 'node:http'

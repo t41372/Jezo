@@ -77,13 +77,14 @@ How a user's plugin code gets loaded at runtime is not decided.
 
 ## Data
 
-Todos and notes come from the workspace ([backend.md](backend.md)): the store applies a change at once, writes it through the main process, and takes the file as it comes back. Experiments and connections are still the mockup's data in the store, shaped like the real entities so wiring them replaces the source without remodeling the UI. `bun scripts/fixture.ts <directory>` writes a workspace with the mockup's todos and notes, for development and tests. Its dates are moved so the mockup's "today" is the real today.
+Todos and notes come from the workspace ([backend.md](backend.md)): the store applies a change at once, writes it through the main process, and takes the file as it comes back. Experiments are files too since 2026-09-30 ([experiments.md](experiments.md)). The mockup's other connections (Strava, Anki, Gmail with its connect dialog) were removed on 2026-09-30: they looked connected and weren't. 連接 has the calendars, and says other services come in as MCP servers or pi packages through 已安裝 ([extensions.md](extensions.md)). `bun scripts/fixture.ts <directory>` writes a workspace with the mockup's todos and notes, for development and tests. Its dates are moved so the mockup's "today" is the real today.
 
 - **Each window changes only the entities it's told about.** When a file comes back, the store replaces that entity and leaves the rest, which may have writes of their own on the way; re-reading the whole list would briefly undo a drag that hasn't reached the disk yet.
 
 - **A todo** has an ID, a title, a goal ID, a cue (the situation it's done in), an estimate, a schedule, and a `why` written by the agent.
 - **A todo has a state: `draft`, `open`, or `done`.** A draft is a todo the agent proposed. It only counts once the user accepts it, because a plan is not progress (see [concept.md](concept.md)). Draft is data, not a style.
 - **A time slot can be proposed.** When the agent suggests a time for a todo the user already accepted, only the time is a draft. The user confirms it, drags it somewhere else, or sends it back to the backlog.
+- **讓 agent 幫我找時間** under the backlog hands the backlog to the agent in a conversation of its own (trigger `backlog`), which proposes times for the next seven days with `todos_update`. The button says it's working while it runs, then offers the conversation, where the agent says what it left in the backlog and why. Until 2026-09-30 the button wrote fixed times from the mockup, which only matched the fixture's todos. Times the agent proposes arrive on the calendar one by one wherever they come from (the morning plan too), not only from this button.
 - **Drafts show up everywhere the todo does,** marked as drafts, and don't count toward "做了". The mockup only showed them in the chat; showing them on Today and the calendar too means the morning plan is visible wherever the user looks first.
 - **A calendar event** comes from a connected calendar and is read-only in Jezo. An all-day event starts at 0 and its hours are whole days.
 - **The backlog has an order,** and a todo dropped on it goes where it was dropped. On disk the order is each todo's `rank`, a fractional index, so a move writes one file ([backend.md](backend.md)).
@@ -109,6 +110,28 @@ AgentHost creates and keeps every pi session. It still supplies Jezo's tools, ch
 The hand-made chat was replaced because retry, editing, queues, markdown and scroll behavior are already maintained by a chat library. **AI Elements** supplies presentation components but would leave Jezo responsible for the pi runtime and conversation tree. **LobeHub UI** supplies polished rendering and controls, but does not provide this pi adapter and would bring another component system. assistant-ui fits Jezo's existing components and offers the pi transport contract. We extend only the parts that the installed adapter cannot carry.
 
 The PiClient archive/delete and extension-dialog methods reject when called: Jezo's session list does not expose those actions, and its tools ask through existing cards. These methods are not new GUI features.
+
+## Todo details
+
+Decided on 2026-09-30, after Tim: the drawer's details couldn't be edited, and a todo tool should have a Notion-like editor that takes images and other files.
+
+- **Every value edits in place.** The title and the cue are text fields that save on Enter or leaving them. 排在 opens a month view and a time; 大約 offers common lengths in one tap and any number of minutes. They write through the store's existing actions, so a time the user picks is theirs, not a proposal.
+- **The notes are the file's body, in a markdown editor:** Milkdown's Crepe, with its "/" menu (headings, lists, to-do lists, quotes, images, tables, code), block handles and image blocks, its labels in the app's language, colored from Jezo's tokens. It writes markdown the way the agent does (`-` bullets, `*` emphasis), so an edit changes only the lines edited: E2E adds a word to a body written like the agent's and the file differs by that word. The one other change it makes is escaping an underscore CommonMark doesn't read as emphasis, like `_不要_` next to Chinese text.
+- **The file can change while the drawer is open,** by the agent or another editor. The editor takes the new text unless the user is typing, whose save then wins.
+- **Files in the notes live in the workspace,** at `<plugin>/attachments/<item id>/<name>`, linked from the notes with an ordinary relative link (`![白板.png](../attachments/t-1/白板.png)`), so any markdown editor and the agent see them. Pasted, dropped or picked images show in the text; other files are links, listed below the notes with a button that opens them in their own app. The window loads workspace files through the `jezo-file:` scheme, which serves nothing outside the workspace; the content policy allows it for images. Like every GUI edit, adding a file isn't in 修改紀錄.
+- **Rejected:** BlockNote, the most Notion-like, because its own block format is the source and its markdown export is lossy: the agent's markdown would be rewritten on every save. MDXEditor, markdown-first but built around a toolbar rather than a "/" menu. Tiptap with its markdown extension stays the fallback; it would need the menus built by hand.
+- **Crepe's image block fails on an image without a title,** which is how people write them; a remark step gives such images an empty title while parsing, which isn't written back.
+
+## Slash commands
+
+Decided on 2026-09-30. Typing "/" at the start of the box, in the chat or the ⌥X window, opens a menu of what can be run from a message, narrowed by any part of a name, title or description. Arrows move, Enter or Tab picks, Escape closes it until the user types on.
+
+- **What's in it is pi's.** Methods (`/skill:name`, shown by their title), prompt templates, and commands that installed extensions register, read the way pi reads them for a session (`AgentHost.commands()`, each time the menu opens, so something installed a minute ago is there). Picking one puts `/name ` in the box; sending it goes through pi's `prompt()`, which expands a method or template and runs an extension's command. Jezo adds no command format of its own.
+- **Jezo's own actions** are two: /new starts a conversation and /model opens the model list. They run on the spot. pi's terminal commands (/tree, /compact, /export and the like) aren't offered: the chat has buttons for what the GUI needs of them.
+- **Arguments, as pi's own editor offers them.** After `/name `, a command whose extension gives `getArgumentCompletions` lists what it suggests for what's typed so far, and picking one puts it after the command; a prompt template shows its `argument-hint`. The main process asks the extensions the menu last read, and gives up on one after two seconds.
+- **An extension's command needs no model** and runs even while the agent works, as pi runs it. It doesn't get 這輪沒有改動 under it.
+- **The chat shows a method command as typed.** pi puts the whole SKILL.md into the user's message for the model; the bubble shows `/skill:name` and what followed it. A prompt template shows expanded, since the text is what was sent.
+- **Our own menu, not assistant-ui's.** assistant-ui has a trigger popover, but it needs its own composer input and runtime, and the ⌥X window uses the same box without either. The menu is one hook and one list.
 
 ## Translation
 
@@ -173,6 +196,8 @@ All motion respects the OS reduced-motion setting: pressed things don't shrink, 
 
 ## Detail added beyond the v2 mockup
 
+- **The todo drawer over the calendar** slides in from the right edge by its own width and leaves the same way (300 ms in on the drawer curve, 200 ms out; with reduced motion it only fades), and Escape closes it. Its glass is 92% opaque: at 55%, what the calendar draws in its own compositing layers (its scroller, the raised draft chips, the sticky toolbar) showed through sharp, because Chromium's backdrop blur leaves those layers out (checked 2026-09-30 by putting a blurred box over the calendar).
+
 v2 left some screens and states undrawn. These follow the older mockups (`Life Agent.dc.html` and `Life Agent Prototype.dc.html`) where they had them:
 
 - **The calendar's header** keeps the arrows, 今天 and 日／週／月 pinned to the right, so they don't move when the title gets longer, and puts the range and the sync status on one line above. The sync status names the calendars shown and when subscriptions were last read, or which calendar can't be read, in red ([calendar.md](calendar.md)). A week with no todos says so in a chip next to the title rather than a banner that pushes the grid down. The day view names the day in the title and says how far away it is above it, and hides the grid's own day header.
@@ -181,7 +206,7 @@ v2 left some screens and states undrawn. These follow the older mockups (`Life A
 - **開始** on the current todo starts a focus state with the time elapsed, and 做完了 or 停下來.
 - **Undo instead of asking.** Removing a draft, unscheduling a todo, and deleting a memory happen at once, with a toast that offers undo.
 - **Steps** in a todo can be checked off.
-- **Reworking a bad day** (今天不太順) is a card in the chat: the user says how they're doing, the agent drafts what to keep, move, and drop, nothing changes until they accept, and accepting can be undone. The weekly report records it as a rework, not as missed work.
+- **Reworking a bad day** (今天不太順) goes to the agent, which follows the rework-a-bad-day skill: it asks how the user is doing with `ask_user` and proposes the new day as a plan card. The mockup had a card of its own for this, removed on 2026-09-30 (backend.md).
 - **Evening check-in** shows what the session will write to memory before writing it, including inferences left out for lack of evidence.
 - **Adding methods** uses the existing Dialog, Input, Button and ListCard styles. The list shows provenance; the view offers updates for remote sources and removal for top-level workspace methods. Replacement and updates over local edits ask inside the dialog ([skills.md](skills.md)). Both languages have the same controls and messages.
 - **A method (skill)** opens to its SKILL.md. When the agent wants to change it, the page shows why, the evidence, and the diff, and the user applies or rejects it.

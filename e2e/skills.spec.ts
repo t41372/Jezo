@@ -127,6 +127,20 @@ test('adding, replacing, writing, removing and updating methods keeps their file
   await main.getByRole('button', { name: '← 更多' }).click()
   await main.getByText('已安裝', { exact: true }).click()
 
+  // A file that isn't text comes back byte for byte.
+  const picture = join(root, 'skills/next-step/picture.bin')
+  await main.getByRole('button', { name: /下一步方法/ }).click()
+  await main.getByRole('button', { name: '移除', exact: true }).click()
+  await page.getByRole('dialog').getByRole('button', { name: '移除', exact: true }).click()
+  await expect.poll(() => existsSync(picture)).toBe(false)
+  await main.getByRole('button', { name: '← 更多' }).click()
+  await main.getByText('修改紀錄', { exact: true }).click()
+  await main.getByRole('button', { name: '撤銷' }).first().click()
+  await expect.poll(() => existsSync(picture)).toBe(true)
+  expect([...readFileSync(picture)]).toEqual([0, 255, 128, 42])
+  await main.getByRole('button', { name: '← 更多' }).click()
+  await main.getByText('已安裝', { exact: true }).click()
+
   // Updating uses the recorded ref and path, checks the current hash, and removes old files.
   await github.version(2)
   writeFileSync(manifest, readFileSync(manifest, 'utf8') + '\nMy own edits.\n')

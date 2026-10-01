@@ -24,7 +24,15 @@
     },
     "connections": {
       "title": "Connections",
-      "description": "Calendars, Strava, Anki"
+      "description": "Calendars"
+    },
+    "automations": {
+      "title": "Automations",
+      "description": "Conversations Jezo starts on its own, like the morning plan"
+    },
+    "problems": {
+      "title": "Files with problems",
+      "description": "What Jezo can’t fully read; ask it to fix them"
     }
   },
   "counts": {
@@ -32,8 +40,8 @@
     "skills_other": "{{count}} on",
     "experiments_one": "{{count}} running",
     "experiments_other": "{{count}} running",
-    "connections_one": "{{count}}",
-    "connections_other": "{{count}}"
+    "automations_one": "{{count}} on",
+    "automations_other": "{{count}} on"
   },
   "memory": {
     "intro": "What you told it and what it guessed are kept apart. If a guess is wrong, delete it and it won't be used again.",
@@ -84,7 +92,6 @@
     "remove": "Remove",
     "removeQuestion": "Remove “{{title}}”?",
     "removeHint": "You can undo this in Change history.",
-    "binaryUndo": "Attached binary files are not covered by undo.",
     "builtin": "Built into Jezo",
     "written": "Written by you",
     "localSource": "From this computer",
@@ -99,22 +106,32 @@
     "done": "Done"
   },
   "experiments": {
-    "intro": "Want to know whether something works for you? The agent alternates two kinds of weeks and tells you what it found.",
+    "intro": "Want to know if a way of doing things works for you? The agent alternates two ways week by week, counts from your records, and tells you the result.",
+    "add": "Add",
+    "addPrefill": "I want to see if this works for me: ",
+    "none": "No experiments yet.",
+    "starts": "Starts {{date}}",
+    "waiting": "Done; the weekly review will count the result",
+    "running": "Week {{week}} of {{weeks}}",
+    "thisWeek": "This week: {{label}}, {{condition}}",
+    "measure": "Comparing: {{measure}}",
     "finished_one": "{{count}} week · finished",
     "finished_other": "{{count}} weeks · finished",
-    "running": "Running · week {{week}} of {{weeks}}",
+    "tellJezo": "Tell Jezo",
     "choices": {
       "adopt": {
-        "label": "Plan this way for two weeks",
-        "reply": "OK. The next two weeks follow this, and I'll ask how it felt afterward."
+        "label": "Adopt it",
+        "reply": "Noted: adopting it.",
+        "prefill": "I’m adopting the experiment “{{title}}”. Help me build it into my days."
       },
       "rerun": {
-        "label": "Test again",
-        "reply": "OK, two more weeks. This time I'll keep the number of meetings about the same in both."
+        "label": "Try again",
+        "reply": "Noted: trying again.",
+        "prefill": "I want another round of the experiment “{{title}}”. Set it up."
       },
       "drop": {
-        "label": "Not interested",
-        "reply": "OK, dropping it. The results stay in the record."
+        "label": "Drop it",
+        "reply": "Noted: not using it. The result stays here."
       }
     }
   },
@@ -128,7 +145,8 @@
       "user": "Chat",
       "you": "You",
       "notes": "Sorting notes",
-      "automation": "Automation"
+      "automation": "Automation",
+      "backlog": "Finding times"
     },
     "retried_one": "Took {{count}} retry to get the format right",
     "retried_other": "Took {{count}} retries to get the format right",
@@ -140,20 +158,13 @@
     "kept_other": "Undone. You changed {{count}} files afterward, so they were left alone."
   },
   "connections": {
-    "intro": "Once connected, calendar events show up on the Calendar page, and runs and flashcard reviews count as done automatically.",
+    "intro": "Once connected, your calendars’ events show on the Calendar page, and the agent sees them when it plans.",
     "connected": "Connected",
-    "notConnected": "Not connected",
     "connect": "Connect",
     "outside": "Content from outside is marked with where it came from and kept apart from what you say, so it never becomes instructions for the agent.",
-    "dialogTitle": "Connect {{name}}",
-    "reads": "Reads",
-    "writes": "Writes",
-    "noWrites": "Nothing",
-    "local": "What it reads stays in the workspace on this computer. Jezo doesn't send it anywhere else.",
-    "browser": "Your browser opens next so you can sign in.",
     "cancel": "Not now",
-    "justNow": "Just connected",
-    "others": "Other"
+    "others": "Other services, like Gmail or Strava, connect as MCP servers or pi packages:",
+    "toInstalled": "add one in Installed"
   },
   "calendars": {
     "title": "Calendars",
@@ -272,5 +283,32 @@
     "configuration": "View config",
     "configure": "Configure",
     "installOption": "Install {{name}}"
+  },
+  "automations": {
+    "intro": "Jezo starts a conversation on its own at these times. Each is a file, and its text is what the agent is asked to do; you can change it.",
+    "add": "Add",
+    "addPrefill": "Add an automation for me: ",
+    "none": "No automations yet.",
+    "daily": "Every day at {{time}}",
+    "weekly": "Every {{day}} at {{time}}",
+    "range": "{{from}} to {{to}} at {{time}}",
+    "and": ", ",
+    "never": "Hasn’t run yet",
+    "last": "Last: {{when}}",
+    "back": "← Automations",
+    "time": "Time",
+    "runNow": "Run now",
+    "remove": "Delete",
+    "removed": "Deleted “{{name}}”",
+    "request": "What the agent is asked",
+    "requestHint": "This is what the agent gets when it runs. Changes are saved when you leave the box, and used from the next run."
+  },
+  "problems": {
+    "intro": "These files don’t match their format, or their id was changed. They still show where they belong, but some fields may not be read.",
+    "count_one": "{{count}} problem",
+    "count_other": "{{count}} problems",
+    "fix": "Ask Jezo to fix it",
+    "fixPrefill": "Please fix the problems in {{path}}.",
+    "none": "No files with problems."
   }
 }

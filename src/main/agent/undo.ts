@@ -2,21 +2,26 @@
 // (docs/design/undo.md). For every file the agent writes it keeps the content
 // from before and a hash of what the agent wrote. Undo restores a file only if
 // it still holds what the agent wrote; a file someone changed since is left alone.
+// Files that aren't text, like a method's image, are kept beside the history as
+// blobs named by their hash, so undo covers them too.
 
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { diffLines } from 'diff'
 import type { DiffLine, HistoryEntry, Trigger, UndoResult } from '../../shared/session'
-import { hashOf, newId, readIfExists, writeAtomic } from '../workspace/files'
+import { type Content, hashOf, newId, readContent, writeAtomic } from '../workspace/files'
 import type { Workspace, Write } from '../workspace/workspace'
 import { acting } from './acting'
+
+/** A file's content in the history: its text, or the blob its bytes are kept in. */
+type Kept = string | { blob: string }
 
 interface FileChange {
   path: string
   /** Null when the agent created the file. */
-  before: string | null
+  before: Kept | null
   /** Null when the agent deleted it. */
-  after: string | null
+  after: Kept | null
 }
 
 interface Run {
@@ -50,6 +55,26 @@ export class UndoLog {
       // No history yet, or an unreadable one. History is safe to lose.
     }
     workspace.onWrite((write) => this.record(write))
+  }
+
+  private get blobs() {
+    return join(dirname(this.file), 'history-blobs')
+  }
+
+  /** Text as it is; bytes into a blob named by their hash. */
+  private keep(content: Content | null): Kept | null {
+    if (content === null || typeof content === 'string') return content
+    const blob = hashOf(content)
+    const path = join(this.blobs, blob)
+    if (!existsSync(path)) {
+      mkdirSync(this.blobs, { recursive: true })
+      writeFileSync(path, content)
+    }
+    return { blob }
+  }
+
+  private content(kept: Kept): Content {
+    return typeof kept === 'string' ? kept : new Uint8Array(readFileSync(join(this.blobs, kept.blob)))
   }
 
   onChange(listener: () => void) {
@@ -102,8 +127,8 @@ export class UndoLog {
     if (!run) return
     const existing = run.files.find((f) => f.path === write.path)
     // Written twice in one run: what was there before the run is still the first `before`.
-    if (existing) existing.after = write.after
-    else run.files.push({ path: write.path, before: write.before, after: write.after })
+    if (existing) existing.after = this.keep(write.after)
+    else run.files.push({ path: write.path, before: this.keep(write.before), after: this.keep(write.after) })
   }
 
   /** Restores what the run changed, file by file, skipping files changed since. */
@@ -112,15 +137,15 @@ export class UndoLog {
     if (!run || run.undone) return { kept: [] }
     const kept: string[] = []
     for (const change of [...run.files].reverse()) {
-      const current = await readIfExists(this.workspace.abs(change.path))
-      const untouched = current === null ? change.after === null : change.after !== null && hashOf(current) === hashOf(change.after)
+      const current = await readContent(this.workspace.abs(change.path))
+      const untouched = current === null ? change.after === null : change.after !== null && hashOf(current) === (typeof change.after === 'string' ? hashOf(change.after) : change.after.blob)
       if (!untouched) {
         kept.push(change.path)
         continue
       }
       // Through the workspace, so an undo is an ordinary change by the user: indexed, and seen by whatever follows writes.
       if (change.before === null) await this.workspace.removeFile(change.path, { by: 'user' })
-      else await this.workspace.writeFile(change.path, change.before, { by: 'user' }, current)
+      else await this.workspace.writeFile(change.path, this.content(change.before), { by: 'user' }, current)
     }
     run.undone = true
     await this.save()
@@ -146,12 +171,18 @@ export class UndoLog {
 
   private async save() {
     await writeAtomic(this.file, JSON.stringify(this.runs))
+    // Blobs no run refers to any more, once old runs are dropped.
+    const used = new Set(this.runs.flatMap((r) => r.files.flatMap((f) => [f.before, f.after])).flatMap((k) => (k && typeof k !== 'string' ? [k.blob] : [])))
+    if (existsSync(this.blobs)) for (const blob of readdirSync(this.blobs)) if (!used.has(blob)) rmSync(join(this.blobs, blob), { force: true })
     for (const listener of this.listeners) listener()
   }
 }
 
-/** The changed lines of a file, with a line of context around each change. */
-function diff(before: string | null, after: string | null): DiffLine[] {
+/** The changed lines of a file, with a line of context around each change. A file that isn't text is one line. */
+function diff(before: Kept | null, after: Kept | null): DiffLine[] {
+  if ((before && typeof before !== 'string') || (after && typeof after !== 'string')) {
+    return [{ kind: after === null ? 'remove' : before === null ? 'add' : 'context', text: '(binary)' }]
+  }
   const lines: DiffLine[] = []
   for (const part of diffLines(before ?? '', after ?? '')) {
     const kind = part.added ? 'add' : part.removed ? 'remove' : 'context'

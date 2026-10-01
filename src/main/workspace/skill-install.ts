@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 import type { SkillInstallResult, SkillOrigin, SkillPreview } from '../../shared/skills'
 import { currentActing } from '../agent/acting'
-import { hashOf, newId, readIfExists, writeAtomic } from './files'
+import { hashOf, newId, readIfExists } from './files'
 import { patch } from './frontmatter'
 import { archiveEntries, checkDownloadSize, discoverSkills, normalizeName, parseSource, textOf, usableEntries, type FoundSkill, type SkillFile, type Skipped } from './skill-source'
 import type { Workspace } from './workspace'
@@ -246,12 +246,9 @@ export class SkillInstaller {
           text = patch(text!, { name: skill.name, 'disable-model-invocation': undefined })
           installedText = text
         }
-        if (text === null) {
-          // Workspace undo stores text. Binary companions aren't covered; the
-          // provenance lists them so removing the skill removes them too.
-          await writeAtomic(this.workspace.abs(`${dir}/${file.path}`), file.data)
-          binary.push(file.path)
-        } else await this.workspace.writeFile(`${dir}/${file.path}`, text, actor)
+        // Everything goes through the workspace, so undo takes back bytes as well as text.
+        await this.workspace.writeFile(`${dir}/${file.path}`, text ?? file.data, actor)
+        if (text === null) binary.push(file.path)
         if (file.executable) await chmod(this.workspace.abs(`${dir}/${file.path}`), 0o755)
       }
       const origin: SkillOrigin = {
@@ -283,7 +280,7 @@ export class SkillInstaller {
     // A previous skill's links must not make replacement write outside its directory.
     if ((await lstat(absolute)).isSymbolicLink()) throw new Error(`The skill directory ${dir} is a symbolic link. Choose a regular directory.`)
     for (const file of await folderFiles(absolute, true)) {
-      if (file.type !== 'file' || textOf(file.data) === null) await rm(this.workspace.abs(`${dir}/${file.path}`), { force: true })
+      if (file.type !== 'file') await rm(this.workspace.abs(`${dir}/${file.path}`), { force: true })
       else await this.workspace.removeFile(`${dir}/${file.path}`, currentActing().actor)
     }
     await rm(absolute, { recursive: true, force: true })

@@ -73,6 +73,14 @@ export class Schedule {
     }
   }
 
+  /** Runs an automation now, from its page in 更多, whatever its schedule. Returns the conversation. */
+  async run(id: string) {
+    const item = this.workspace.get(id)
+    if (!item || item.kind !== 'automation') throw new Error(`There is no automation ${id}.`)
+    const d = item.data as { name: string; trigger?: Trigger }
+    return this.host.startAutomation({ id, name: d.name, trigger: d.trigger, request: item.body.trim() })
+  }
+
   /** Says the session is ready. Clicking it opens the conversation. */
   private notify(session: string, name: string) {
     if (!Notification.isSupported()) return

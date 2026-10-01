@@ -100,6 +100,12 @@ export function createTools(
 
   /** An item file must still match its manifest after the write, and keep its id. */
   const check = (path: string, content: string) => {
+    // A model wrote an automation as items/<id>.yaml, which the app never reads as an item.
+    const dir = /^([^/]+)\/items\/[^/]+$/.exec(path)?.[1]
+    if (dir && !path.endsWith('.md') && workspace.kindAt(`${dir}/items/x.md`)) {
+      context().refused()
+      throw new Error(`Not written: items are markdown files named after their id, like ${dir}/items/<id>.md.`)
+    }
     const manifest = workspace.kindAt(path)
     if (!manifest) return
     let problems: string[]
@@ -178,7 +184,7 @@ export function createTools(
       'Proposes new todos as drafts, shown to the user as one plan they can accept, tweak, or turn down. Nothing counts until they accept. Returns the new ids. To change a plan you proposed, call it again with revise and the whole new list. Give each draft you keep its id. A draft you leave out of the list is deleted: that is how to drop one from the plan.',
     parameters: Type.Object({
       title: Type.Optional(Type.String({ description: "The plan's name as the user would say it, like 今天的安排." })),
-      revise: Type.Optional(Type.String({ description: 'The id of any draft in the plan this replaces.' })),
+      revise: Type.Optional(Type.String({ description: 'One id: any one draft from the plan being changed.' })),
       todos: Type.Array(todoInput, { minItems: 1 }),
     }),
     async execute(_id, params) {
@@ -192,8 +198,10 @@ export function createTools(
       // A small model listed the plan again without revise, twice, then gave up: when every title it
       // repeats is a draft of one plan, that's the plan it means.
       const repeated = workspace.list().filter((i) => i.data.state === 'draft' && params.todos.some((t) => t.id === i.id || same(t.title) === same(i.data.title)))
+      // Given several ids anyway, any one of them names the plan.
+      const named = params.revise?.split(/[\s,]+/).find((id) => plans(id))
       const inferred = !params.revise && repeated.length ? plans(repeated[0].id) : undefined
-      const revise = params.revise ?? (inferred && repeated.every((i) => inferred.includes(i.id)) ? repeated[0].id : undefined)
+      const revise = named ?? (inferred && repeated.every((i) => inferred.includes(i.id)) ? repeated[0].id : undefined)
       const revised = revise ? plans(revise) : undefined
       if (params.revise && !revised) throw new Error(`No plan in this conversation has ${params.revise}. Give the id of a draft from the plan to change. Nothing was proposed.`)
       const drafts = (revised ?? []).flatMap((id) => {
@@ -201,7 +209,7 @@ export function createTools(
         return item?.data.state === 'draft' ? [item] : []
       })
       // Asked to schedule a todo from the backlog, a small model proposed a new one with the same name.
-      const open = workspace.list().filter((i) => i.kind === 'todo' && i.data.state !== 'done' && !drafts.includes(i))
+      const open = workspace.list().filter((i) => i.kind === 'todo' && i.data.state !== 'done' && !drafts.some((d) => d.id === i.id))
       const existing = params.todos.flatMap((t) => open.filter((i) => same(i.data.title) === same(t.title)))
       // Revising, a model listed a todo from another plan alongside this plan's: that one is left as it is, and the rest goes ahead.
       const skipped = revised ? existing : []
@@ -394,7 +402,7 @@ export function createTools(
       const warnings = skipped.map((s) => `${s.count} skipped: ${s.reason}`).join('; ')
       if (outcome.choices) return { content: text(`Nothing installed. Choose a method and call install_from_address again with its path:\n${outcome.choices.map((s) => `- path: ${JSON.stringify(s.path)}, name: ${s.name}, description: ${s.description}`).join('\n')}${warnings ? `\n${warnings}` : ''}`), details: undefined }
       return {
-        content: text(`${outcome.result!.installed.map((s) => `Installed "${s.title}" at ${s.directory}/ (${s.files} files). The skill is on.`).join('\n')}${warnings ? `\n${warnings}` : ''}\nIt will be used from the next conversation.${outcome.result!.installed.some((s) => s.binary) ? ' Binary files are not covered by undo.' : ''}`),
+        content: text(`${outcome.result!.installed.map((s) => `Installed "${s.title}" at ${s.directory}/ (${s.files} files). The skill is on.`).join('\n')}${warnings ? `\n${warnings}` : ''}\nIt will be used from the next conversation.`),
         details: undefined,
       }
     },

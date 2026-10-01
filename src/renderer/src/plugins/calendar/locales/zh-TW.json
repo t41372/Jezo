@@ -10,7 +10,9 @@
     "dropHere": "放在這裡 = 先不排時間",
     "empty": "都排好了。",
     "findTime": "讓 agent 幫我找時間",
-    "card": "{{goal}} · 大約 {{duration}}"
+    "card": "{{goal}} · 大約 {{duration}}",
+    "finding": "agent 在找時間…",
+    "whatItSaid": "看 agent 怎麼說"
   },
   "legend": {
     "events": "行事曆上的事",

@@ -146,6 +146,8 @@ function Quick() {
             autoFocus
             className="shadow-none"
             textareaClassName="text-[15.5px]"
+            commands={window.jezo.agent.commands}
+            menuSide="bottom"
             onKeyDown={(e) => {
               const question = text.trim()
               if (e.key === 'Enter' && !e.shiftKey && (e.metaKey || e.ctrlKey)) {

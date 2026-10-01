@@ -22,13 +22,13 @@ The page says when a method includes scripts, program files or executable files.
 
 ## Writes, provenance and undo
 
-Text files are written through `Workspace.writeFile` as `currentActing().actor`. Agent installs therefore appear in 修改紀錄 and undo removes their text files. Bytes that are not valid UTF-8, or contain NUL, are written atomically as binary files. Binary files are listed in provenance and removed with the method, but text undo does not restore or remove them. Undoing an installation can leave binary companions in its directory.
+Every file is written through `Workspace.writeFile` as `currentActing().actor`, text and bytes alike (bytes that aren't valid UTF-8, or contain NUL). Agent installs therefore appear in 修改紀錄, and undo removes all their files. Until 2026-09-30 bytes were written directly and undo left them behind.
 
 `skills/installed.yaml` has a comment header and a `skills` list. An entry records the directory name, original source, resolved GitHub ref when applicable, path in the source, installation time, user or agent, and the SHA-256 of SKILL.md as installed. Local sources say `this computer`. Methods written in the app say `written`, have `by: user`, and need no source hash. Binary companion paths are kept in `binary`.
 
 The list and view show the source and who installed it. Files Jezo seeded without an installation record say Jezo 內建. Top-level built-ins belong to the user and can be removed. Methods inside a plugin's directory can only be turned off.
 
-Removal deletes text files through `Workspace.removeFile`, binary files directly, and the provenance entry. It is the explicit exception to agent-only history: the user's removal is recorded as a user action in 修改紀錄 so the dialog's undo promise works. Other GUI edits are not added to history. Undo keeps files the user changed afterward, as it does for agent runs. The removal dialog explains when binary companions cannot be restored.
+Removal deletes every file through `Workspace.removeFile`, and the provenance entry. It is the explicit exception to agent-only history: the user's removal is recorded as a user action in 修改紀錄 so the dialog's undo promise works. Other GUI edits are not added to history. Undo keeps files the user changed afterward, as it does for agent runs.
 
 ## Replacement and update
 

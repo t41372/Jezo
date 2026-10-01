@@ -1,8 +1,8 @@
-// The renderer's state. Todos and notes come from the workspace, and
-// conversations and the change history from Jezo's agent (docs/design/backend.md).
-// The store applies the user's changes at once and writes them, and what comes
-// back replaces them. Calendar events come from the user's calendars
-// (calendar.ts). Experiments and connections other than calendars are still mock data.
+// The renderer's state. Todos, notes, goals, memories and experiments come from
+// the workspace, and conversations and the change history from Jezo's agent
+// (docs/design/backend.md). The store applies the user's changes at once and
+// writes them, and what comes back replaces them. Calendar events come from the
+// user's calendars (calendar.ts).
 
 import { generateKeyBetween } from 'fractional-indexing'
 import { toast } from 'sonner'
@@ -11,10 +11,9 @@ import type { ThemeSource } from '../../../shared/bridge'
 import type { CalendarStatus } from '../../../shared/calendar'
 import type { Fields, Item, ItemChanges } from '../../../shared/workspace'
 import i18n, { applyLanguage, storedLanguage, type LanguageSetting } from '@/i18n'
-import { entities, localDate, stamp, toGoal, toMemory, toNote, toTodo, todoFields } from './entities'
+import { entities, localDate, stamp, toExperiment, toGoal, toMemory, toNote, toTodo, todoFields } from './entities'
 import { connectCalendar } from './calendar'
-import * as mock from './mock'
-import type { CalendarEvent, CalendarViewName, Connection, Energy, Experiment, Goal, HistoryEntry, ISODate, Memory, Message, Note, NoteKind, NoteOutcome, NoteProposal, Session, Skill, Todo, Trigger } from './types'
+import type { CalendarEvent, CalendarViewName, Experiment, Goal, HistoryEntry, ISODate, Memory, Note, NoteKind, NoteOutcome, NoteProposal, Session, Skill, Todo, Trigger } from './types'
 
 export interface Nav {
   page: string
@@ -42,7 +41,6 @@ interface State {
   skills: Skill[]
   experiments: Experiment[]
   history: HistoryEntry[]
-  connections: Connection[]
   notes: Note[]
   settings: { theme: ThemeSource; language: LanguageSetting }
 
@@ -76,22 +74,24 @@ interface State {
    * that todo, or with null at the end. The backlog's order is the order here.
    */
   moveTodo(id: string, slot: Slot | null, options?: { minutes?: number; before?: string | null }): void
+  /** Hands the backlog to the agent, which proposes times in a conversation of its own. */
   proposeSlots(): void
+  /** That conversation, while the agent works in it. */
+  findingTimes: string | null
   /** The todos the agent just proposed times for, so the calendar can bring them in one by one. */
   lastProposal: { ids: string[]; at: number } | null
   confirmSlot(id: string): void
   addTodo(title: string, slot?: Slot, minutes?: number): void
+  /** Changes a todo's own fields from its detail: title, cue, how long. Times go through moveTodo. */
+  editTodo(todoId: string, change: Pick<Partial<Todo>, 'title' | 'cue' | 'estimateMinutes'>): void
+  /** Saves a todo's notes, its markdown body. */
+  setNotes(todoId: string, notes: string): void
   toggleSubtask(todoId: string, index: number): void
   /** 開始: the user is working on it now. Null stops. */
   setStarted(todoId: string, startedAt: number | null): void
   /** Puts a todo back as it was, for undo. */
   restoreTodo(todo: Todo): void
 
-  /** How the user is doing, for a day the agent is reworking. */
-  chooseEnergy(sessionId: string, index: number, energy: Energy): void
-  applyRework(sessionId: string, index: number): void
-  undoRework(sessionId: string, index: number): void
-  saveMemoryPreview(sessionId: string, index: number): void
 
   /** Jots something down in 隨手記. */
   addNote(text: string, source: Note['source']): void
@@ -132,7 +132,6 @@ interface State {
   decideSkillProposal(id: string, accept: boolean): void
   /** Accepts or turns down the agent's rewrite of a goal's failing rule. */
   decideRuleProposal(goalId: string, accept: boolean): void
-  connect(id: string): void
   undo(historyId: string): void
   decideExperiment(id: string, decision: NonNullable<Experiment['decision']>): void
   setTheme(theme: ThemeSource): void
@@ -173,6 +172,9 @@ const byRank = (a: Todo, b: Todo) =>
 
 const newestMemory = (a: Memory, b: Memory) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id)
 
+/** Running ones first, then the most recently started. */
+const started = (x: Experiment) => x.arms.flatMap((a) => a.periods.map((p) => p.from)).sort()[0] ?? ''
+const byExperiment = (a: Experiment, b: Experiment) => (a.state === b.state ? started(b).localeCompare(started(a)) : a.state === 'running' ? -1 : 1)
 const byCreated = (a: Note, b: Note) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`) || a.id.localeCompare(b.id)
 
 /** Replaces the entities that changed, leaving the others, which may have writes of their own on the way. */
@@ -193,14 +195,18 @@ function applyChanges({ changed, removed }: ItemChanges) {
   for (const item of changed) if (item.kind === 'goal' && !item.id.startsWith('?')) goalItems.set(item.id, item)
   useStore.setState((s) => {
     const todos = upsert(s.todos, entities(changed, 'todo', toTodo), removed, byRank)
+    // Times the agent just proposed, wherever it did: the calendar brings them in one by one.
+    const proposed = todos.filter((t) => t.slot?.proposed && !s.todos.some((o) => o.id === t.id && o.slot?.proposed && o.slot.date === t.slot!.date && o.slot.start === t.slot!.start))
     const memories = upsert(s.memories, entities(changed, 'memory', toMemory).filter((m): m is Memory => m !== null), removed, newestMemory)
     // A memory that was just replaced comes back as superseded; it leaves the list.
     const replaced = changed.filter((i) => i.kind === 'memory' && i.data.status === 'superseded').map((i) => i.id)
     return {
       todos,
       notes: upsert(s.notes, entities(changed, 'note', toNote), removed, byCreated),
+      experiments: upsert(s.experiments, entities(changed, 'experiment', toExperiment), removed, byExperiment),
       goals: deriveGoals(todos, s.now.date),
       memories: memories.filter((m) => !replaced.includes(m.id)),
+      ...(proposed.length && { lastProposal: { ids: proposed.map((t) => t.id), at: Date.now() } }),
     }
   })
 }
@@ -232,6 +238,7 @@ async function loadWorkspace() {
   useStore.setState((s) => ({
     todos,
     notes: entities(items, 'note', toNote).sort(byCreated),
+    experiments: entities(items, 'experiment', toExperiment).sort(byExperiment),
     goals: deriveGoals(todos, s.now.date),
     memories: entities(items, 'memory', toMemory)
       .filter((m): m is Memory => m !== null)
@@ -290,11 +297,6 @@ const allTodoFields = (todo: Todo): Fields => ({
   ...todoFields({ goalId: todo.goalId, cue: todo.cue, estimateMinutes: todo.estimateMinutes, slot: todo.slot, subtasks: todo.subtasks, why: todo.why, startedAt: todo.startedAt, rank: todo.rank }),
 })
 
-/** Changes one message of one session. */
-function mapMessage(sessions: Session[], sessionId: string, index: number, f: (m: Message) => Message) {
-  return sessions.map((s) => (s.id === sessionId ? { ...s, messages: s.messages.map((m, i) => (i === index ? f(m) : m)) } : s))
-}
-
 export const useStore = create<State>()((set, get) => ({
   now: clock(),
   goals: [],
@@ -305,9 +307,8 @@ export const useStore = create<State>()((set, get) => ({
   memories: [],
   notes: [],
   skills: [],
-  experiments: mock.experiments,
+  experiments: [],
   history: [],
-  connections: mock.connections,
   settings: { theme: storedTheme(), language: storedLanguage() },
 
   nav: { page: 'chat', sub: null },
@@ -374,13 +375,9 @@ export const useStore = create<State>()((set, get) => ({
     if (!slot) set((s) => ({ calendarDetail: s.calendarDetail === id ? null : s.calendarDetail }))
   },
   proposeSlots: () => {
-    const ids = get().todos.filter((t) => !t.slot && mock.suggestedSlots[t.id]).map((t) => t.id)
-    for (const id of ids) {
-      const suggestion = mock.suggestedSlots[id]
-      writeTodo(id, { slot: { date: suggestion.date, start: suggestion.start, proposed: true }, why: suggestion.why })
-    }
-    set({ lastProposal: { ids, at: Date.now() } })
+    window.jezo.agent.start('backlog').then((id) => set({ findingTimes: id }), failed)
   },
+  findingTimes: null,
   lastProposal: null,
   confirmSlot: (id) => {
     const todo = get().todos.find((t) => t.id === id)
@@ -391,6 +388,11 @@ export const useStore = create<State>()((set, get) => ({
     workspace().create('todo', { ...fields, created: stamp() }).catch(failed)
   },
 
+  editTodo: (todoId, change) => writeTodo(todoId, change),
+  setNotes: (todoId, notes) => {
+    useStore.setState((s) => ({ todos: mapTodo(s.todos, todoId, (t) => ({ ...t, notes })) }))
+    workspace().update(todoId, {}, { body: notes }).catch(failed)
+  },
   toggleSubtask: (todoId, index) => {
     const todo = get().todos.find((t) => t.id === todoId)
     if (!todo?.subtasks) return
@@ -401,36 +403,6 @@ export const useStore = create<State>()((set, get) => ({
     if (get().todos.some((t) => t.id === todo.id)) writeTodo(todo.id, todo)
     else workspace().create('todo', { id: todo.id, ...allTodoFields(todo) }).catch(failed)
   },
-
-  chooseEnergy: (sessionId, index, energy) =>
-    set((s) => ({ sessions: mapMessage(s.sessions, sessionId, index, (m) => (m.kind === 'rework' ? { ...m, energy } : m)) })),
-  applyRework: (sessionId, index) => {
-    const s = get()
-    const message = s.sessions.find((x) => x.id === sessionId)?.messages[index]
-    if (message?.kind !== 'rework' || !message.energy) return
-    const plan = mock.reworkPlans[message.energy]
-    const changes = new Map([...plan.keep, ...plan.move, ...plan.drop].map((item) => [item.todoId, item.change]))
-    for (const [id, change] of changes) if (s.todos.some((t) => t.id === id)) writeTodo(id, change)
-    set({
-      sessions: mapMessage(s.sessions, sessionId, index, (m) => ({
-        ...m,
-        applied: true,
-        before: s.todos.filter((t) => changes.has(t.id)),
-      })),
-    })
-  },
-  undoRework: (sessionId, index) => {
-    const s = get()
-    const message = s.sessions.find((x) => x.id === sessionId)?.messages[index]
-    if (message?.kind !== 'rework' || !message.before) return
-    for (const todo of message.before) writeTodo(todo.id, todo)
-    set({
-      sessions: mapMessage(s.sessions, sessionId, index, (m) => ({ ...m, applied: false, before: undefined })),
-    })
-  },
-
-  saveMemoryPreview: (sessionId, index) =>
-    set((s) => ({ sessions: mapMessage(s.sessions, sessionId, index, (m) => (m.kind === 'memory-preview' ? { ...m, saved: true } : m)) })),
 
   setTodayDetail: (todayDetail) => set({ todayDetail }),
   setCalendarDetail: (calendarDetail) => set({ calendarDetail }),
@@ -539,15 +511,15 @@ export const useStore = create<State>()((set, get) => ({
     const rules = goal.rules.map((r, i) => (accept && i === p.ruleIndex ? { cue: p.cue, action: p.action } : { cue: r.cue, action: r.action }))
     workspace().update(goalId, { rules, rule_proposal: null }).catch(failed)
   },
-  connect: (id) =>
-    set((s) => ({ connections: s.connections.map((c) => (c.id === id ? { ...c, connected: true, detail: undefined } : c)) })),
   undo: (id) => {
     window.jezo.history.undo(id).then(({ kept }) => {
       if (kept.length) toast(i18n.t('more:history.kept', { count: kept.length }))
     }, failed)
   },
-  decideExperiment: (id, decision) =>
-    set((s) => ({ experiments: s.experiments.map((x) => (x.id === id ? { ...x, decision } : x)) })),
+  decideExperiment: (id, decision) => {
+    set((s) => ({ experiments: s.experiments.map((x) => (x.id === id ? { ...x, decision } : x)) }))
+    workspace().update(id, { decision }).catch(failed)
+  },
   setTheme: (theme) => {
     try {
       localStorage.setItem(THEME_KEY, theme)

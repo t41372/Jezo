@@ -1,6 +1,6 @@
 # Automations
 
-Things Jezo starts on its own at set times, like planning the morning. One file per automation in `items/`. The body is exactly what you're asked when it runs, so changing the body changes what happens.
+Things Jezo starts on its own at set times, like planning the morning. One markdown file per automation, `items/<id>.md`, with an id that starts with `a-`. The body is exactly what you're asked when it runs, so changing the body changes what happens.
 
 You may add, change or turn off automations when the user asks, or when it clearly helps (a weekly reminder they asked for). The user can undo it.
 

@@ -15,6 +15,12 @@ const tomorrow = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+/** A local date this many days from today. */
+const day = (offset: number) => {
+  const d = new Date(Date.now() + offset * 86_400_000)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 /** Waits until the agent has finished in the open conversation. */
 async function settled(page: import('@playwright/test').Page) {
   await expect(page.getByRole('button', { name: '停下來' })).toBeVisible({ timeout: 30_000 })
@@ -74,6 +80,105 @@ test('a turn that changed nothing says so, and one tap asks the agent to act wit
   expect(jezo.errors).toEqual([])
 })
 
+test('the "/" menu runs a method by name, and its own actions start a conversation and open the model list', async ({ jezo }) => {
+  const { page, root } = jezo
+  const main = page.locator('main')
+  const box = main.locator('textarea').first()
+  const menu = page.locator('[data-slash-menu]')
+
+  // Methods show by their title, found by any part of it; the keyboard picks one.
+  await box.fill('/')
+  await expect(menu.getByRole('option').filter({ hasText: '某天崩了幫你重排' })).toContainText('/skill:rework-a-bad-day')
+  await box.fill('/崩')
+  await box.press('Escape')
+  await expect(menu).toBeHidden()
+  // Typing on opens it again.
+  await box.pressSequentially('了')
+  await expect(menu.getByRole('option')).toHaveCount(1)
+  // Arrows move through the list; Tab or Enter puts the command in the box.
+  await box.fill('/skill:')
+  await box.press('ArrowDown')
+  await box.press('ArrowDown')
+  await box.press('ArrowUp')
+  const second = (await menu.getByRole('option').nth(1).locator('.font-mono').innerText()).trim()
+  await expect(menu.getByRole('option', { selected: true })).toContainText(second)
+  await box.press('Tab')
+  await expect(box).toHaveValue(`${second} `)
+  await box.fill('/skill:rew')
+  await box.press('Enter')
+  await expect(box).toHaveValue('/skill:rework-a-bad-day ')
+  await box.pressSequentially('下午開了三個會，什麼都沒做')
+  await box.press('Enter')
+  await settled(page)
+
+  // The model read the whole method; the chat shows what the user typed.
+  await expect(main.locator('[data-chat-message="user"]')).toHaveText('/skill:rework-a-bad-day 下午開了三個會，什麼都沒做')
+  const session = readdirSync(join(root, 'sessions')).find((f) => f.endsWith('.jsonl'))!
+  const user = readFileSync(join(root, 'sessions', session), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).find((e) => e.message?.role === 'user')
+  expect(JSON.stringify(user.message.content)).toContain('<skill name=\\"rework-a-bad-day\\"')
+
+  // Jezo's own actions: /model opens the model list, /new starts an empty conversation.
+  await box.fill('/model')
+  await box.press('Enter')
+  await expect(page.getByRole('dialog')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await box.fill('/new')
+  await box.press('Enter')
+  await expect(main.locator('[data-chat-message]')).toHaveCount(0)
+  await expect(box).toHaveValue('')
+
+  // In the ⌥X window the menu opens below the box, and the window grows to show it.
+  const quick = jezo.app.windows().find((w) => w.url().includes('/quick.html'))!
+  await quick.locator('textarea').fill('/skill:rew')
+  await expect(quick.locator('[data-slash-menu]')).toContainText('某天崩了幫你重排')
+  await expect.poll(() => quick.evaluate(() => document.querySelector('[data-slash-menu]')!.getBoundingClientRect().bottom <= window.innerHeight)).toBe(true)
+  expect(jezo.errors).toEqual([])
+})
+
+test('an automation added from its page by asking the agent is listed there in words', async ({ jezo }) => {
+  const { page, items } = jezo
+  const main = page.locator('main')
+  await open(page, '更多')
+  await page.getByText('自動化', { exact: true }).click()
+  await main.getByRole('button', { name: '新增' }).click()
+
+  // The chat opens with the start of the request in the box.
+  const box = main.locator('textarea').first()
+  await expect(box).toHaveValue('幫我新增一個自動化：')
+  await box.pressSequentially('每週一早上九點，提醒我看一下這週的目標')
+  await box.press('Enter')
+  await settled(page)
+
+  const added = items('automations').find((a) => !['a-morning', 'a-evening', 'a-weekly'].includes(String(a.data.id)))
+  expect(added?.data).toMatchObject({ schedule: '0 9 * * 1', state: 'on' })
+  await open(page, '更多')
+  await page.getByText('自動化', { exact: true }).click()
+  await expect(main.locator(`[data-automation="${added!.data.id}"]`)).toContainText('每週一 09:00')
+  expect(jezo.errors).toEqual([])
+})
+
+test('the backlog hands its todos to the agent, which proposes times in the coming week', async ({ jezo }) => {
+  const { page, items } = jezo
+  await open(page, '行事曆')
+  const backlogIds = items('todos').filter((t) => t.data.state === 'open' && !t.data.scheduled).map((t) => String(t.data.id))
+  await page.getByRole('button', { name: '讓 agent 幫我找時間' }).click()
+  await expect(page.getByRole('button', { name: 'agent 在找時間…' })).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByText('看 agent 怎麼說')).toBeVisible({ timeout: 240_000 })
+
+  // Times went to the files as proposals, within the next seven days.
+  const placed = items('todos').filter((t) => backlogIds.includes(String(t.data.id)) && t.data.scheduled)
+  expect(placed.length).toBeGreaterThanOrEqual(2)
+  for (const t of placed) {
+    expect(t.data.proposed).toBe(true)
+    const date = String(t.data.scheduled).slice(0, 10)
+    expect(date >= day(0) && date <= day(7), `${t.data.title} at ${t.data.scheduled}`).toBe(true)
+  }
+  // What it said is a conversation of its own.
+  await page.getByText('看 agent 怎麼說').click()
+  await expect(page.getByRole('button', { name: /幫待辦找時間/ }).first()).toBeVisible()
+  expect(jezo.errors).toEqual([])
+})
+
 test('a conversation picked up two hours later plans from the new time', async ({ jezo }) => {
   const { app, page, read, root } = jezo
   const say = async (text: string) => {
@@ -106,7 +211,8 @@ test('a conversation picked up two hours later plans from the new time', async (
   const scheduled = read('todos/items/t-u2.md').data.scheduled as string
   const minutes = (new Date(scheduled).getTime() - then.getTime()) / 60_000
   expect(minutes, `scheduled ${scheduled}, two hours later it was ${then.toString()}`).toBeGreaterThanOrEqual(45)
-  expect(minutes).toBeLessThanOrEqual(75)
+  // Later is fine when it moves past a todo in the way; from the old time it would be about an hour early.
+  expect(minutes).toBeLessThanOrEqual(120)
   // The time went with the message.
   const session = readdirSync(join(root, 'sessions')).find((f) => f.endsWith('.jsonl'))!
   const notes = readFileSync(join(root, 'sessions', session), 'utf8').split('\n').filter((l) => l.includes('"jezo.time"'))
@@ -373,7 +479,7 @@ test.describe('installing methods in a conversation', () => {
     delete process.env.JEZO_GITHUB_CODELOAD
   })
 
-  test('the user asks for an install, and undo removes its text files', async ({ jezo }) => {
+  test('the user asks for an install, and undo removes its files', async ({ jezo }) => {
     const { page, root } = jezo
     const { existsSync } = await import('node:fs')
     const { parse: parseYaml } = await import('yaml')
@@ -397,8 +503,8 @@ test.describe('installing methods in a conversation', () => {
     expect(existsSync(join(root, 'skills/next-step/scripts/run.sh'))).toBe(false)
     expect(existsSync(join(root, 'skills/next-step/old.txt'))).toBe(false)
     expect(existsSync(join(root, 'skills/installed.yaml'))).toBe(false)
-    // Binary companions remain because they are not covered by text undo.
-    expect(existsSync(join(root, 'skills/next-step/picture.bin'))).toBe(true)
+    // So do files that aren't text.
+    expect(existsSync(join(root, 'skills/next-step/picture.bin'))).toBe(false)
     expect(jezo.errors).toEqual([])
   })
 })

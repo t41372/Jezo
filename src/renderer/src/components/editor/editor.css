@@ -1,0 +1,46 @@
+/* Crepe's colors and type, from Jezo's tokens, so the editor follows the theme and the glass. */
+.jezo-editor .milkdown {
+  --crepe-color-background: transparent;
+  --crepe-color-on-background: var(--foreground);
+  --crepe-color-surface: var(--popover);
+  --crepe-color-surface-low: var(--muted);
+  --crepe-color-on-surface: var(--foreground);
+  --crepe-color-on-surface-variant: var(--muted-foreground);
+  --crepe-color-outline: var(--border);
+  --crepe-color-primary: var(--brand);
+  --crepe-color-secondary: var(--muted);
+  --crepe-color-on-secondary: var(--foreground);
+  --crepe-color-inverse: var(--primary);
+  --crepe-color-on-inverse: var(--primary-foreground);
+  --crepe-color-inline-code: var(--foreground);
+  --crepe-color-error: var(--destructive);
+  --crepe-color-hover: var(--muted);
+  --crepe-color-selected: color-mix(in oklab, var(--brand) 18%, transparent);
+  --crepe-color-inline-area: var(--muted);
+
+  --crepe-base-font-size: 14px;
+  --crepe-font-title: inherit;
+  --crepe-font-default: inherit;
+  --crepe-font-code: ui-monospace, Menlo, monospace;
+
+  --crepe-shadow-1: 0 1px 3px rgb(10 14 40 / 0.1);
+  --crepe-shadow-2: 0 4px 16px rgb(10 14 40 / 0.12);
+}
+
+/* The drawer is narrow: the block handles sit in the editor's own margin, not outside it. */
+.jezo-editor .milkdown .ProseMirror {
+  padding: 4px 4px 4px 28px;
+  line-height: 1.7;
+}
+
+.jezo-editor .milkdown .ProseMirror h1 { font-size: 1.35em; margin: 0.6em 0 0.3em; }
+.jezo-editor .milkdown .ProseMirror h2 { font-size: 1.2em; margin: 0.6em 0 0.3em; }
+.jezo-editor .milkdown .ProseMirror h3 { font-size: 1.05em; margin: 0.5em 0 0.25em; }
+.jezo-editor .milkdown .ProseMirror p { margin: 0.25em 0; }
+.jezo-editor .milkdown .ProseMirror img { border-radius: 8px; }
+
+/* Lists as tight as the text around them: Crepe sizes its bullets for 16px type. */
+.jezo-editor .milkdown .milkdown-list-item-block li { gap: 6px; }
+.jezo-editor .milkdown .milkdown-list-item-block li .label-wrapper,
+.jezo-editor .milkdown .milkdown-list-item-block li .label-wrapper .label { height: 24px; width: 18px; padding: 0; }
+.jezo-editor .milkdown .milkdown-list-item-block li p { margin: 0; }

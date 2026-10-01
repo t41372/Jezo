@@ -2,7 +2,27 @@ import { createHash, randomBytes } from 'node:crypto'
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 
-export const hashOf = (text: string) => createHash('sha256').update(text).digest('hex')
+export const hashOf = (content: string | Uint8Array) => createHash('sha256').update(content).digest('hex')
+
+/** What a file holds: text, or bytes when it isn't UTF-8 text. */
+export type Content = string | Uint8Array
+
+/** The bytes as text, or null when they aren't UTF-8 text. */
+export function textOf(data: Uint8Array): string | null {
+  if (data.includes(0)) return null
+  try { return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(data) } catch { return null }
+}
+
+/** A file's content, as text when it is text; null when there's no file. */
+export async function readContent(path: string): Promise<Content | null> {
+  try {
+    const bytes = new Uint8Array(await readFile(path))
+    return textOf(bytes) ?? bytes
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
+    throw error
+  }
+}
 
 /** Temporary files end in this, so the watcher can skip them. */
 export const TEMP_SUFFIX = '.jezo-tmp'

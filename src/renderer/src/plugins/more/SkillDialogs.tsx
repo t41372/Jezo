@@ -268,7 +268,6 @@ export function RemoveSkillDialog({ skill }: { skill: SkillInfo }) {
           <DialogTitle className="text-base">{t('skills.removeQuestion', { title: skill.title })}</DialogTitle>
           <DialogDescription className="text-[13px] leading-relaxed">{t('skills.removeHint')}</DialogDescription>
         </DialogHeader>
-        {!!skill.origin?.binary?.length && <p className="text-[13px] text-muted-foreground">{t('skills.binaryUndo')}</p>}
         {error && <p className="text-[13px] text-destructive">{error}</p>}
         <DialogFooter>
           <DialogClose render={<Button variant="ghost" disabled={busy} />}>{t('connections.cancel')}</DialogClose>

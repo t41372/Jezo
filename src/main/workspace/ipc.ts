@@ -3,6 +3,7 @@
 
 import { BrowserWindow, dialog, ipcMain } from 'electron'
 import type { UndoLog } from '../agent/undo'
+import { attach, openFile } from './attachments'
 import { skillInstaller } from './skill-install'
 import { installer as resourceInstaller } from '../install/installer'
 import type { Fields } from '../../shared/workspace'
@@ -16,6 +17,8 @@ export function serveWorkspace(workspace: Workspace, undo: UndoLog) {
   ipcMain.handle('workspace:create', (_, kind: string, data: Fields, body: string) => workspace.create(kind, data, body, user))
   ipcMain.handle('workspace:update', (_, id: string, fields: Fields, options: { body?: string }) => workspace.update(id, fields, user, options))
   ipcMain.handle('workspace:remove', (_, id: string) => workspace.remove(id, user))
+  ipcMain.handle('workspace:attach', (_, id: string, name: string, bytes: Uint8Array) => attach(workspace, id, name, bytes))
+  ipcMain.handle('workspace:open-file', (_, path: string) => openFile(workspace, path))
   ipcMain.handle('skills:list', () => listSkills(workspace.root))
   ipcMain.handle('skills:set-enabled', async (_, id: string, enabled: boolean) => {
     await setSkillEnabled(workspace, id, enabled)

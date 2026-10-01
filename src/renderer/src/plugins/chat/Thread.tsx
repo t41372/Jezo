@@ -15,7 +15,6 @@ import { Button } from '@/components/ui/button'
 import { useStore } from '@/data/store'
 import type { Message, Step } from '@/data/types'
 import { useTranslation } from 'react-i18next'
-import { MemoryPreviewCard, ReworkCard } from './cards'
 import { sessionHeadline } from './session'
 import { ChatRuntime } from './runtime'
 import { Markdown } from './Markdown'
@@ -267,8 +266,6 @@ function CardView({ message: m, sessionId, index }: { message: Message; sessionI
           ))}
         </div>
       )
-    case 'rework': return <ReworkCard message={m} sessionId={sessionId} index={index} />
-    case 'memory-preview': return <MemoryPreviewCard message={m} sessionId={sessionId} index={index} />
     case 'plugin': {
       const View = getMessageView(`${m.plugin}.${m.type}`)
       if (View) return <View data={m.data} sessionId={sessionId} index={index} />
@@ -359,6 +356,8 @@ function ChatComposer() {
           placeholder={t('placeholder')}
           autoFocus
           attach
+          commands={window.jezo.agent.commands}
+          onNew={() => useStore.getState().openSession(null)}
         />
       </div>
     </div>

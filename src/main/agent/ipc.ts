@@ -18,12 +18,15 @@ const isQuickWindow = (window: BrowserWindow) => window.webContents.getURL().inc
 export function serveAgent(host: AgentHost, undo: UndoLog, providers: Providers, schedule: Schedule) {
   ipcMain.handle('schedule:get', () => schedule.times())
   ipcMain.handle('schedule:set', (_, change: Partial<ScheduleTimes>) => schedule.setTimes(change))
+  ipcMain.handle('schedule:run', (_, id: string) => schedule.run(id))
 
   ipcMain.handle('agent:list', () => host.list())
   ipcMain.handle('agent:send', (_, id: string | null, text: string, trigger?: Trigger, behavior?: 'followUp' | 'steer') => host.send(id, text, trigger, behavior))
   ipcMain.handle('agent:start', (_, trigger: Trigger) => host.start(trigger))
   ipcMain.handle('agent:abort', (_, id: string) => host.abort(id))
   ipcMain.handle('agent:nudge', (_, id: string) => host.nudge(id))
+  ipcMain.handle('agent:commands', () => host.commands())
+  ipcMain.handle('agent:arguments', (_, name: string, typed: string) => host.argumentSuggestions(name, typed))
   ipcMain.handle('agent:extension-answer', (_, id: string, request: string, value?: string | boolean) => host.answerExtension(id, request, value))
   host.onChange((view, catalogChanged) => {
     // The quick window has a small SessionView preview. Main uses Pi events

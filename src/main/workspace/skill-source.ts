@@ -4,6 +4,7 @@
 import { Gunzip, unzipSync } from 'fflate'
 import { parseTar } from 'nanotar'
 import { parse } from './frontmatter'
+import { textOf } from './files'
 
 export const MAX_DOWNLOAD = 50 * 1024 * 1024
 export const MAX_FILES = 2000
@@ -97,10 +98,7 @@ export function checkFileCount(count: number, name: string) {
 }
 
 /** Null means binary. Preserve the BOM so recording a text file doesn't change its bytes. */
-export function textOf(data: Uint8Array): string | null {
-  if (data.includes(0)) return null
-  try { return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(data) } catch { return null }
-}
+export { textOf }
 
 function unsafePath(path: string) {
   return path.startsWith('/') || path.startsWith('\\') || /^[a-z]:/i.test(path) || path.includes('\0') || path.replaceAll('\\', '/').split('/').includes('..')

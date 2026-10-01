@@ -1,6 +1,6 @@
 # Goals
 
-One file per goal in `items/`. The body is what the goal is for, in the user's words: why it matters and what "done" means to them.
+One markdown file per goal, `items/<id>.md`, with an id that starts with `g-`. The body is what the goal is for, in the user's words: why it matters and what "done" means to them.
 
 A goal needs a direction, a measure and rules. Create one only after talking it through with the user; a goal idea from 隨手記 isn't a goal yet.
 

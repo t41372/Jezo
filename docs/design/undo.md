@@ -47,7 +47,7 @@ Follow Hermes' model, with storage outside the workspace. Built on 2026-09-29 (`
 3. **For structured data, go per field** if file-level checks turn out to be too coarse. Record `{entity id, field, old, new}`, so the agent's change to one field can be undone even when the user edited a different field in the same file.
 4. **Keep only recent turns.** History older than a short window is dropped. Losing it is fine.
 
-Skill installations and removals record text through the workspace. Binary companions are written and removed directly and are not covered by undo. Undoing an install can leave those files behind; undoing a removal restores only the text and provenance.
+Skill installations and removals go through the workspace, bytes included. A file that isn't text is kept in the history as a blob named by its hash, in `history-blobs/` beside `history.json`, and dropped when no kept run refers to it; like the rest of the history, it's safe to lose. Its diff in 修改紀錄 is one line, `(binary)`. Files a shell command changes are compared as text only, so bytes it writes aren't in the history.
 
 ## Open questions
 

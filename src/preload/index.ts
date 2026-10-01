@@ -22,6 +22,8 @@ const bridge: JezoBridge = {
     create: (kind, data, body = '') => ipcRenderer.invoke('workspace:create', kind, data, body),
     update: (id, fields, options = {}) => ipcRenderer.invoke('workspace:update', id, fields, options),
     remove: (id) => ipcRenderer.invoke('workspace:remove', id),
+    attach: (id, name, bytes) => ipcRenderer.invoke('workspace:attach', id, name, bytes),
+    openFile: (path) => ipcRenderer.invoke('workspace:open-file', path),
     onChange: (listener) => listen<ItemChanges>('workspace:changed', listener),
   },
   agent: {
@@ -50,6 +52,8 @@ const bridge: JezoBridge = {
     start: (trigger) => ipcRenderer.invoke('agent:start', trigger),
     abort: (id) => ipcRenderer.invoke('agent:abort', id),
     nudge: (id) => ipcRenderer.invoke('agent:nudge', id),
+    commands: () => ipcRenderer.invoke('agent:commands'),
+    argumentSuggestions: (name, typed) => ipcRenderer.invoke('agent:arguments', name, typed),
     answerExtension: (id, request, value) => ipcRenderer.invoke('agent:extension-answer', id, request, value),
     onNotice: (listener) => listen('agent:notice', listener),
     onChange: (listener) => listen<SessionView>('agent:changed', listener),
@@ -94,6 +98,7 @@ const bridge: JezoBridge = {
   schedule: {
     get: () => ipcRenderer.invoke('schedule:get'),
     set: (change) => ipcRenderer.invoke('schedule:set', change),
+    run: (id) => ipcRenderer.invoke('schedule:run', id),
   },
   skills: {
     list: () => ipcRenderer.invoke('skills:list'),

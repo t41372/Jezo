@@ -26,6 +26,11 @@ export default function (pi) {
     parameters: Type.Object({ text: Type.String() }),
     async execute(id, args) { return { content: [{ type: 'text', text: args.text }], details: undefined } }
   })
+  pi.registerCommand('greet', {
+    description: 'Says hello from the package.',
+    getArgumentCompletions: (typed) => ['Tim', 'Taro', 'Anna'].filter((n) => n.toLowerCase().startsWith(typed.toLowerCase())).map((n) => ({ value: n, label: n, description: 'say hello to ' + n })),
+    handler: async (args, ctx) => ctx.ui.notify('套件打招呼：' + args.trim(), 'info'),
+  })
   pi.on('session_start', async (event, ctx) => {
     const allowed = await ctx.ui.confirm('啟用測試工具？', '這是套件提出的問題。')
     let selected, input
@@ -45,7 +50,7 @@ export async function installServer() {
     { name: 'extension.ts', data: extension },
     { name: 'package.json', data: JSON.stringify(manifest) },
     { name: 'methods/package-method/SKILL.md', data: skillMarkdown('package-method', '套件的方法') },
-    { name: 'prompts/package-prompt.md', data: '---\ndescription: A package prompt.\n---\nTake one step.\n' },
+    { name: 'prompts/package-prompt.md', data: '---\ndescription: A package prompt.\nargument-hint: <topic>\n---\nTake one step on $1.\n' },
   ]
   const githubArchive = await createTarGzip(files.map((f) => ({ ...f, name: `package-main/${f.name}` })))
   const npmArchive = await createTarGzip(files.map((f) => ({ ...f, name: `package/${f.name}` })))

@@ -3,11 +3,12 @@
 // pi records into the messages the chat draws, and each run into an entry the
 // user can undo.
 
+import { existsSync, readFileSync } from 'node:fs'
 import { mkdir, readdir, stat } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { PiAgentMessage, PiClient, PiClientEvent, PiClientEventBody, PiSendMessageInput, PiThreadMetadata } from '@assistant-ui/react-pi'
-import { shownCustom, UNCHANGED_ENTRY, type ChatSnapshot } from '../../shared/chat'
+import { shownCustom, typedText, UNCHANGED_ENTRY, type ChatSnapshot } from '../../shared/chat'
 import {
   type AgentSession,
   type AgentSessionEvent,
@@ -19,12 +20,12 @@ import {
   SessionManager,
 } from '@earendil-works/pi-coding-agent'
 import type { ThinkingLevel } from '@earendil-works/pi-agent-core'
-import type { SessionMessage, SessionView, Step, Trigger } from '../../shared/session'
+import type { ArgumentSuggestion, SessionMessage, SessionView, SlashCommand, Step, Trigger } from '../../shared/session'
 import { calendarExtension, HELD_MESSAGE } from '../calendar/agent'
 import { type Held, type OutsideContent, outsideToolResults } from './outside'
 import type { Calendars } from '../calendar/calendars'
 import { newId } from '../workspace/files'
-import { skillRoots } from '../workspace/skills'
+import { listSkills, skillRoots } from '../workspace/skills'
 import type { Workspace } from '../workspace/workspace'
 import { type Memory, memoryExtension } from '../../../packages/pi-memory/src/index.ts'
 import { acting } from './acting'
@@ -78,6 +79,8 @@ export class AgentHost {
   private entryIds = new WeakMap<object, string>()
   private finishedListeners = new Set<(id: string, automation?: { id: string; name: string }) => void>()
   private timers = new Map<string, NodeJS.Timeout>()
+  /** The resources the "/" menu last read, for its argument suggestions. */
+  private commandLoader?: DefaultResourceLoader
   private ui = new ExtensionUI((id, question) => {
     const c = this.conversations.get(id)
     if (!c) return
@@ -207,6 +210,8 @@ export class AgentHost {
       }
       const session = c.session ?? await this.sessionFor(c)
       if (!session) throw new Error('No model is available.')
+      // An extension's command runs now, even while the agent works; pi won't queue one.
+      if (command(session, input.content)) return session.prompt(input.content)
       if (input.streamingBehavior === 'steer') await session.steer(input.content, input.attachments)
       else await session.followUp(input.content, input.attachments)
       return
@@ -273,7 +278,7 @@ export class AgentHost {
         const result = await session.navigateTree(request.id, { summarize: false })
         if (result.cancelled || c.aborted) return
         this.publish(c, { type: 'snapshot', snapshot: this.getThread(id) })
-        await session.sendCustomMessage({ customType: REQUEST_MESSAGE, content: request.content, display: false }, { triggerTurn: true })
+        await session.sendCustomMessage({ customType: REQUEST_MESSAGE, content: timed(String(request.content)), display: false }, { triggerTurn: true })
       })
       return
     }
@@ -314,7 +319,7 @@ export class AgentHost {
   async startAutomation(automation: { id: string; name: string; trigger?: Trigger; request: string }) {
     const conversation = await this.create(automation.trigger ?? 'automation', { id: automation.id, name: automation.name })
     this.launch(conversation, (session) =>
-      session.sendCustomMessage({ customType: REQUEST_MESSAGE, content: automation.request, display: false }, { triggerTurn: true }),
+      session.sendCustomMessage({ customType: REQUEST_MESSAGE, content: timed(automation.request), display: false }, { triggerTurn: true }),
     )
     return conversation.id
   }
@@ -333,7 +338,7 @@ export class AgentHost {
     if (!request) throw new Error(`Nothing starts a session for ${trigger}.`)
     const conversation = await this.create(trigger)
     this.launch(conversation, (session) =>
-      session.sendCustomMessage({ customType: REQUEST_MESSAGE, content: request, display: false }, { triggerTurn: true }),
+      session.sendCustomMessage({ customType: REQUEST_MESSAGE, content: timed(request), display: false }, { triggerTurn: true }),
     )
     return conversation.id
   }
@@ -412,7 +417,9 @@ export class AgentHost {
     try {
       const session = await this.sessionFor(c)
       if (c.aborted) return
-      if (!session?.model) {
+      // An extension's command needs no model: pi runs its code, not the agent.
+      const byExtension = session && userText !== undefined && command(session, userText)
+      if (!session || (!session.model && !byExtension)) {
         if (userText) c.manager.appendMessage({ role: 'user', content: userText, timestamp: Date.now() })
         this.note(c, { kind: 'error', code: 'no-model' })
         return
@@ -435,7 +442,7 @@ export class AgentHost {
       })
       await this.undo.finish(c.context.run, firstSentence(session.getLastAssistantText() ?? ''))
       // Said so under the reply, so a reply that claims a change the run never made is easy to see (docs/design/frontend.md, "Chat").
-      if (!c.aborted && !this.undo.changed(c.context.run) && !c.context.acted) c.manager.appendCustomEntry(UNCHANGED_ENTRY, {})
+      if (!c.aborted && !byExtension && !this.undo.changed(c.context.run) && !c.context.acted) c.manager.appendCustomEntry(UNCHANGED_ENTRY, {})
       for (const listener of this.finishedListeners) listener(c.id, c.automation)
     } catch (error) {
       console.error(error)
@@ -482,22 +489,17 @@ export class AgentHost {
     const runtime = this.providers.runtime
     const installs = installer(this.workspace)
     const settings = installs.settings
-    const resources = await installs.resources()
 
     // The prompt's picture of the day is from now; each message says the time again (timeNote).
     const promptTime = new Date()
     const loader = new DefaultResourceLoader({
-      cwd: this.workspace.root,
-      agentDir: process.env.PI_CODING_AGENT_DIR!,
-      settingsManager: settings,
-      noExtensions: true,
-      noSkills: true,
-      noPromptTemplates: true,
-      noThemes: true,
-      noContextFiles: true,
-      additionalSkillPaths: [...await this.skillDirs(), ...resources.skills.filter((r) => r.enabled).map((r) => r.path)],
-      additionalExtensionPaths: resources.extensions.filter((r) => r.enabled).map((r) => r.path),
-      additionalPromptTemplatePaths: resources.prompts.filter((r) => r.enabled).map((r) => r.path),
+      ...await this.resourcePaths(),
+      // The workspace's AGENTS.md is its map, as a project's is for a coding agent. Only that one:
+      // pi would also read every AGENTS.md above it, and the workspace may sit inside someone's repository.
+      agentsFilesOverride: () => {
+        const path = join(this.workspace.root, 'AGENTS.md')
+        return { agentsFiles: existsSync(path) ? [{ path, content: readFileSync(path, 'utf8') }] : [] }
+      },
       systemPromptOverride: () => SYSTEM_PROMPT,
       appendSystemPromptOverride: () => [digest(this.workspace.list(), promptTime)],
       extensionFactories: [
@@ -611,6 +613,58 @@ export class AgentHost {
   }
 
   /** Skills live in the workspace: its own skills/, and each plugin directory's. */
+  /** Where the loader finds skills, prompt templates and extensions: the workspace's, and what the user installed. */
+  private async resourcePaths() {
+    const installs = installer(this.workspace)
+    const resources = await installs.resources()
+    return {
+      cwd: this.workspace.root,
+      agentDir: process.env.PI_CODING_AGENT_DIR!,
+      settingsManager: installs.settings,
+      noExtensions: true,
+      noSkills: true,
+      noPromptTemplates: true,
+      noThemes: true,
+      noContextFiles: true,
+      additionalSkillPaths: [...await this.skillDirs(), ...resources.skills.filter((r) => r.enabled).map((r) => r.path)],
+      additionalExtensionPaths: resources.extensions.filter((r) => r.enabled).map((r) => r.path),
+      additionalPromptTemplatePaths: resources.prompts.filter((r) => r.enabled).map((r) => r.path),
+    }
+  }
+
+  /**
+   * What the "/" menu offers: skills, prompt templates and the commands installed
+   * extensions register, as pi runs them from a message (docs/design/frontend.md,
+   * "Slash commands"). Read without a conversation, since a new one has no session yet.
+   */
+  async commands(): Promise<SlashCommand[]> {
+    const loader = new DefaultResourceLoader(await this.resourcePaths())
+    await loader.reload()
+    this.commandLoader = loader
+    const titles = new Map((await listSkills(this.workspace.root)).map((s) => [s.name, s.title]))
+    return [
+      ...loader.getSkills().skills.map((s) => ({ name: `skill:${s.name}`, title: titles.get(s.name), description: s.description, source: 'skill' as const })),
+      ...loader.getPrompts().prompts.map((p) => ({ name: p.name, description: p.description, hint: p.argumentHint, source: 'prompt' as const })),
+      ...loader.getExtensions().extensions.flatMap((e) =>
+        [...e.commands.values()].map((c) => ({ name: c.name, description: c.description, source: 'extension' as const, completes: !!c.getArgumentCompletions })),
+      ),
+    ]
+  }
+
+  /**
+   * What an extension command suggests for its arguments so far, as pi's own
+   * editor asks (getArgumentCompletions), from the extensions the menu last read.
+   */
+  async argumentSuggestions(name: string, typed: string): Promise<ArgumentSuggestion[]> {
+    if (!this.commandLoader) await this.commands()
+    const command = this.commandLoader!.getExtensions().extensions.flatMap((e) => [...e.commands.values()]).find((c) => c.name === name)
+    if (!command?.getArgumentCompletions) return []
+    // An extension's own code: one that hangs or throws mustn't hold up the box.
+    const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000))
+    const items = await Promise.race([Promise.resolve(command.getArgumentCompletions(typed)).catch(() => null), timeout])
+    return (items ?? []).slice(0, 50).map((i) => ({ value: i.value, label: i.label, ...(i.description && { description: i.description }) }))
+  }
+
   private async skillDirs() {
     return (await skillRoots(this.workspace.root)).map((dir) => join(this.workspace.root, dir))
   }
@@ -755,6 +809,7 @@ export class AgentHost {
           ? { title: c.automation.name }
           : {}),
       trigger: c.trigger,
+      ...(c.automation && { automation: c.automation.id }),
       date: localTime(c.started).slice(0, 10),
       time: c.started.getHours() + c.started.getMinutes() / 60,
       messages,
@@ -763,6 +818,22 @@ export class AgentHost {
       pending: { steering: [...(c.session?.getSteeringMessages() ?? [])], followUp: [...(c.session?.getFollowUpMessages() ?? [])] },
     }
   }
+}
+
+/**
+ * A request Jezo sends on its own, with the time in front. A user's message gets
+ * it from the time note (prompt.ts, timeNote); a request has no user message, and
+ * with the date only in the system prompt, a local model planned "the next seven
+ * days" in January. A retried request gets the time it's sent again.
+ */
+function timed(request: string) {
+  const now = new Date()
+  return `${timeNote(now, now)}\n\n${request.replace(/^Now: .*\n(The days after today: .*\n)?\n/, '')}`
+}
+
+/** The extension command a message runs, if it's one ("/greet Tim"). */
+function command(session: AgentSession, text: string) {
+  return text.startsWith('/') ? session.extensionRunner.getCommand(text.slice(1).split(/\s/)[0]) : undefined
 }
 
 // ─── From pi's entries to the chat's messages ───
@@ -799,7 +870,7 @@ export function toMessages(entries: unknown[], root: string): SessionMessage[] {
     const m = entry.message
     if (m.role === 'user') {
       const text = typeof m.content === 'string' ? m.content : (m.content as Block[]).filter((b) => b.type === 'text').map((b) => b.text).join('\n')
-      out.push({ id: entry.id, kind: 'user', text })
+      out.push({ id: entry.id, kind: 'user', text: typedText(text) })
     } else if (m.role === 'assistant') {
       for (const block of (m.content as Block[]) ?? []) {
         const last = out.at(-1)

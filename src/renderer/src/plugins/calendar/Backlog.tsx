@@ -16,7 +16,9 @@ import { duration } from '@/lib/time'
 export function Backlog() {
   const { t } = useTranslation('calendar')
   const todos = useStore((s) => s.todos).filter((x) => !x.slot && x.state !== 'done')
-  const { proposeSlots, setCalendarDate, setCalendarView, moveTodo } = useStore.getState()
+  const { proposeSlots, setCalendarDate, setCalendarView, moveTodo, openSession } = useStore.getState()
+  // The conversation the agent is finding times in, and whether it still is.
+  const finding = useStore((s) => s.sessions.find((x) => x.id === s.findingTimes))
   const { active } = useDndContext()
   const dragging = !!active
   const list = useRef<HTMLUListElement>(null)
@@ -115,6 +117,7 @@ export function Backlog() {
         <Button
           variant="outline"
           className="mt-1.5 h-9.5 rounded-full border-[1.5px] border-dashed border-draft bg-draft-bg text-[13px] text-draft-ink hover:bg-draft-chip"
+          disabled={finding?.running}
           onClick={() => {
             // The proposals are for the coming days, so show this week.
             setCalendarDate(useStore.getState().now.date)
@@ -122,8 +125,14 @@ export function Backlog() {
             proposeSlots()
           }}
         >
-          {t('backlog.findTime')}
+          {finding?.running ? t('backlog.finding') : t('backlog.findTime')}
         </Button>
+      )}
+      {/* What it said, including why something stayed in the backlog, is in its conversation. */}
+      {finding && !finding.running && (
+        <button className="self-center text-[12.5px] text-muted-foreground underline-offset-2 hover:underline" onClick={() => openSession(finding.id)}>
+          {t('backlog.whatItSaid')}
+        </button>
       )}
 
       <div className="flex-1" />

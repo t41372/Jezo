@@ -8,7 +8,7 @@ import { Card } from '@/components/ui/card'
 import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Switch } from '@/components/ui/switch'
 import { useStore } from '@/data/store'
-import type { Connection, Experiment, Memory } from '@/data/types'
+import type { Memory } from '@/data/types'
 import { dayLabel, dayTime } from '@/lib/time'
 import { offerUndo } from '@/lib/undo'
 import { ListCard, Row } from '@/components/ListCard'
@@ -165,68 +165,6 @@ export function SkillView({ id }: { id: string }) {
   )
 }
 
-const DECISIONS = [
-  { id: 'adopt', variant: 'default' },
-  { id: 'rerun', variant: 'outline' },
-  { id: 'drop', variant: 'ghost' },
-] as const
-
-export function Experiments() {
-  const { t } = useTranslation('more')
-  const experiments = useStore((s) => s.experiments)
-  return (
-    <>
-      <SectionHeader title={t('sections.experiments.title')}>{t('experiments.intro')}</SectionHeader>
-      {experiments.map((x) => (x.finished ? <FinishedExperiment key={x.id} experiment={x} /> : <RunningExperiment key={x.id} experiment={x} />))}
-    </>
-  )
-}
-
-function FinishedExperiment({ experiment: x }: { experiment: Experiment }) {
-  const { t } = useTranslation('more')
-  const decide = useStore((s) => s.decideExperiment)
-  return (
-    <Card className="gap-3.5 px-5 py-4.5">
-      <div className="flex items-center gap-2">
-        <span className="flex-1 text-[15.5px] font-semibold">{x.title}</span>
-        <span className="text-xs text-muted-foreground">{t('experiments.finished', { count: x.weeks })}</span>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        {x.arms?.map((arm) => (
-          <div key={arm.label} className={cn('rounded-lg px-3.5 py-3', arm.highlight ? 'bg-brand/14' : 'bg-muted')}>
-            <div className="text-xs text-muted-foreground">{arm.label}</div>
-            <div className="mt-0.5 text-[26px] font-medium tabular-nums">{arm.value}</div>
-            <div className="text-xs text-muted-foreground">{arm.metric}</div>
-          </div>
-        ))}
-      </div>
-      <p className="text-[14.5px] leading-[1.7] text-pretty">{x.conclusion}</p>
-      {x.decision ? (
-        <p className="text-[13.5px] text-muted-foreground">{t(`experiments.choices.${x.decision}.reply`)}</p>
-      ) : (
-        <div className="flex flex-wrap gap-2">
-          {DECISIONS.map((d) => (
-            <Button key={d.id} variant={d.variant} className={cn(d.variant === 'ghost' && 'text-muted-foreground')} onClick={() => decide(x.id, d.id)}>
-              {t(`experiments.choices.${d.id}.label`)}
-            </Button>
-          ))}
-        </div>
-      )}
-    </Card>
-  )
-}
-
-function RunningExperiment({ experiment: x }: { experiment: Experiment }) {
-  const { t } = useTranslation('more')
-  return (
-    <Card className="flex-row items-center gap-2.5 px-4.5 py-3.5">
-      <span className="size-[7px] rounded-full bg-ok" />
-      <span className="flex-1 text-sm">{x.title}</span>
-      <span className="text-xs text-muted-foreground">{t('experiments.running', { week: x.week, weeks: x.weeks })}</span>
-    </Card>
-  )
-}
-
 export function History() {
   const { t } = useTranslation('more')
   const history = useStore((s) => s.history)
@@ -276,71 +214,20 @@ export function History() {
   )
 }
 
-/**
- * Connecting sends nothing out, but it lets outside content in, so the dialog
- * says plainly what the connector reads and writes before the user signs in.
- */
-function ConnectDialog({ connection: c }: { connection: Connection }) {
-  const { t } = useTranslation('more')
-  const connect = useStore((s) => s.connect)
-  return (
-    <Dialog>
-      <DialogTrigger render={<Button variant="outline" size="sm" />}>{t('connections.connect')}</DialogTrigger>
-      <DialogContent showCloseButton={false} className="gap-4 sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="text-base">{t('connections.dialogTitle', { name: c.name })}</DialogTitle>
-        </DialogHeader>
-        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-[13.5px]">
-          <dt className="text-muted-foreground">{t('connections.reads')}</dt>
-          <dd>{c.access?.reads}</dd>
-          <dt className="text-muted-foreground">{t('connections.writes')}</dt>
-          <dd>{c.access?.writes ?? t('connections.noWrites')}</dd>
-        </dl>
-        <p className="text-[13px] leading-relaxed text-muted-foreground">
-          {t('connections.local')} {t('connections.browser')}
-        </p>
-        <DialogFooter>
-          <DialogClose render={<Button variant="ghost" />}>{t('connections.cancel')}</DialogClose>
-          <DialogClose render={<Button />} onClick={() => connect(c.id)}>
-            {t('connections.connect')}
-          </DialogClose>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
 export function Connections() {
   const { t } = useTranslation('more')
-  const connections = useStore((s) => s.connections)
+  const navigate = useStore((s) => s.navigate)
   return (
     <>
       <SectionHeader title={t('sections.connections.title')}>{t('connections.intro')}</SectionHeader>
       <CalendarConnections />
-      <h2 className="px-1 text-sm font-medium">{t('connections.others')}</h2>
-      <ListCard>
-        {connections.map((c) => (
-          <div key={c.id} className="flex items-center gap-3 px-4 py-3.5">
-            <span className="size-8.5 shrink-0 rounded-[9px] bg-muted" />
-            <div className="flex-1">
-              <div className="text-[14.5px] font-medium">{c.name}</div>
-              <div className="mt-0.5 text-[12.5px] text-muted-foreground">
-                {c.connected
-                  ? [t('connections.connected'), c.detail ?? t('connections.justNow')].join(' · ')
-                  : (c.detail ?? t('connections.notConnected'))}
-              </div>
-            </div>
-            {c.connected ? (
-              <span className="flex items-center gap-1.5 text-[12.5px] text-ok">
-                <span className="size-1.5 rounded-full bg-ok" />
-                {t('connections.connected')}
-              </span>
-            ) : (
-              <ConnectDialog connection={c} />
-            )}
-          </div>
-        ))}
-      </ListCard>
+      {/* Other services come in as MCP servers or pi packages, through the one install entry (extensions.md). */}
+      <p className="text-[13px] text-muted-foreground">
+        {t('connections.others')}{' '}
+        <button className="underline underline-offset-2 hover:text-foreground" onClick={() => navigate('more', 'skills')}>
+          {t('connections.toInstalled')}
+        </button>
+      </p>
       <p className="text-[13px] text-muted-foreground">{t('connections.outside')}</p>
     </>
   )

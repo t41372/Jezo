@@ -24,13 +24,21 @@
     },
     "connections": {
       "title": "連接",
-      "description": "行事曆、Strava、Anki"
+      "description": "行事曆"
+    },
+    "automations": {
+      "title": "自動化",
+      "description": "Jezo 自己定時開的對話，像早上排程"
+    },
+    "problems": {
+      "title": "有問題的檔案",
+      "description": "Jezo 讀不懂的地方，交給它修"
     }
   },
   "counts": {
     "skills_other": "{{count}} 個開著",
     "experiments_other": "{{count}} 個進行中",
-    "connections_other": "{{count}} 個"
+    "automations_other": "{{count}} 個開著"
   },
   "memory": {
     "intro": "你說過的和它猜的分開放。猜錯了就刪掉，它不會再用。",
@@ -80,7 +88,6 @@
     "remove": "移除",
     "removeQuestion": "移除「{{title}}」？",
     "removeHint": "可以在「修改紀錄」撤銷。",
-    "binaryUndo": "附帶的二進位檔案不在撤銷範圍內。",
     "builtin": "Jezo 內建",
     "written": "你寫的",
     "localSource": "來自這台電腦",
@@ -93,21 +100,31 @@
     "done": "完成"
   },
   "experiments": {
-    "intro": "想知道某個做法對你有沒有用？agent 會輪流排兩種週，最後告訴你結果。",
+    "intro": "想知道某個做法對你有沒有用？agent 會一週一週輪流排兩種做法，照你的紀錄算數字，最後告訴你結果。",
+    "add": "新增",
+    "addPrefill": "我想試試這個做法有沒有用：",
+    "none": "還沒有小實驗。",
+    "starts": "{{date}} 開始",
+    "waiting": "跑完了，等週回顧算結果",
+    "running": "第 {{week}} / {{weeks}} 週",
+    "thisWeek": "這週：{{label}}，{{condition}}",
+    "measure": "比的是：{{measure}}",
     "finished_other": "{{count}} 週 · 結束了",
-    "running": "進行中 · 第 {{week}} / {{weeks}} 週",
+    "tellJezo": "跟 Jezo 說",
     "choices": {
       "adopt": {
-        "label": "先照這樣排兩週",
-        "reply": "好，接下來兩週先照這個方式排，兩週後再問你感覺。"
+        "label": "採用",
+        "reply": "記下了：採用這個做法。",
+        "prefill": "小實驗「{{title}}」我決定採用，幫我把它放進每天的安排。"
       },
       "rerun": {
-        "label": "再測一次",
-        "reply": "好，再測兩週，這次我會讓兩種週的會議數差不多。"
+        "label": "再試一次",
+        "reply": "記下了：再試一次。",
+        "prefill": "小實驗「{{title}}」想再試一輪，幫我排。"
       },
       "drop": {
         "label": "不用了",
-        "reply": "好，不用這個做法。結果還是留在紀錄裡。"
+        "reply": "記下了：不用這個做法。結果還是留著。"
       }
     }
   },
@@ -121,7 +138,8 @@
       "user": "對話",
       "you": "你自己改的",
       "notes": "整理隨手記",
-      "automation": "自動化"
+      "automation": "自動化",
+      "backlog": "幫待辦找時間"
     },
     "retried_other": "重試了 {{count}} 次才寫對格式",
     "undo": "撤銷",
@@ -130,20 +148,13 @@
     "kept_other": "撤銷了。有 {{count}} 個檔案你後來改過，那些沒動。"
   },
   "connections": {
-    "intro": "連上之後，行事曆上的事會出現在「行事曆」頁，agent 排事情時也看得到；運動、背卡的紀錄會自動算成「做了」。",
+    "intro": "連上之後，行事曆上的事會出現在「行事曆」頁，agent 排事情時也看得到。",
     "connected": "已連接",
-    "notConnected": "還沒連接",
     "connect": "連接",
     "outside": "外面進來的內容會標上來源，跟你自己說的分開，不會直接變成 agent 的指令。",
-    "dialogTitle": "連接 {{name}}",
-    "reads": "會讀",
-    "writes": "會寫",
-    "noWrites": "不會寫入任何東西",
-    "local": "讀到的內容只存在這台電腦的工作區，Jezo 不會傳到別的地方。",
-    "browser": "接下來會打開瀏覽器讓你登入。",
     "cancel": "先不要",
-    "justNow": "剛剛連上",
-    "others": "其他"
+    "others": "其他服務，像 Gmail 或 Strava，用 MCP 伺服器或 pi 套件接上：",
+    "toInstalled": "到「已安裝」加"
   },
   "calendars": {
     "title": "行事曆",
@@ -260,5 +271,31 @@
     "configuration": "查看設定",
     "configure": "設定",
     "installOption": "安裝「{{name}}」"
+  },
+  "automations": {
+    "intro": "Jezo 會在這些時間自己開一個對話。每一個都是一個檔案，內容就是它要 agent 做的事，你可以直接改。",
+    "add": "新增",
+    "addPrefill": "幫我新增一個自動化：",
+    "none": "還沒有自動化。",
+    "daily": "每天 {{time}}",
+    "weekly": "每{{day}} {{time}}",
+    "range": "{{from}}到{{to}} {{time}}",
+    "and": "、",
+    "never": "還沒跑過",
+    "last": "上次：{{when}}",
+    "back": "← 自動化",
+    "time": "時間",
+    "runNow": "現在跑一次",
+    "remove": "刪掉",
+    "removed": "刪掉了「{{name}}」",
+    "request": "要 agent 做的事",
+    "requestHint": "到時候 agent 收到的就是這段。改完離開輸入框就存好，下次跑就用新的。"
+  },
+  "problems": {
+    "intro": "這些檔案有地方跟它們的格式不合，或 id 被改掉了。它們還是會出現在該出現的地方，但有些欄位可能讀不到。",
+    "count_other": "{{count}} 個問題",
+    "fix": "請 Jezo 修",
+    "fixPrefill": "幫我修好 {{path}} 的問題。",
+    "none": "沒有有問題的檔案。"
   }
 }

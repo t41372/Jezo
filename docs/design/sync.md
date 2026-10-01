@@ -25,7 +25,7 @@ Status: designing ahead, not built. Tim, 2026-09-30: no phone app soon, but like
 
 From the research, in the order they'd hurt if left:
 
-- **Ids can't change.** Done: `Workspace.update()` refuses a new `id`, and so do the agent's `write` and `edit`. A file whose id is changed by hand while Jezo runs keeps its old id, with a problem saying to put it back. Left: a change made while Jezo was closed is read as a new item, since nothing remembers the old id; and the GUI doesn't show problems yet (the agent sees them in the digest).
+- **Ids can't change.** Done: `Workspace.update()` refuses a new `id`, and so do the agent's `write` and `edit`. A file whose id is changed by hand while Jezo runs keeps its old id, with a problem saying to put it back. Left: a change made while Jezo was closed is read as a new item, since nothing remembers the old id. Problems show in 更多 → 有問題的檔案, and the agent sees them in the digest.
 - **Joining isn't seeding.** A phone joining an existing workspace must not recreate the defaults the user deleted elsewhere.
 - **Automations have an owner** (see above).
 

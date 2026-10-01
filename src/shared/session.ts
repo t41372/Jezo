@@ -5,7 +5,7 @@
 export type ISODate = string
 
 /** What started a session, or made a change. */
-export type Trigger = 'morning' | 'evening' | 'weekly' | 'hotkey' | 'user' | 'notes' | 'automation'
+export type Trigger = 'morning' | 'evening' | 'weekly' | 'hotkey' | 'user' | 'notes' | 'backlog' | 'automation'
 
 /** One thing the agent did with a tool: the tool's name and the file or item it touched. */
 export interface Step {
@@ -13,6 +13,26 @@ export interface Step {
   target?: string
   /** The tool failed, or a check refused what it wrote. */
   error?: boolean
+}
+
+/** A command the "/" menu offers. `app` ones are Jezo's own actions; the rest pi runs from the message. */
+export interface SlashCommand {
+  name: string
+  /** The method's title the user sees, when it has one. */
+  title?: string
+  description?: string
+  source: 'skill' | 'prompt' | 'extension' | 'app'
+  /** What its arguments are, when it says (a prompt template's argument-hint). */
+  hint?: string
+  /** An extension command that suggests its own arguments (pi's getArgumentCompletions). */
+  completes?: boolean
+}
+
+/** One argument an extension command suggests: `value` replaces what's typed after the command. */
+export interface ArgumentSuggestion {
+  value: string
+  label: string
+  description?: string
 }
 
 export type SessionMessage = { id?: string } & (
@@ -49,6 +69,8 @@ export interface SessionView {
   /** Named after the user's first message; sessions Jezo starts are named after their trigger. */
   title?: string
   trigger: Trigger
+  /** The automation that started it, if one did. */
+  automation?: string
   date: ISODate
   /** Hours from midnight. */
   time: number

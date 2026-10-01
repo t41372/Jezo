@@ -1,7 +1,7 @@
 // What the preload script exposes to the renderer as `window.jezo`.
 
 import type { CalendarEvent, CalendarSource, CalendarStatus } from './calendar'
-import type { HistoryEntry, SessionView, Trigger, UndoResult } from './session'
+import type { ArgumentSuggestion, HistoryEntry, SessionView, SlashCommand, Trigger, UndoResult } from './session'
 import type { Fields, Item, ItemChanges } from './workspace'
 import type { SkillInfo, SkillInstallResult, SkillPreview } from './skills'
 import type { ExtensionNotice, InstallPreview, InstallResult, InstalledResources } from './install'
@@ -118,6 +118,10 @@ export interface JezoBridge {
     /** A field set to null is removed. */
     update(id: string, fields: Fields, options?: { body?: string }): Promise<Item>
     remove(id: string): Promise<void>
+    /** Stores a file for an item's notes; resolves to the link from the item's file, like `../attachments/t-1/photo.png`. */
+    attach(id: string, name: string, bytes: Uint8Array): Promise<string>
+    /** Opens a workspace file in the app the system uses for it. */
+    openFile(path: string): Promise<void>
     onChange(listener: (changes: ItemChanges) => void): () => void
   }
   /** Conversations with Jezo's agent. */
@@ -131,6 +135,10 @@ export interface JezoBridge {
     abort(id: string): Promise<void>
     /** Asks the agent, without a visible message, to make the change it described in a run that changed nothing. */
     nudge(id: string): Promise<void>
+    /** What the "/" menu offers: skills, prompt templates and extension commands. */
+    commands(): Promise<SlashCommand[]>
+    /** What an extension command suggests for its arguments, given what's typed after it. */
+    argumentSuggestions(name: string, typed: string): Promise<ArgumentSuggestion[]>
     answerExtension(id: string, request: string, value?: string | boolean): Promise<void>
     onNotice(listener: (notice: ExtensionNotice) => void): () => void
     /** Saved records, queues and run status; the quick preview also receives streaming text. */
@@ -188,6 +196,8 @@ export interface JezoBridge {
   schedule: {
     get(): Promise<Schedule>
     set(change: Partial<Schedule>): Promise<Schedule>
+    /** Runs an automation now; resolves to its conversation. */
+    run(id: string): Promise<string>
   }
   /** The agent's methods, from the workspace. */
   skills: {

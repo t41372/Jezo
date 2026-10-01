@@ -21,6 +21,13 @@ export function shownCustom(entry: PiAnySessionEntry, asked: Set<string>) {
   return shown({ id })
 }
 
+/**
+ * A user message as the user wrote it. pi replaces "/skill:name" with the whole
+ * SKILL.md before the model reads it; the chat shows the command again.
+ */
+export const typedText = (text: string) =>
+  text.replace(/^<skill name="([^"]+)" location="[^"]*">\n[\s\S]*?\n<\/skill>(?:\n\n)?/, (_, name: string) => `/skill:${name} `).trimEnd()
+
 export interface ChatTree {
   entries: PiAnySessionEntry[]
   leafId: string | null

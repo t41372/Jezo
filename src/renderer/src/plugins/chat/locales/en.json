@@ -12,41 +12,6 @@
   "placeholder": "Tell me what you want to do, or hold ⌥X to talk",
   "attach": "Attach",
   "voice": "Talk",
-  "rework": {
-    "energy": {
-      "low": {
-        "title": "Exhausted, want to lie down",
-        "hint": "Keep only the smallest thing"
-      },
-      "some": {
-        "title": "OK, can do a little",
-        "hint": "Keep two or three short ones"
-      },
-      "plenty": {
-        "title": "Actually, I've got energy",
-        "hint": "Keep the plan, move only what won't fit"
-      }
-    },
-    "draft": "The agent's draft",
-    "untilYouSay": "Nothing changes until you say so",
-    "keep": "Keep",
-    "move": "Move",
-    "drop": "Drop",
-    "recorded": "The weekly report will say you reworked the day, not that you skipped things.",
-    "apply": "Do it",
-    "edit": "I'll change it myself",
-    "applied": "Reworked",
-    "undo": "Undo",
-    "goToday": "Back to Today →"
-  },
-  "memoryPreview": {
-    "title": "What this session will remember",
-    "stated": "You said",
-    "skipped": "Not saved",
-    "plan": "Plan",
-    "save": "Save it",
-    "saved": "Saved to memory"
-  },
   "steps": {
     "looked_one": "Looked at {{count}} file",
     "looked_other": "Looked at {{count}} files",

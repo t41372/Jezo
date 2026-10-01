@@ -10,7 +10,9 @@
     "dropHere": "Drop here to unschedule",
     "empty": "Everything is scheduled.",
     "findTime": "Let the agent find time",
-    "card": "{{goal}} · about {{duration}}"
+    "card": "{{goal}} · about {{duration}}",
+    "finding": "The agent is finding times…",
+    "whatItSaid": "See what the agent said"
   },
   "legend": {
     "events": "Calendar events",

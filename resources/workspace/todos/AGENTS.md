@@ -1,6 +1,6 @@
 # Todos
 
-One file per todo in `items/`. The body is optional prose about it.
+One markdown file per todo, `items/<id>.md`. The body is the user's notes about it, in markdown, and the app shows it as an editable page. Files the user added to the notes (a photo, a PDF) are in `attachments/<id>/`, linked from the body with a relative link like `![白板.png](../attachments/t-1/白板.png)`.
 
 ## Fields
 

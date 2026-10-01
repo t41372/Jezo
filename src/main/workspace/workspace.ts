@@ -6,18 +6,18 @@ import { readdir, rm } from 'node:fs/promises'
 import { join, relative, sep } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import type { Fields, Item, ItemChanges } from '../../shared/workspace'
-import { hashOf, newId, readIfExists, TEMP_SUFFIX, writeAtomic } from './files'
+import { type Content, hashOf, newId, readContent, readIfExists, TEMP_SUFFIX, writeAtomic } from './files'
 import { FrontmatterError, parse, patch } from './frontmatter'
 import { compileSchema, type Check } from './schema'
 
 /** Who is writing. An explicit user history action may carry a run too (docs/design/undo.md). */
 export type Actor = { by: 'user'; run?: string } | { by: 'agent'; run: string }
 
-/** A file about to change. `before` or `after` is null when the file is created or deleted. */
+/** A file about to change. `before` or `after` is null when the file is created or deleted; bytes when it isn't text. */
 export interface Write {
   path: string
-  before: string | null
-  after: string | null
+  before: Content | null
+  after: Content | null
   actor: Actor
 }
 
@@ -191,7 +191,7 @@ export class Workspace {
   /** Deletes any file in the workspace, recorded like a write. */
   async removeFile(path: string, actor: Actor) {
     await this.serial(path, async () => {
-      const text = await readIfExists(this.abs(path))
+      const text = await readContent(this.abs(path))
       if (text === null) return
       for (const listener of this.writeListeners) listener({ path, before: text, after: null, actor })
       await rm(this.abs(path), { force: true })
@@ -206,9 +206,9 @@ export class Workspace {
    * through here, so their changes are recorded and indexed like any other.
    * `before` is what the caller read; pass undefined to read it here.
    */
-  async writeFile(path: string, text: string, actor: Actor, before?: string | null) {
+  async writeFile(path: string, text: Content, actor: Actor, before?: Content | null) {
     await this.serial(path, async () => {
-      const current = before === undefined ? await readIfExists(this.abs(path)) : before
+      const current = before === undefined ? await readContent(this.abs(path)) : before
       await this.writeNow(path, text, actor, current)
     })
   }
@@ -227,11 +227,11 @@ export class Workspace {
     })
   }
 
-  private async writeNow(path: string, text: string, actor: Actor, before: string | null) {
+  private async writeNow(path: string, text: Content, actor: Actor, before: Content | null) {
     for (const listener of this.writeListeners) listener({ path, before, after: text, actor })
     await writeAtomic(this.abs(path), text)
     for (const listener of this.fileListeners) listener(path)
-    const changes = await this.reread(path, text)
+    const changes = await this.reread(path, typeof text === 'string' ? text : undefined)
     if (changes) this.emit(changes)
   }
 

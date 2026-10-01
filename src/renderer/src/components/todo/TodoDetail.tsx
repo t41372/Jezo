@@ -1,23 +1,27 @@
 import { Checkbox as CheckboxPrimitive } from '@base-ui/react/checkbox'
-import { Check, X } from 'lucide-react'
-import { AnimatePresence, motion } from 'motion/react'
+import { Check, Paperclip, X } from 'lucide-react'
+import { useRef } from 'react'
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { Button } from '@/components/ui/button'
 import { Disclosure } from '@/components/Disclosure'
+import { MarkdownEditor } from '@/components/editor/MarkdownEditor'
 import { goalById, useStore } from '@/data/store'
 import type { CalendarEvent, Todo } from '@/data/types'
 import { goalStyle } from '@/lib/goal-color'
 import { useTranslation } from 'react-i18next'
-import { easeOut } from '@/lib/motion'
-import { addDays, clock, duration, longDate, monthDay, weekday } from '@/lib/time'
+import { easeDrawer, easeOut } from '@/lib/motion'
+import { addDays, clock, longDate, monthDay, weekday } from '@/lib/time'
 import { offerUndo } from '@/lib/undo'
-import { slotLabel, whenLabel } from './format'
+import { attachmentsIn, fileUrl, isImage, linkedPath } from '@/lib/files'
+import { whenLabel } from './format'
 import { Related } from './Related'
+import { CueField, EstimateField, SlotField, TitleField } from './TodoFields'
 
 /** Everything about one todo, and what you can do with it. */
 export function TodoDetail({ todo, onClose }: { todo: Todo; onClose: () => void }) {
   const { t } = useTranslation()
   const goal = useStore((s) => goalById(s.goals, todo.goalId))
-  const { accept, discard, confirmSlot, moveTodo, setDone, openSession, restoreTodo, toggleSubtask } = useStore.getState()
+  const { accept, discard, confirmSlot, moveTodo, setDone, openSession, restoreTodo, toggleSubtask, setNotes } = useStore.getState()
   const discardDraft = () => {
     discard(todo.id)
     offerUndo(t('undo.discarded', { title: todo.title }), () => restoreTodo(todo))
@@ -39,17 +43,16 @@ export function TodoDetail({ todo, onClose }: { todo: Todo; onClose: () => void 
         <CloseButton onClick={onClose} />
       </div>
 
-      <h2 className="text-[19px] leading-snug font-semibold" data-selectable>
-        {todo.title}
-      </h2>
+      <TitleField todo={todo} />
 
-      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-[13.5px]">
+      {/* Each value is its own control: click to change it. */}
+      <dl className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-0.5 text-[13.5px]">
         <dt className="text-muted-foreground">{t('todo.when')}</dt>
-        <dd>{whenLabel(todo)}</dd>
+        <dd>{todo.fromCalendar ? whenLabel(todo) : <CueField todo={todo} />}</dd>
         <dt className="text-muted-foreground">{t('todo.slot')}</dt>
-        <dd>{slotLabel(todo)}</dd>
+        <dd><SlotField todo={todo} /></dd>
         <dt className="text-muted-foreground">{t('todo.estimate')}</dt>
-        <dd>{duration(todo.estimateMinutes)}</dd>
+        <dd><EstimateField todo={todo} /></dd>
       </dl>
 
       {(draftTodo || proposedSlot) && (
@@ -86,6 +89,8 @@ export function TodoDetail({ todo, onClose }: { todo: Todo; onClose: () => void 
           ))}
         </ul>
       )}
+
+      <Notes todo={todo} onSave={(notes) => setNotes(todo.id, notes)} />
 
       {!draftTodo && !proposedSlot && todo.why && <Why text={todo.why} />}
 
@@ -159,6 +164,51 @@ export function EventDetail({ event, onClose }: { event: CalendarEvent; onClose:
   )
 }
 
+/**
+ * A todo's notes, and the files in them. Images show in the text; other files
+ * (a PDF, a spreadsheet) are links, listed below with a button that opens them.
+ */
+function Notes({ todo, onSave }: { todo: Todo; onSave: (notes: string) => void }) {
+  const { t } = useTranslation()
+  const picker = useRef<HTMLInputElement>(null)
+  const from = todo.path ?? `todos/items/${todo.id}.md`
+  const upload = async (file: File) => window.jezo.workspace.attach(todo.id, file.name, new Uint8Array(await file.arrayBuffer()))
+  const display = (url: string) => {
+    const path = linkedPath(from, url)
+    return path ? fileUrl(path) : url
+  }
+  const files = attachmentsIn(todo.notes, from).filter((f) => !isImage(f.path))
+  const add = async (list: FileList | null) => {
+    const lines: string[] = []
+    for (const file of list ?? []) lines.push(`${isImage(file.name) ? '!' : ''}[${file.name.replace(/[[\]]/g, '')}](${encodeURI(await upload(file))})`)
+    if (lines.length) onSave(`${todo.notes.trimEnd()}${todo.notes.trim() ? '\n\n' : ''}${lines.join('\n\n')}\n`)
+  }
+  return (
+    <section className="flex flex-col gap-2">
+      <div className="-mx-1">
+        <MarkdownEditor value={todo.notes} onSave={onSave} upload={upload} display={display} placeholder={t('editor.notesPlaceholder')} />
+      </div>
+      {files.length > 0 && (
+        <ul className="flex flex-col gap-1" aria-label={t('editor.files')}>
+          {files.map((f) => (
+            <li key={f.path}>
+              <button className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] hover:bg-muted" onClick={() => void window.jezo.workspace.openFile(f.path)}>
+                <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />
+                <span className="truncate">{f.name}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <input ref={picker} type="file" multiple hidden onChange={(e) => void add(e.target.files).finally(() => (e.target.value = ''))} />
+      <Button size="sm" variant="ghost" className="self-start text-muted-foreground" onClick={() => picker.current?.click()}>
+        <Paperclip />
+        {t('editor.attach')}
+      </Button>
+    </section>
+  )
+}
+
 function Why({ text }: { text: string }) {
   const { t } = useTranslation()
   return (
@@ -177,20 +227,30 @@ function CloseButton({ onClick }: { onClick: () => void }) {
   )
 }
 
-/** The side panel that holds a detail view. It slides in from the right edge. */
+/**
+ * The side panel that holds a detail view. Over the calendar it's a drawer of
+ * frosted glass that slides in from the right edge and leaves the same way;
+ * beside Today it's part of the layout and only fades in a little. The glass is
+ * mostly opaque: Chromium's backdrop blur skips content the calendar draws in its
+ * own compositing layers (its scroller, raised chips), which would show through sharp.
+ */
 export function DetailPanel({ open, overlay, children }: { open: boolean; overlay?: boolean; children: React.ReactNode }) {
+  const still = useReducedMotion()
+  // A drawer moves by its own width; with reduced motion it only fades.
+  const away = overlay && !still ? { transform: 'translateX(100%)' } : { opacity: 0, transform: still ? 'none' : 'translateX(12px)' }
+  const here = overlay && !still ? { transform: 'translateX(0%)' } : { opacity: 1, transform: 'none' }
   return (
     <AnimatePresence initial={false}>
       {open && (
         <motion.aside
-          initial={{ opacity: 0, transform: 'translateX(24px)' }}
-          animate={{ opacity: 1, transform: 'translateX(0px)' }}
+          initial={away}
+          animate={here}
           // Leaves faster than it arrives: closing is the user done with it.
-          exit={{ opacity: 0, transform: 'translateX(24px)', transition: { duration: 0.15, ease: easeOut } }}
-          transition={{ duration: 0.22, ease: easeOut }}
+          exit={{ ...away, transition: { duration: overlay ? 0.2 : 0.15, ease: easeOut } }}
+          transition={{ duration: overlay ? 0.3 : 0.2, ease: overlay ? easeDrawer : easeOut }}
           className={
             overlay
-              ? 'absolute inset-y-0 right-0 z-10 w-[340px] max-w-[85%] overflow-auto border-l bg-background px-5.5 py-6 shadow-[-20px_0_50px_-20px_rgb(10_14_40/0.35)] backdrop-blur-2xl backdrop-saturate-150'
+              ? 'absolute inset-y-0 right-0 z-10 w-[360px] max-w-[85%] overflow-auto border-l border-white/40 bg-popover/92 px-5.5 py-6 shadow-[-24px_0_60px_-24px_rgb(10_14_40/0.35)] backdrop-blur-2xl backdrop-saturate-150 dark:border-white/8'
               : 'w-[340px] shrink-0 overflow-auto border-l bg-card px-5.5 py-5.5'
           }
         >

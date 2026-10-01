@@ -132,6 +132,29 @@ test('a GitHub pi package brings resources and its questions receive GUI answers
   await input.getByRole('button', { name: '送出' }).click()
   await expect(page.getByText('測試套件收到回答', { exact: true })).toBeVisible()
   await expect.poll(() => page.evaluate(async (id) => (await window.jezo.agent.list()).find((s) => s.id === id)?.tools ?? [], session)).toContain('installation_echo')
+
+  // The package's method, template and command are in the "/" menu, and its command runs without a model.
+  const box = page.locator('main textarea').first()
+  await box.fill('/')
+  const menu = page.locator('[data-slash-menu]')
+  for (const [name, kind] of [['skill:package-method', '方法'], ['package-prompt', '範本'], ['greet', '擴充']]) {
+    await expect(menu.getByRole('option').filter({ hasText: `/${name}` })).toContainText(kind)
+  }
+  await expect(menu.getByRole('option').filter({ hasText: '/package-prompt' })).toContainText('<topic>')
+  await box.fill('/greet')
+  await expect(menu.getByRole('option')).toHaveCount(1)
+  await box.press('Enter')
+  await expect(box).toHaveValue('/greet ')
+  // The command suggests its own arguments, narrowed by what's typed.
+  await expect(menu.getByRole('option')).toHaveText([/Tim/, /Taro/, /Anna/])
+  await box.pressSequentially('T')
+  await expect(menu.getByRole('option')).toHaveCount(2)
+  await box.press('ArrowDown')
+  await box.press('Enter')
+  await expect(box).toHaveValue('/greet Taro')
+  await expect(menu).toBeHidden()
+  await box.press('Enter')
+  await expect(page.getByText('套件打招呼：Taro', { exact: true })).toBeVisible()
   await page.evaluate((id) => window.jezo.agent.abort(id), session)
   const entries = await app.evaluate((_electron, dir) => {
     const { readdirSync, readFileSync } = process.getBuiltinModule('node:fs')

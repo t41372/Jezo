@@ -55,6 +55,11 @@
       "title": "自動化",
       "short": "自動",
       "started": "自動開始"
+    },
+    "backlog": {
+      "title": "幫待辦找時間",
+      "short": "找時間",
+      "started": "從 Backlog 交給 agent"
     }
   },
   "todo": {
@@ -77,7 +82,11 @@
     "ask": "問 agent 這件事",
     "askPrefill": "關於「{{title}}」，",
     "close": "關閉",
-    "subtasks": "步驟"
+    "subtasks": "步驟",
+    "title": "標題",
+    "cuePlaceholder": "什麼情境下做，例如：午餐回座位",
+    "at": "時間",
+    "minutes": "分鐘"
   },
   "event": {
     "readOnly": "來自 {{source}}，時間要在那邊改。",
@@ -162,11 +171,49 @@
     "steer": "先照這個做",
     "queued": "接著問",
     "steering": "先照這個做",
-    "takeBack": "拿回待送訊息"
+    "takeBack": "拿回待送訊息",
+    "commands": {
+      "label": "指令",
+      "new": "開新對話",
+      "model": "換模型",
+      "source": {
+        "skill": "方法",
+        "prompt": "範本",
+        "extension": "擴充",
+        "app": "Jezo"
+      }
+    }
   },
   "related": {
     "title": "相關",
     "linksTo": "它連到的",
     "linkedFrom": "連到它的"
+  },
+  "editor": {
+    "upload": "上傳",
+    "imageLink": "或貼上圖片網址",
+    "caption": "寫說明…",
+    "confirm": "好",
+    "linkPlaceholder": "貼上連結",
+    "notesPlaceholder": "寫點筆記，打 / 插入標題、清單、圖片…",
+    "menu": {
+      "text": "文字",
+      "paragraph": "內文",
+      "h1": "大標題",
+      "h2": "中標題",
+      "h3": "小標題",
+      "quote": "引言",
+      "divider": "分隔線",
+      "lists": "清單",
+      "bullets": "項目清單",
+      "numbers": "編號清單",
+      "tasks": "待辦清單",
+      "more": "其他",
+      "image": "圖片",
+      "code": "程式碼",
+      "table": "表格"
+    },
+    "attach": "加附件",
+    "files": "附件"
   }
 }

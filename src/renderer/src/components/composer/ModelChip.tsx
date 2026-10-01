@@ -27,11 +27,16 @@ function useChoices() {
  * model list one step further in. It changes Jezo's model everywhere, the same
  * choice as in 設定.
  */
-export function ModelChip({ className }: { className?: string }) {
+export function ModelChip({ className, openModels = 0 }: { className?: string; /** Counts up to open the model list, as /model does. */ openModels?: number }) {
   const { t } = useTranslation()
   const [choices, setChoices] = useChoices()
   const [open, setOpen] = useState(false)
   const [page, setPage] = useState<'thinking' | 'models'>('thinking')
+  useEffect(() => {
+    if (!openModels) return
+    setPage('models')
+    setOpen(true)
+  }, [openModels])
   // Opening the menu puts the keyboard on the slider, the thing most often changed.
   const slider = useRef<HTMLDivElement>(null)
   if (!choices?.main) return null
