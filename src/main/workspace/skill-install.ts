@@ -252,7 +252,7 @@ export class SkillInstaller {
         if (file.executable) await chmod(this.workspace.abs(`${dir}/${file.path}`), 0o755)
       }
       const origin: SkillOrigin = {
-        name: skill.name, source: prepared.source, installed: new Date().toISOString(), by: actor.by,
+        name: skill.name, source: prepared.source, installed: new Date().toISOString(), by: actor.by === 'agent' ? 'agent' : 'user',
         ...(prepared.source !== 'written' ? { hash: hashOf(installedText), path: skill.path } : {}),
         ...(prepared.ref ? { ref: prepared.ref } : {}), ...(binary.length ? { binary } : {}),
       }

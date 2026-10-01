@@ -1,4 +1,5 @@
 import cronstrue from 'cronstrue/i18n'
+import { cityOf } from '@/components/ZonePicker'
 import i18n from '@/i18n'
 
 /** A time of day from a schedule whose minute and hour are plain numbers, as "08:00". */
@@ -22,7 +23,13 @@ const weekday = (day: number) =>
  * The shapes people use most are said the way a person would; anything else
  * goes to cronstrue, and a schedule that doesn't parse is shown as it's written.
  */
-export function scheduleWords(cron: string) {
+export function scheduleWords(cron: string, zone?: string) {
+  const words = scheduleIn(cron)
+  // A schedule fixed to a zone runs by that zone's clock, wherever the user is.
+  return zone && zone !== 'local' ? i18n.t('automations.inZone', { ns: 'more', words, city: cityOf(zone) }) : words
+}
+
+function scheduleIn(cron: string) {
   const time = scheduleTime(cron)
   const [, , dayOfMonth, month, days] = cron.split(' ')
   if (time && dayOfMonth === '*' && month === '*') {

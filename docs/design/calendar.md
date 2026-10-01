@@ -34,20 +34,42 @@ Events aren't copied into the workspace. They'd be a mirror of something another
 
 - **EventKit** is reached through `native/eventkit`, a small Swift program the main process runs and reads JSON from (`status`, `request`, `calendars`, `events FROM TO`, `watch`). Repeating events come expanded. All-day events come as dates with the end the day after, like ICS. `watch` prints a line whenever the calendar store changes, and the windows reload. `scripts/native.ts` builds it in `postinstall`, `dev`, `build` and `e2e`; the packaged app ships it in `Resources/bin`.
   - **Permission.** macOS asks the *responsible* process. In development that's the terminal Jezo was started from, so the terminal needs calendar access. The packaged app asks as Jezo, with `NSCalendarsFullAccessUsageDescription` from `electron-builder.yml`. The packaged path hasn't been tried yet.
-- **ICS** is read with ical.js (`src/main/calendar/ics.ts`). ical.js expands repeat rules, EXDATE and moved or cancelled occurrences (RECURRENCE-ID). Jezo turns the times into local time. Feeds get zones wrong in several ways, and each has a test in `ics.test.ts`, written before the code:
+- **ICS** is read with ical.js (`src/main/calendar/ics.ts`). ical.js expands repeat rules, EXDATE and moved or cancelled occurrences (RECURRENCE-ID). Jezo keeps what each time meant ("Times from each source" below). Feeds get zones wrong in several ways, and each has a test in `ics.test.ts`, written before the code:
   - Windows zone names ("Pacific Standard Time") are only defined by the feed's own VTIMEZONE, as Outlook sends them.
-  - An IANA name without a VTIMEZONE is converted with `Intl`, daylight saving included.
-  - UTC times are converted to local time.
-  - Floating times use `X-WR-TIMEZONE` if the feed has one, and local time otherwise.
+  - An IANA name without a VTIMEZONE is read with Temporal, daylight saving included.
+  - UTC times are moments in UTC.
+  - Floating times use `X-WR-TIMEZONE` if the feed has one, and otherwise stay floating: that clock wherever the user is.
+  - A zone the feed names but doesn't define is read as floating, and 連接 says so under the subscription.
   - All-day dates are never shifted by a zone.
 - **Google** (`src/main/calendar/google.ts`):
   - **Sign-in.** PKCE with an S256 challenge, a loopback redirect to a free port on 127.0.0.1, `access_type=offline` for a refresh token, and scope `calendar.readonly`. A Desktop client needs its secret in the token request even with PKCE. The secret isn't confidential for a Desktop client, but it's the user's, so it lives in the keychain.
-  - **Reading.** Calendars come from `calendarList`. Events come from `events.list` with `singleEvents=true`, so Google expands repeats, for 90 days back to 365 ahead, into a cache that's read again with the others.
+  - **Reading.** Calendars come from `calendarList`. Events come from `events.list` with `singleEvents=true`, so Google expands repeats, for 90 days back to 365 ahead, into a cache that's read again with the others. The cache keeps each time as Google gave it, with the event's zone.
   - **Descriptions** are Google's small HTML; they're turned into text with links kept.
   - **Signed out.** `invalid_grant` means the sign-in is gone (revoked, or a Testing app after 7 days), and the account shows as needing to connect again.
   - **Not yet.** Incremental sync (sync tokens) isn't used; that matters once many people share one project's quota, which a client of Jezo's own would bring.
 - **Refreshing.** Subscriptions are read when Jezo opens, every 30 minutes, and when the window comes back after 5 minutes away. Requests carry `If-None-Match` / `If-Modified-Since`. A failure keeps the last copy and shows the reason; nothing is thrown away.
 - **Ids.** Each occurrence has its own id (`uid@recurrence-id`), the same on every read.
+
+## Times from each source
+
+Decided 2026-10-01 ([time.md](time.md)). Until then every adapter turned times into local strings, losing each event's zone. A Google cache read after travel showed the old zone's clock, and EventKit's floating events looked fixed.
+
+An event's endpoints are structured, not local strings:
+- a fixed event has a moment, plus its source zone and clock when known;
+- a floating event has a clock;
+- an all-day event has days, with the end exclusive.
+
+| Source | What it keeps |
+|---|---|
+| EventKit | The helper sends fixed endpoints as moments with the event's `timeZone`, floating events (nil zone) as clocks, and all-day events as days. Its range query takes a zone. |
+| Google | The cache keeps `dateTime` with its offset, each endpoint's `timeZone`, and recurring-instance identity. |
+| ICS | VTIMEZONE still defines zones, Windows names included, and its offsets win even when Temporal knows the name: the feed's rules are what its author meant. A TZID or `X-WR-TIMEZONE` nobody defines is a problem shown in the GUI, not a silent guess; it's found when the feed is fetched, across the whole feed, so the warning doesn't depend on which dates were asked about. `X-WR-TIMEZONE` stays the fallback for floating times, and can name a zone the feed defines. Seconds are kept. |
+
+- **Occurrence ids** use the moment for fixed occurrences, and the clock or date for floating and all-day ones. A clock formatted in the device's zone changed with travel, so ids no longer use one.
+- **Range queries take a zone.** Oct 8 in Tokyo and Oct 8 in Phoenix are different intervals. Asking for the wrong one and converting afterwards loses events. The calendar page asks in the zone it shows.
+- **A source that couldn't be read for a range is unavailable,** and every answer names it: not connected, access taken away, a read that failed, no saved copy, or dates past what's kept of Google. Overlap checks against it say "unknown", and the agent is told "Couldn't read Personal just now, so nothing is known from it", never "nothing on the calendar".
+- **An overlap check covers the whole slot,** however long: a three-day todo is checked against all three days.
+- **The agent reads both ends of an event.** A clock that happens twice that day carries its offset ("01:30 (-04:00)–01:30 (-05:00)"), and the event's own zone shows both its dates when they differ.
 
 ## The agent
 

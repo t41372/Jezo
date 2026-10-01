@@ -1,4 +1,4 @@
-# Handoff: where the work stands (2026-09-30, evening)
+# Handoff: where the work stands (2026-10-01)
 
 This is a working note, not a design doc. It holds what the agent building
 Jezo was in the middle of, and the decisions waiting on Tim. Delete it once
@@ -9,7 +9,7 @@ it's empty.
 ### Offline sync (designing ahead)
 
 Tim, 2026-09-30: decide about the phone later; the desktop app comes first. No phone app soon, but likely later, working offline and merging with the desktop, peer to peer with something like iroh. Design the architecture for it now. Codex's report is in `.claude/research/2026-09-30/sync-astra.md`; its last section has eight questions for Tim (can devices sync without being online together, may user-owned storage hold encrypted data, what exactly "forget" promises, does the phone run its own agent, and more). Hazards already known:
-- Times are written as local time with no zone (backend.md). That's fine on one Mac, but ambiguous once a phone in another zone writes.
+- Which device's zone is the user's, with several devices (sync.md, time.md).
 - Some config is per device (EventKit sources, hidden calendars), some per user (ICS subscriptions). calendar.md marks which is which. A subscription's address is in each device's keychain, so a phone would ask for it again.
 
 ### Decided on 2026-09-30 (kept here until the work lands)
@@ -21,6 +21,16 @@ Tim, 2026-09-30: decide about the phone later; the desktop app comes first. No p
 - **Chat UI on assistant-ui** with its pi adapter over IPC, and Streamdown. Built and merged (frontend.md, "Chat").
 - **這輪沒有改動 under a run that changed nothing, with 請它動手** (frontend.md, "Chat"). Done.
 - **No checks that read the reply's words, and no extra model calls per run** to rescue weak models.
+
+### Time zones and missed automations (decided and built 2026-10-01)
+
+[time.md](design/time.md) and [automations.md](design/automations.md). The research and reviews are in `.claude/research/2026-10-01/`.
+
+- **Every todo time and record carries its zone** (Tim, 2026-10-01): there's no time without a zone, and no 跟著我走. The display is always right after travel. Moving a plan after travel is a proposal the user accepts.
+- **No migration mechanisms for now** (Tim, 2026-10-01): Jezo isn't released.
+- **One default Tim can still flip:** the weekly review catches up for 24 hours; the other choice is "until next time".
+
+Health connectors: none for now (Tim, 2026-10-01). Apple Health waits for the phone app. Google's Health API is closed to new projects.
 
 ### Connectors
 
@@ -34,11 +44,22 @@ Google through EventKit won't be tested separately (Tim, 2026-09-30: every accou
 
 ## Work in progress, in order
 
-1. **Left over from merged work:**
+1. **Time zones and missed automations: left over.**
+   - A request the calendar starts while showing another zone (finding times) still reads times in the device's zone.
+   - The GUI time picker shifts a clock in a spring-forward gap without saying so (it keeps the todo's zone); the tools refuse it.
+   - An `until` clock before an automation's time isn't flagged.
+   - Try in the packaged app: start at login (`wasOpenedAtLogin` may be false on macOS 13+, which only means the window opens), EventKit against real calendars.
+   - The morning plan's late-run wording hasn't been tried at 15:00 with the real model on its real request.
+   - From the code review of 2026-10-01 (`.claude/research/2026-10-01/review/`, each part with its verification), waiting for Tim:
+     - ICS repeats and lengths across a clock change: an IANA zone without VTIMEZONE is applied after ical.js has already compared UNTIL and EXDATE; repeats are bounded by the clock, not the interval, so a moved occurrence or one across the date line can be missed; DURATION across a change adds wall hours. All three were there before; fixing them means giving ical.js Temporal's zone rules.
+     - A damaged line in the middle of an automation's history is dropped with a console message. It should show in 有問題的檔案, and the automation shouldn't run on its own until it's fixed, since a lost claim could run a time twice.
+     - Previewing another zone on a device whose own clocks change that night: the grid's Dates are in the device's zone, so a Tokyo 02:30 on New York's spring-forward day draws at 03:30. The grid's own today and now line also follow the device.
+   - The voice E2E fails while another Jezo runs in development with its own speech server.
+2. **Left over from merged work:**
    - The install entry isn't verified in the packaged app, with a native addon, or with a live OAuth sign-in (extensions.md). The pi directory (packages, MCP config) isn't in the workspace backup.
-2. **Sync:** designed (docs/design/sync.md); its eight questions are for Tim. The cheap changes are done; the rest waits for sync itself, with reasons in the doc.
-3. **Test model.** `qwen3.6-35b-a3b-splash` (Tim, 2026-09-30, replacing gemma-4-e4b). Read traces with `bun scripts/trace.ts` and fix the input first (AGENTS.md, "How we work"). It sometimes repeats a line in its thinking until it runs out of tokens (3 of ~20 runs); the chat now says so and offers a retry. The agent tests pass most runs; single failures are usually that loop.
-4. Later:
+3. **Sync:** designed (docs/design/sync.md); its eight questions are for Tim. The cheap changes are done; the rest waits for sync itself, with reasons in the doc.
+4. **Test model.** `qwen3.6-35b-a3b-splash` (Tim, 2026-09-30, replacing gemma-4-e4b). Read traces with `bun scripts/trace.ts` and fix the input first (AGENTS.md, "How we work"). It sometimes repeats a line in its thinking until it runs out of tokens (3 of ~20 runs); the chat now says so and offers a retry. The agent tests pass most runs; single failures are usually that loop.
+5. Later:
    - an experiment's arm isn't checked against the morning plan in a test (the digest line is there, the effect isn't measured)
    - bundling uv for the packaged app
    - trying the packaged app's EventKit permission
@@ -62,5 +83,17 @@ Google through EventKit won't be tested separately (Tim, 2026-09-30: every accou
   assistant-ui data parts; `require.resolve` of pi's ESM-only package
   crashing the main process).
 - **The clipboard is Tim's.** A test that copies must put back what was there (chat.spec.ts); one failed when Tim copied something mid-run, and every run overwrote his clipboard.
+- **Don't `git stash` in this tree.** Another session may have uncommitted work in it (on 2026-10-01 one was doing the app icon); commit only your own files, and stage your hunks of a shared file with `git apply --cached`.
+- **Test requests that name a plugin's folder** ("在 notes 資料夾") get that plugin's conventions from a model (items/, frontmatter). The bash test writes to scratch/ now.
+- **Model tests that flake on qwen3.6** as of 2026-10-01:
+  - "一小時後" read as "within an hour";
+  - a revised plan proposed without `revise`, so the old card doesn't say 拿掉了;
+  - times described in the reply without calling the tool;
+  - an experiment's conclusion or decision written by the agent;
+  - a tool call with keys and values run together (`"date2026-10-07": 2026`), repeated until it runs out of tokens;
+  - "每週一早上九點" written as a Sunday cron. The automations' instructions now give a Monday example and say 0 is Sunday; that test passed 2 of 3 runs after.
+
+  Each passes on a rerun. Read the trace before changing anything for them.
+- **Bun has no Temporal.** Scripts and unit tests load `scripts/temporal.ts` (bunfig.toml preloads it for `bun test`); Electron and Node have it natively.
 - **E2E evaluate in the main process** can't use dynamic `import()`; use
   `process.getBuiltinModule('node:fs')` and the electron modules passed in.

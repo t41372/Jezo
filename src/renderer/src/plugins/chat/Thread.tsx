@@ -39,6 +39,7 @@ export function Thread() {
 function Conversation() {
   const session = useStore((s) => s.sessions.find((x) => x.id === s.sessionId))
   const today = useStore((s) => s.now.date)
+  const zone = useStore((s) => s.zone)
   const running = useAuiState((s) => s.thread.isRunning)
   const messages = useAuiState((s) => s.thread.messages)
   const { t } = useTranslation('chat')
@@ -49,7 +50,7 @@ function Conversation() {
     <ThreadPrimitive.Root className="flex min-h-0 min-w-0 flex-1 flex-col">
       <ThreadPrimitive.Viewport className="flex-1 overflow-auto px-6 pt-7 pb-3">
         <div className="mx-auto flex max-w-[660px] flex-col gap-3.5">
-          {session && <div className="text-center text-xs text-muted-foreground">{sessionHeadline(session, today)}</div>}
+          {session && <div className="text-center text-xs text-muted-foreground">{sessionHeadline(session, today, zone)}</div>}
           {!!session?.tools?.length && (
             <Disclosure label={tm('install.sessionTools')}>
               <p className="px-1 py-2 text-xs leading-relaxed break-all text-muted-foreground">{session.tools.join(' · ')}</p>

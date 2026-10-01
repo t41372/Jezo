@@ -19,7 +19,7 @@ import {
   type ExtensionAPI,
   SessionManager,
 } from '@earendil-works/pi-coding-agent'
-import type { ThinkingLevel } from '@earendil-works/pi-agent-core'
+import type { AgentMessage, ThinkingLevel } from '@earendil-works/pi-agent-core'
 import type { ArgumentSuggestion, SessionMessage, SessionView, SlashCommand, Step, Trigger } from '../../shared/session'
 import { calendarExtension, HELD_MESSAGE } from '../calendar/agent'
 import { type Held, type OutsideContent, outsideToolResults } from './outside'
@@ -32,7 +32,10 @@ import { acting } from './acting'
 import { ExtensionUI } from './extension-ui'
 import { installer } from '../install/installer'
 import type { Providers } from './providers'
-import { digest, NOTHING_CHANGED, REQUESTS, SYSTEM_PROMPT, timeNote } from './prompt'
+import { deviceZone } from '../clock'
+import { now } from '../../shared/time'
+import { eventWhen } from '../calendar/agent'
+import { digest, JUMP_MS, jumpNote, NOTHING_CHANGED, REQUESTS, SYSTEM_PROMPT, timeNote } from './prompt'
 import { type CardDetails, createTools, type RunContext, TOOL_NAMES } from './tools'
 import type { UndoLog } from './undo'
 
@@ -60,11 +63,20 @@ interface Conversation {
   liveAssistantId?: string
   initializing?: Promise<AgentSession | null>
   completion?: Promise<void>
+  /** How the last run ended, for an automation's history (docs/design/automations.md, "Attempts"). */
+  outcome?: Outcome
   finishing?: boolean
   aborted?: boolean
   projection?: { leafId: string | null; messages: SessionMessage[]; entryIds: Set<string> }
   catalogChanged?: boolean
 }
+
+/**
+ * How a run ended. `unreachable` is a failure before anything happened: no
+ * model, or one that didn't answer, so the run can be tried again.
+ */
+/** How a run ended. `interrupted` is Jezo quitting mid-run; a crash is found to be one at the next launch. */
+export type Outcome = 'completed' | 'waiting' | 'failed' | 'unreachable' | 'stopped' | 'interrupted'
 
 const TRIGGER_ENTRY = 'jezo.session'
 const CHECK_MESSAGE = 'jezo.check'
@@ -74,10 +86,12 @@ const NUDGE_MESSAGE = 'jezo.nudge'
 
 export class AgentHost {
   private conversations = new Map<string, Conversation>()
+  /** Jezo is quitting: runs it cuts off are interrupted, not finished. */
+  private closing = false
   private listeners = new Set<(view: SessionView, catalogChanged: boolean) => void>()
   private eventListeners = new Set<(event: PiClientEvent) => void>()
   private entryIds = new WeakMap<object, string>()
-  private finishedListeners = new Set<(id: string, automation?: { id: string; name: string }) => void>()
+  private finishedListeners = new Set<(id: string, automation: { id: string; name: string } | undefined, outcome: Outcome | undefined) => void>()
   private timers = new Map<string, NodeJS.Timeout>()
   /** The resources the "/" menu last read, for its argument suggestions. */
   private commandLoader?: DefaultResourceLoader
@@ -278,7 +292,7 @@ export class AgentHost {
         const result = await session.navigateTree(request.id, { summarize: false })
         if (result.cancelled || c.aborted) return
         this.publish(c, { type: 'snapshot', snapshot: this.getThread(id) })
-        await session.sendCustomMessage({ customType: REQUEST_MESSAGE, content: timed(String(request.content)), display: false }, { triggerTurn: true })
+        await session.sendCustomMessage({ customType: REQUEST_MESSAGE, content: timed(withoutRunNote(String(request.content))), display: false }, { triggerTurn: true })
       })
       return
     }
@@ -296,14 +310,14 @@ export class AgentHost {
     this.emit(c, true)
   }
 
-  /** Called when a run ends with an answer, with the automation that started it, if one did. */
-  onFinished(listener: (id: string, automation?: { id: string; name: string }) => void) {
+  /** Called whenever a run ends, however it ends, with the automation that started the conversation, if one did. */
+  onFinished(listener: (id: string, automation: { id: string; name: string } | undefined, outcome: Outcome | undefined) => void) {
     this.finishedListeners.add(listener)
     return () => this.finishedListeners.delete(listener)
   }
 
   list(): SessionView[] {
-    return [...this.conversations.values()].map((c) => this.view(c)).sort((a, b) => (a.date + a.time < b.date + b.time ? 1 : -1))
+    return [...this.conversations.values()].map((c) => this.view(c)).sort((a, b) => b.started - a.started)
   }
 
   /** Sends the user's message, starting a conversation when `id` is null. Returns the conversation's id. */
@@ -315,22 +329,29 @@ export class AgentHost {
   }
 
   /** Starts a conversation Jezo asks for, like sorting notes. The request isn't shown to the user. */
-  /** Runs an automation: its body is the request, and the session remembers which automation it was. */
-  async startAutomation(automation: { id: string; name: string; trigger?: Trigger; request: string }) {
+  /**
+   * Runs an automation: its body is the request, after `note`, what the
+   * scheduler says about this run, like how late it is. The session remembers
+   * which automation it was. `done` settles when the run ends, however it ends.
+   */
+  /**
+   * Starts an automation's conversation. `claim` is awaited after the conversation
+   * exists and before anything is asked of the model, so the history can name it.
+   */
+  async startAutomation(automation: { id: string; name: string; trigger?: Trigger; request: string; note?: string; claim?: (session: string) => Promise<void> }) {
     const conversation = await this.create(automation.trigger ?? 'automation', { id: automation.id, name: automation.name })
+    await automation.claim?.(conversation.id)
+    const request = automation.note ? `${automation.note}\n\nRequest:\n${automation.request}` : automation.request
     this.launch(conversation, (session) =>
-      session.sendCustomMessage({ customType: REQUEST_MESSAGE, content: timed(automation.request), display: false }, { triggerTurn: true }),
+      session.sendCustomMessage({ customType: REQUEST_MESSAGE, content: timed(request), display: false }, { triggerTurn: true }),
     )
-    return conversation.id
+    const done = conversation.completion!.then(() => conversation.outcome ?? 'failed')
+    return { id: conversation.id, done }
   }
 
-  /** When each automation last started a session. */
-  lastRuns() {
-    const runs = new Map<string, Date>()
-    for (const c of this.conversations.values()) {
-      if (c.automation && (!runs.has(c.automation.id) || runs.get(c.automation.id)! < c.started)) runs.set(c.automation.id, c.started)
-    }
-    return runs
+  /** Stops a run, as the user's Stop does. */
+  stop(id: string) {
+    return this.abort(id)
   }
 
   async start(trigger: Trigger) {
@@ -365,11 +386,14 @@ export class AgentHost {
   answerExtension(id: string, request: string, value?: string | boolean) { this.ui.answer(id, request, value) }
 
   async close() {
+    this.closing = true
     this.ui.close()
     await Promise.all([...this.conversations.values()].map(async (c) => {
       if (!c.session) return
       try {
         await c.session.abort()
+        // The run settles as interrupted before the session goes away.
+        await c.completion
         await c.session.extensionRunner.emit({ type: 'session_shutdown', reason: 'quit' })
       } finally { c.session.dispose() }
     }))
@@ -400,7 +424,7 @@ export class AgentHost {
   }
 
   private contextFor(session: string): RunContext {
-    const context: RunContext = { run: '', session, said: '', acted: false, heard: [], closed: [], refused: () => this.undo.refused(context.run) }
+    const context: RunContext = { run: '', session, said: '', acted: false, asked: false, heard: [], closed: [], refused: () => this.undo.refused(context.run) }
     return context
   }
 
@@ -414,6 +438,7 @@ export class AgentHost {
     c.finishing = false
     c.aborted = false
     this.emit(c)
+    let recording = false
     try {
       const session = await this.sessionFor(c)
       if (c.aborted) return
@@ -422,15 +447,19 @@ export class AgentHost {
       if (!session || (!session.model && !byExtension)) {
         if (userText) c.manager.appendMessage({ role: 'user', content: userText, timestamp: Date.now() })
         this.note(c, { kind: 'error', code: 'no-model' })
+        c.outcome = 'unreachable'
         return
       }
+      c.outcome = undefined
       c.context.run = newId('r')
       c.context.said = userText ?? ''
       c.context.acted = false
+      c.context.asked = false
       c.context.heard = [...heard(c.manager.getEntries()), ...(userText ? [userText] : [])]
       c.context.closed = this.memory.deleted().flatMap((f) => f.evidence ?? [])
       c.failed.clear()
       this.undo.start({ id: c.context.run, session: c.id, trigger: c.trigger, at: localTime(new Date()) })
+      recording = true
       // Everything this run does, however deep, is the agent's, acting on the user's words or on what Jezo asked.
       const source = userText !== undefined ? 'user' : 'agent'
       const file = c.manager.getSessionFile()
@@ -440,14 +469,30 @@ export class AgentHost {
         await session.waitForIdle()
         c.finishing = true
       })
+      // Cut off by Quit, the run stays unfinished in the undo history, so the next launch lists it as 沒跑完.
+      if (this.closing && !c.aborted) {
+        c.outcome = 'interrupted'
+        return
+      }
       await this.undo.finish(c.context.run, firstSentence(session.getLastAssistantText() ?? ''))
+      recording = false
+      const last = [...session.messages].reverse().find((m) => m.role === 'assistant') as { stopReason?: string } | undefined
+      const nothingDone = !this.undo.changed(c.context.run) && !c.context.acted
+      // A reply cut off by its output limit ('length') or aborted by something other than Stop didn't finish.
+      c.outcome = c.aborted ? 'stopped'
+        : last?.stopReason === 'error' ? (nothingDone ? 'unreachable' : 'failed')
+        : last?.stopReason === 'length' || last?.stopReason === 'aborted' ? 'failed'
+        : c.context.asked ? 'waiting' : 'completed'
       // Said so under the reply, so a reply that claims a change the run never made is easy to see (docs/design/frontend.md, "Chat").
       if (!c.aborted && !byExtension && !this.undo.changed(c.context.run) && !c.context.acted) c.manager.appendCustomEntry(UNCHANGED_ENTRY, {})
-      for (const listener of this.finishedListeners) listener(c.id, c.automation)
     } catch (error) {
       console.error(error)
       this.note(c, { kind: 'error', text: String(error instanceof Error ? error.message : error) })
+      c.outcome = c.aborted ? 'stopped' : this.closing ? 'interrupted' : 'failed'
+      // What it changed before failing is in the undo history, like any finished run.
+      if (recording && !this.closing) await this.undo.finish(c.context.run, '').catch(console.error)
     } finally {
+      for (const listener of this.finishedListeners) listener(c.id, c.automation, c.outcome)
       this.ui.cancel(c.id)
       c.running = false
       c.partial = null
@@ -491,7 +536,7 @@ export class AgentHost {
     const settings = installs.settings
 
     // The prompt's picture of the day is from now; each message says the time again (timeNote).
-    const promptTime = new Date()
+    const promptTime = nowHere()
     const loader = new DefaultResourceLoader({
       ...await this.resourcePaths(),
       // The workspace's AGENTS.md is its map, as a project's is for a coding agent. Only that one:
@@ -529,12 +574,16 @@ export class AgentHost {
         this.workspace,
         () => c.context,
         (path) => this.blocked(path),
-        async (scheduled, minutes) =>
-          Promise.all(
-            (await this.calendars.overlapping(scheduled, minutes)).map(
-              async (e) => `${(await this.outside.screen(e.title, `the calendar, ${e.start.replace('T', ' ')}`)).text} ${e.start.slice(11)}–${e.end.slice(11)}`,
-            ),
-          ),
+        async (scheduled, minutes) => {
+          const { events, unchecked } = await this.calendars.overlapping(scheduled, minutes)
+          const found = await Promise.all(
+            events.map(async (e) => {
+              const when = eventWhen(e, deviceZone())
+              return `${(await this.outside.screen(e.title, `the calendar, ${when}`)).text} ${when}`
+            }),
+          )
+          return { found, unchecked }
+        },
         (todoId) => this.planOf(c, todoId),
       ),
       sessionManager: c.manager,
@@ -551,14 +600,30 @@ export class AgentHost {
    * would be the clock rather than what the user asked; it's moved in front of
    * it for the model, and kept after it in the session file.
    */
-  private time(pi: ExtensionAPI, promptTime: Date) {
-    pi.on('before_agent_start', () => ({ message: { customType: TIME_MESSAGE, content: timeNote(new Date(), promptTime), display: false } }))
+  private time(pi: ExtensionAPI, promptTime: Temporal.ZonedDateTime) {
+    // Notes said when time jumped between two model calls of one run, kept where they were said.
+    // A run starts with its own time note, so each run starts them afresh: a jump from an
+    // earlier run, or from another branch after a retry, never shows up in this one.
+    let jumps: { at: number; note: AgentMessage }[] = []
+    let last: Temporal.ZonedDateTime | null = null
+    pi.on('before_agent_start', () => {
+      jumps = []
+      last = null
+      return { message: { customType: TIME_MESSAGE, content: timeNote(nowHere(), promptTime), display: false } }
+    })
     pi.on('context', (event) => {
+      const now = nowHere()
+      // A short sleep across midnight counts too: the model would still be on yesterday's date.
+      if (last && (now.timeZoneId !== last.timeZoneId || now.epochMilliseconds - last.epochMilliseconds > JUMP_MS || !now.toPlainDate().equals(last.toPlainDate()))) {
+        jumps.push({ at: event.messages.length, note: { role: 'custom', customType: TIME_MESSAGE, content: jumpNote(last, now), display: false, timestamp: now.epochMilliseconds } as AgentMessage })
+      }
+      last = now
       const messages = [...event.messages]
       for (let i = 1; i < messages.length; i++) {
         const note = messages[i] as { role: string; customType?: string }
         if (note.role === 'custom' && note.customType === TIME_MESSAGE && messages[i - 1].role === 'user') [messages[i - 1], messages[i]] = [messages[i], messages[i - 1]]
       }
+      for (const jump of [...jumps].reverse()) if (jump.at <= messages.length) messages.splice(jump.at, 0, jump.note)
       return { messages }
     })
   }
@@ -810,8 +875,7 @@ export class AgentHost {
           : {}),
       trigger: c.trigger,
       ...(c.automation && { automation: c.automation.id }),
-      date: localTime(c.started).slice(0, 10),
-      time: c.started.getHours() + c.started.getMinutes() / 60,
+      started: c.started.getTime(),
       messages,
       tools: c.session?.getAllTools().filter((tool) => tool.exposure !== 'hidden').map((tool) => tool.name),
       ...(c.running && { running: true }),
@@ -827,8 +891,18 @@ export class AgentHost {
  * days" in January. A retried request gets the time it's sent again.
  */
 function timed(request: string) {
-  const now = new Date()
-  return `${timeNote(now, now)}\n\n${request.replace(/^Now: .*\n(The days after today: .*\n)?\n/, '')}`
+  const now = nowHere()
+  return `${timeNote(now, now)}\n\n${request.replace(/^Now: .*\n(Times you give .*\n)?(The days after today: .*\n)?\n/, '')}`
+}
+
+/**
+ * A retried automation's request without what the scheduler said about the first
+ * try (how late it was), which would contradict the clock now. Which day the run
+ * is for stays: a weekly review retried on Tuesday still reviews the week to Sunday.
+ */
+function withoutRunNote(request: string) {
+  const note = /^(?:Now: .*\n(?:Times you give .*\n)?(?:The days after today: .*\n)?\n)?(This run: .* due at [^.\n]*\.)[^\n]*\n[\s\S]*?\n\nRequest:\n/.exec(request)
+  return note ? `${note[1]} This is a retry, sent now.\n\nRequest:\n${request.slice(note[0].length)}` : request
 }
 
 /** The extension command a message runs, if it's one ("/greet Tim"). */
@@ -932,3 +1006,6 @@ function localTime(at: Date) {
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}T${pad(at.getHours())}:${pad(at.getMinutes())}`
 }
+
+/** Now, in the device's zone. */
+const nowHere = () => now().toZonedDateTimeISO(deviceZone())

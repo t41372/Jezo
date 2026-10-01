@@ -29,7 +29,7 @@ export function Agenda() {
   const selected = useStore((s) => s.todayDetail)
   const { navigate, openSession, send, setTodayDetail } = useStore.getState()
 
-  const todos = all.filter((x) => x.slot?.date === date).sort((a, b) => a.slot!.start - b.slot!.start)
+  const todos = all.filter((x) => x.slot?.date === date).sort((a, b) => a.slot!.at - b.slot!.at)
   const drafts = todos.filter((x) => x.state === 'draft')
   const accepted = todos.filter((x) => x.state !== 'draft')
   const open = accepted.filter((x) => x.state === 'open')

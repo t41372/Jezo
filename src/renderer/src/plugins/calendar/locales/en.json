@@ -59,5 +59,11 @@
   "sourcesMore": "{{first}} and {{count}} more",
   "mac": "Mac calendars",
   "manage": "Manage calendars",
-  "connect": "+ Connect a calendar"
+  "connect": "+ Connect a calendar",
+  "zone": {
+    "here": "{{city}} time",
+    "preview": "Previewing {{city}} time",
+    "device": "This device’s zone ({{city}})",
+    "search": "Find a city or zone"
+  }
 }

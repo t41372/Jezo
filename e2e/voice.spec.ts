@@ -82,6 +82,6 @@ test.describe('holding ⌥X', () => {
 
     // What was said is sent as the question, and shows as one.
     await expect(quick.locator('[data-selectable]').first()).toHaveText(/打給媽.*明天晚上八點/, { timeout: 30_000 })
-    await expect.poll(() => read('todos/items/t-u2.md').data.scheduled, { timeout: 240_000 }).toMatch(/T20:00$/)
+    await expect.poll(() => read('todos/items/t-u2.md').data.scheduled, { timeout: 240_000 }).toMatch(/T20:00(\[Asia\/Taipei\])?$/)
   })
 })

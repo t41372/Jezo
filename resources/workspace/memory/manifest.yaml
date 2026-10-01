@@ -9,7 +9,7 @@ schema:
     about: { enum: [preference, fact, pattern, person, commitment] }
     epistemic: { enum: [stated, inferred] }
     status: { enum: [active, superseded] }
-    recorded: { type: string }
+    recorded: { type: string, format: jezo-record }
     source: { type: string }
     evidence: { type: array, items: { type: string } }
     confidence: { enum: [low, medium, high] }

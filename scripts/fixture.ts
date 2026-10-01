@@ -3,6 +3,7 @@
 // The mockup's "today" (NOW in mock.ts) becomes the real today, so the data is
 // always current. It refuses to write into a directory that already has files.
 
+import './temporal'
 import { cp, mkdir, readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { generateNKeysBetween } from 'fractional-indexing'
@@ -21,19 +22,22 @@ if (language !== 'zh-TW') await cp(join(resources, `workspace.${language}`), dir
 await cp(join(resources, 'workspace'), dir, { recursive: true, force: false, errorOnExist: false })
 await mkdir(join(dir, 'sessions'), { recursive: true })
 
+/** A local clock in the fixture's zone, as the moment a record is written as. */
+const moment = (clock: string) => Temporal.PlainDateTime.from(clock).toZonedDateTime(zone).toString({ smallestUnit: 'second', timeZoneName: 'never' })
 const DAY = 86_400_000
-const offset = Math.round((Date.parse(localDate(new Date())) - Date.parse(NOW.date)) / DAY)
+const zone = Intl.DateTimeFormat().resolvedOptions().timeZone
+const offset = Math.round((Date.parse(localDate(zone)) - Date.parse(NOW.date)) / DAY)
 const shift = (date: string) => new Date(Date.parse(date) + offset * DAY).toISOString().slice(0, 10)
 
 const ranks = generateNKeysBetween(null, null, todos.length)
 for (const [i, todo] of todos.entries()) {
-  const fields = { id: todo.id, title: todo.title, state: todo.state, ...todoFields({ ...todo, slot: todo.slot && { ...todo.slot, date: shift(todo.slot.date) }, rank: ranks[i] }) }
+  const fields = { id: todo.id, title: todo.title, state: todo.state, ...todoFields({ ...todo, slot: todo.slot && { ...todo.slot, date: shift(todo.slot.date) }, rank: ranks[i] }, { zone, device: zone }) }
   const clean = Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== null && v !== undefined))
   await mkdir(join(dir, 'todos/items'), { recursive: true })
   await writeFile(join(dir, 'todos/items', `${todo.id}.md`), patch('', clean))
 }
 for (const note of notes) {
-  const fields = { id: note.id, created: writeLocal(shift(note.date), note.time), source: note.source, state: note.state }
+  const fields = { id: note.id, created: moment(writeLocal(shift(note.date), note.time)), source: note.source, state: note.state }
   await mkdir(join(dir, 'notes/items'), { recursive: true })
   await writeFile(join(dir, 'notes/items', `${note.id}.md`), patch(`${note.text}\n`, fields))
 }
@@ -93,11 +97,11 @@ for (const goal of goals) await writeFile(join(dir, 'goals/items', `${goal.field
 
 // The mockup's memories. Inferences carry the todos they rest on.
 const memories = [
-  { id: 'm-1', epistemic: 'stated', about: 'preference', recorded: `${shift(NOW.date)}T21:40`, text: '加班的日子 → 回家伸展 10 分鐘' },
-  { id: 'm-2', epistemic: 'stated', about: 'preference', recorded: '2026-09-14T20:10', text: '週日不排工作' },
-  { id: 'm-3', epistemic: 'stated', about: 'fact', recorded: '2026-09-02T19:30', text: '週四晚上固定打排球' },
-  { id: 'm-4', epistemic: 'inferred', about: 'pattern', recorded: `${shift(NOW.date)}T08:00`, confidence: 'medium', evidence: ['todos/items/t-x7.md', 'todos/items/t-2.md'], text: '下午會議多的日子，你寫東西比較難' },
-  { id: 'm-5', epistemic: 'inferred', about: 'pattern', recorded: `${shift(NOW.date)}T08:00`, confidence: 'high', evidence: ['todos/items/t-x16.md'], text: '長跑你常少估 35% 的時間' },
+  { id: 'm-1', epistemic: 'stated', about: 'preference', recorded: moment(`${shift(NOW.date)}T21:40`), text: '加班的日子 → 回家伸展 10 分鐘' },
+  { id: 'm-2', epistemic: 'stated', about: 'preference', recorded: moment('2026-09-14T20:10'), text: '週日不排工作' },
+  { id: 'm-3', epistemic: 'stated', about: 'fact', recorded: moment('2026-09-02T19:30'), text: '週四晚上固定打排球' },
+  { id: 'm-4', epistemic: 'inferred', about: 'pattern', recorded: moment(`${shift(NOW.date)}T08:00`), confidence: 'medium', evidence: ['todos/items/t-x7.md', 'todos/items/t-2.md'], text: '下午會議多的日子，你寫東西比較難' },
+  { id: 'm-5', epistemic: 'inferred', about: 'pattern', recorded: moment(`${shift(NOW.date)}T08:00`), confidence: 'high', evidence: ['todos/items/t-x16.md'], text: '長跑你常少估 35% 的時間' },
 ]
 await mkdir(join(dir, 'memory/items'), { recursive: true })
 for (const { text, ...fields } of memories) {

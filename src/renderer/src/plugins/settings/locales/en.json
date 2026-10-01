@@ -94,5 +94,9 @@
       "skipped": "Didn't import {{names}}: not an OpenAI-style API, or its key comes from running a command."
     }
   },
-  "scheduleOff": "Off"
+  "scheduleOff": "Off",
+  "atLogin": {
+    "title": "Open in the background at login",
+    "hint": "Automations run while the computer’s awake, without opening the window first. Quitting Jezo still quits it."
+  }
 }

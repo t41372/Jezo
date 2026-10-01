@@ -1,48 +1,43 @@
 // Turns workspace items into the entities the UI draws, and UI changes back into
 // fields to write. The file formats are in docs/design/backend.md.
 
+import { dateOf, epochOf, formatTime, moveTo, place, readTime, resolve, stamp, todayIn, type TimeValue, type Zone } from '../../../shared/time'
 import type { Fields, Item } from '../../../shared/workspace'
-import type { Experiment, Goal, ISODate, Memory, Note, Todo } from './types'
+import type { Experiment, Goal, ISODate, Memory, Note, SlotInput, Todo } from './types'
 
-// ─── Local times ───
-// On disk a time is local, with no zone: "2026-09-29T09:30". The UI keeps a
-// date and hours from midnight.
+// ─── Times ───
+// On disk a time is one string of the kinds in docs/design/time.md, read and
+// written only through the time module. The UI keeps a date and hours from
+// midnight, as seen from the device's zone.
 
 const pad = (n: number) => String(n).padStart(2, '0')
 
-/** "2026-09-29T09:30" → { date: "2026-09-29", hours: 9.5 } */
-export function readLocal(text: unknown): { date: ISODate; hours: number } | null {
-  if (typeof text !== 'string') return null
-  const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})/.exec(text)
-  return m ? { date: m[1], hours: Number(m[2]) + Number(m[3]) / 60 } : null
-}
-
+/** A date and hours from midnight → "2026-09-29T09:30", a local time. */
 export function writeLocal(date: ISODate, hours: number) {
   const minutes = Math.round(hours * 60)
   return `${date}T${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`
 }
 
-export function localDate(at: Date) {
-  return `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`
+/** A value as the UI draws it: its date and hours from midnight in `zone`. */
+function where(value: TimeValue | null, zone: Zone): { date: ISODate; hours: number } | null {
+  if (!value || value.kind === 'day') return null
+  const at = resolve(value, zone)!.at
+  return { date: at.toPlainDate().toString(), hours: at.hour + at.minute / 60 }
 }
 
-/** A moment as a local time, to the minute. */
-export const stamp = (at = new Date()) => writeLocal(localDate(at), at.getHours() + at.getMinutes() / 60)
-
-function toEpoch(text: unknown) {
-  const local = readLocal(text)
-  if (!local) return undefined
-  const [y, m, d] = local.date.split('-').map(Number)
-  return new Date(y, m - 1, d, 0, Math.round(local.hours * 60)).getTime()
-}
+/** Today's date in `zone`. */
+export const localDate = (zone: Zone) => todayIn(zone).toString()
 
 const str = (v: unknown) => (typeof v === 'string' ? v : undefined)
 
 // ─── Todos ───
 
-export function toTodo(item: Item): Todo {
+export function toTodo(item: Item, zone: Zone): Todo {
   const d = item.data
-  const scheduled = readLocal(d.scheduled)
+  const started = readTime(d.started, 'record')
+  const completed = readTime(d.completed, 'record')
+  const startedAt = epochOf(started, zone)
+  const completedAt = epochOf(completed, zone)
   return {
     id: item.id,
     title: str(d.title) ?? '',
@@ -52,19 +47,50 @@ export function toTodo(item: Item): Todo {
     state: d.state === 'draft' || d.state === 'done' ? d.state : 'open',
     cue: str(d.cue),
     estimateMinutes: typeof d.estimate === 'number' ? d.estimate : 30,
-    slot: scheduled && { date: scheduled.date, start: scheduled.hours, ...(d.proposed === true && { proposed: true }) },
+    slot: toSlot(d.scheduled, zone, d.proposed === true),
     subtasks: Array.isArray(d.steps) ? (d.steps as { text: string; done: boolean }[]) : undefined,
     why: str(d.why),
-    startedAt: toEpoch(d.started),
+    startedAt,
     rank: str(d.rank),
     amount: typeof d.amount === 'number' ? d.amount : undefined,
-    completedAt: toEpoch(d.completed),
+    completedAt,
+    elapsedMinutes: startedAt !== undefined && completedAt !== undefined ? Math.round((completedAt - startedAt) / 60_000) : undefined,
+    times: { scheduled: str(d.scheduled), started: str(d.started), completed: str(d.completed) },
     links: item.links,
   }
 }
 
-/** The fields to write for a change to a todo. Fields a change clears are null. */
-export function todoFields(change: Partial<Todo>): Fields {
+/** A todo's `scheduled` as the UI draws it: its moment, and its date and hours in `zone`. */
+export function toSlot(scheduled: unknown, zone: Zone, proposed = false): Todo['slot'] {
+  const value = readTime(scheduled)
+  const shown = where(value, zone)
+  if (!shown || (value?.kind !== 'zoned' && value?.kind !== 'moment')) return null
+  return {
+    date: shown.date,
+    start: shown.hours,
+    at: epochOf(value, zone)!,
+    kind: value.kind,
+    ...(value.kind === 'zoned' && { zone: value.zone }),
+    ...(proposed && { proposed: true }),
+  }
+}
+
+/**
+ * Where a change in the GUI happens: the zone its clock is read in (the
+ * calendar's, which may be showing another zone), and the device's zone, which
+ * records are stamped in (docs/design/time.md).
+ */
+export interface TimeContext {
+  zone: Zone
+  device: Zone
+}
+
+/**
+ * The fields to write for a change to a todo. Fields a change clears are null.
+ * A moved time keeps its kind: a time fixed to New York stays in New York.
+ */
+export function todoFields(change: Partial<Omit<Todo, 'slot'>> & { slot?: SlotInput | null }, context: TimeContext, before?: Todo): Fields {
+  const zone = context.device
   const f: Fields = {}
   if ('title' in change) f.title = change.title
   if ('goalId' in change) f.goal = change.goalId ?? null
@@ -72,16 +98,35 @@ export function todoFields(change: Partial<Todo>): Fields {
   if ('cue' in change) f.cue = change.cue ?? null
   if ('estimateMinutes' in change) f.estimate = change.estimateMinutes
   if ('slot' in change) {
-    f.scheduled = change.slot ? writeLocal(change.slot.date, change.slot.start) : null
+    f.scheduled = change.slot ? slotText(change.slot, context, before?.times?.scheduled) : null
     f.proposed = change.slot?.proposed ? true : null
   }
   if ('subtasks' in change) f.steps = change.subtasks?.length ? change.subtasks : null
   if ('why' in change) f.why = change.why ?? null
-  if ('startedAt' in change) f.started = change.startedAt ? stamp(new Date(change.startedAt)) : null
+  if ('startedAt' in change) f.started = change.startedAt ? recordText(change.startedAt, zone, before?.startedAt, before?.times?.started) : null
   if ('rank' in change) f.rank = change.rank ?? null
   if ('amount' in change) f.amount = change.amount ?? null
-  if ('completedAt' in change) f.completed = change.completedAt ? stamp(new Date(change.completedAt)) : null
+  if ('completedAt' in change) f.completed = change.completedAt ? recordText(change.completedAt, zone, before?.completedAt, before?.times?.completed) : null
   return f
+}
+
+/**
+ * A slot as written. One that didn't move is written as it was, so accepting a
+ * proposal changes nothing about its time. A moved time keeps its zone. A new
+ * one is fixed to the zone it was placed in: the device's, or the one the
+ * calendar shows, since placing it there is planning for being there.
+ */
+function slotText(slot: SlotInput, context: TimeContext, previous?: string) {
+  const value = readTime(previous)
+  const was = where(value, context.zone)
+  if (value && was && was.date === slot.date && Math.round(was.hours * 60) === Math.round(slot.start * 60)) return previous!
+  const clock = writeLocal(slot.date, slot.start).slice(11)
+  return formatTime((value ? moveTo(value, slot.date, clock, context.zone) : place(slot.date, clock, context.zone)).value)
+}
+
+/** A record as written: unchanged when it's the same moment, so rewriting a todo doesn't restamp it in another zone. */
+function recordText(at: number, zone: Zone, previousAt?: number, previous?: string) {
+  return previous && previousAt === at ? previous : stamp(zone, at)
 }
 
 // ─── Goals ───
@@ -120,10 +165,10 @@ export function toGoal(item: Item, todos: Todo[], today: ISODate): Goal {
       return { cue: r.cue, action: r.action, tries: tried.length, hits: tried.filter((t) => t.state === 'done').length }
     }),
     samples: done
-      .filter((t) => t.startedAt && t.completedAt)
+      .filter((t) => t.elapsedMinutes !== undefined)
       .sort((a, b) => a.completedAt! - b.completedAt!)
       .slice(-8)
-      .map((t) => ({ estimated: t.estimateMinutes, actual: Math.round((t.completedAt! - t.startedAt!) / 60_000) })),
+      .map((t) => ({ estimated: t.estimateMinutes, actual: t.elapsedMinutes! })),
     report: d.report as Goal['report'],
     ruleProposal: proposal && { ruleIndex: proposal.rule, cue: proposal.cue, action: proposal.action, why: proposal.why },
     links: item.links,
@@ -132,16 +177,15 @@ export function toGoal(item: Item, todos: Todo[], today: ISODate): Goal {
 
 /** Monday and Sunday of the week a date is in. */
 export function weekOf(date: ISODate): [ISODate, ISODate] {
-  const [y, m, day] = date.split('-').map(Number)
-  const d = new Date(y, m - 1, day)
-  const monday = new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7))
-  return [localDate(monday), localDate(new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6))]
+  const d = Temporal.PlainDate.from(date)
+  const monday = d.subtract({ days: d.dayOfWeek - 1 })
+  return [monday.toString(), monday.add({ days: 6 }).toString()]
 }
 
 // ─── Memory ───
 
 /** A memory in use: replaced ones keep their files but aren't shown or used. */
-export function toMemory(item: Item): Memory | null {
+export function toMemory(item: Item, zone: Zone): Memory | null {
   const d = item.data
   if (d.status === 'superseded') return null
   const evidence = Array.isArray(d.evidence) ? (d.evidence as string[]) : []
@@ -149,7 +193,10 @@ export function toMemory(item: Item): Memory | null {
     id: item.id,
     text: item.body.trim(),
     kind: d.epistemic === 'inferred' ? 'inferred' : 'stated',
-    date: String(d.recorded ?? '').slice(0, 10),
+    date: (() => {
+      const recorded = readTime(d.recorded, 'record')
+      return recorded ? dateOf(recorded, zone).toString() : ''
+    })(),
     ...(evidence.some((e) => e.startsWith('notes/')) && { via: 'notes' as const }),
     ...(d.epistemic === 'inferred' && { evidence: evidence.length, confidence: d.confidence as Memory['confidence'] }),
     record: { ...d, text: item.body.trim() },
@@ -158,14 +205,17 @@ export function toMemory(item: Item): Memory | null {
 
 // ─── Notes ───
 
-export function toNote(item: Item): Note {
+export function toNote(item: Item, zone: Zone): Note {
   const d = item.data
-  const created = readLocal(d.created)
+  const value = readTime(d.created, 'record')
+  const created = where(value, zone)
   return {
     id: item.id,
     text: item.body.replace(/\n$/, ''),
     date: created?.date ?? '',
     time: created?.hours ?? 0,
+    at: epochOf(value, zone) ?? 0,
+    created: str(d.created),
     source: d.source === 'hotkey' ? 'hotkey' : 'page',
     state: d.state === 'sorting' || d.state === 'sorted' ? d.state : 'new',
     proposal: d.proposal as Note['proposal'],

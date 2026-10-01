@@ -5,8 +5,11 @@
 //   jezo-eventkit status                 -> {"access": "full" | "notDetermined" | "denied" | "restricted" | "writeOnly"}
 //   jezo-eventkit request                -> asks for full access, then prints the status
 //   jezo-eventkit calendars              -> the calendars and the account each belongs to
-//   jezo-eventkit events FROM TO [IDS…]  -> events between two local dates (YYYY-MM-DD, TO exclusive), repeats
-//                                           expanded; all-day events as dates, their end the day after
+//   jezo-eventkit events FROM TO [IDS…]  -> events between two moments (ISO 8601, TO exclusive), repeats expanded.
+//                                           A timed event's times are moments with the offset of the event's
+//                                           own zone, and the zone; one with no zone floats, and its times are
+//                                           the clock as written. All-day events are dates, their end the day after.
+//                                           (docs/design/calendar.md, "Times from each source")
 //   jezo-eventkit watch                  -> prints "changed" whenever the calendar store changes, until stdin closes
 
 import EventKit
@@ -36,13 +39,24 @@ func access() -> String {
   }
 }
 
-/** Local time without a zone, the way Jezo writes times: 2026-09-29T09:30. */
+/** A floating event's clock, as written: 2026-09-29T09:30. EventKit gives floating times in the default zone. */
 let local: DateFormatter = {
   let f = DateFormatter()
   f.locale = Locale(identifier: "en_US_POSIX")
   f.dateFormat = "yyyy-MM-dd'T'HH:mm"
   return f
 }()
+
+/** A moment with the offset of `zone`: 2026-09-29T09:30:00-04:00. */
+func moment(_ date: Date, in zone: TimeZone) -> String {
+  let f = DateFormatter()
+  f.locale = Locale(identifier: "en_US_POSIX")
+  f.timeZone = zone
+  f.dateFormat = "yyyy-MM-dd'T'HH:mm:ssxxx"
+  return f.string(from: date)
+}
+
+let instant = ISO8601DateFormatter()
 
 let day: DateFormatter = {
   let f = DateFormatter()
@@ -96,7 +110,7 @@ case "calendars":
 case "events":
   guard access() == "full" else { fail("No access to calendars.") }
   let rest = Array(args.dropFirst())
-  guard rest.count >= 2, let from = day.date(from: rest[0]), let to = day.date(from: rest[1]) else {
+  guard rest.count >= 2, let from = instant.date(from: rest[0]), let to = instant.date(from: rest[1]) else {
     fail("Usage: jezo-eventkit events FROM TO [CALENDAR_IDS…]")
   }
   let wanted = Set(rest.dropFirst(2))
@@ -105,14 +119,21 @@ case "events":
   let found = store.events(matching: store.predicateForEvents(withStart: from, end: to, calendars: calendars))
   let calendar = Calendar.current
   emit(found.map { e -> [String: Any] in
+    // A timed event keeps its zone; without one it floats, the same clock wherever the user is.
+    let zone = e.isAllDay ? nil : e.timeZone
+    let time = { (date: Date) in zone.map { moment(date, in: $0) } ?? local.string(from: date) }
     // All-day events end at 23:59:59 of their last day here; Jezo's end is exclusive, the next day.
-    let start = e.isAllDay ? day.string(from: e.startDate) : local.string(from: e.startDate)
+    let start = e.isAllDay ? day.string(from: e.startDate) : time(e.startDate)
     let end = e.isAllDay
       ? day.string(from: calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: e.endDate.addingTimeInterval(-1)))!)
-      : local.string(from: e.endDate)
+      : time(e.endDate)
+    // One id per occurrence: a repeating event shares its identifier across occurrences. The
+    // occurrence is named by its moment, or its clock when it floats, never by a clock from
+    // the device's zone, which would change with travel.
+    let occurrence = e.occurrenceDate ?? e.startDate!
+    let named = zone == nil ? local.string(from: occurrence) : instant.string(from: occurrence)
     var event: [String: Any] = [
-      // One id per occurrence: a repeating event shares its identifier across occurrences.
-      "id": "\(e.eventIdentifier ?? e.calendarItemIdentifier)@\(local.string(from: e.occurrenceDate ?? e.startDate))",
+      "id": "\(e.eventIdentifier ?? e.calendarItemIdentifier)@\(named)",
       "calendar": e.calendar.calendarIdentifier,
       "title": e.title ?? "",
       "start": start,
@@ -120,6 +141,7 @@ case "events":
       "allDay": e.isAllDay,
       "repeats": e.hasRecurrenceRules,
     ]
+    if let zone { event["zone"] = zone.identifier }
     if let location = e.location, !location.isEmpty { event["location"] = location }
     if let notes = e.notes, !notes.isEmpty { event["notes"] = notes }
     if let url = e.url { event["url"] = url.absoluteString }

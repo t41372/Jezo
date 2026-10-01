@@ -93,5 +93,9 @@
       "skipped": "沒匯入 {{names}}：用的不是 OpenAI 格式，或金鑰要執行指令才拿得到。"
     }
   },
-  "scheduleOff": "關著"
+  "scheduleOff": "關著",
+  "atLogin": {
+    "title": "登入時在背景開啟",
+    "hint": "電腦醒著時，排好的自動化就會跑，不用先打開視窗。結束 Jezo 就真的結束。"
+  }
 }

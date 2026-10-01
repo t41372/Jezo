@@ -47,6 +47,11 @@ Follow Hermes' model, with storage outside the workspace. Built on 2026-09-29 (`
 3. **For structured data, go per field** if file-level checks turn out to be too coarse. Record `{entity id, field, old, new}`, so the agent's change to one field can be undone even when the user edited a different field in the same file.
 4. **Keep only recent turns.** History older than a short window is dropped. Losing it is fine.
 
+**Saved as it happens** (decided 2026-10-01, [automations.md](automations.md)). Each change is saved to the history before the file itself is written; the workspace waits for the save. So a run cut off by a quit or a crash still appears in 修改紀錄, marked as interrupted, and can be undone. Before this, its changes were only in memory and were lost.
+- **A shell command cut off mid-way is the exception.** Its changes are found by comparing the workspace before and after the command, so a crash while it runs leaves what it changed so far out of the history. Recovering them would need the before-snapshot saved and a way to tell its changes from the user's and other runs' after the crash; not worth it yet (review, 2026-10-01).
+
+**Jezo's own records aren't undoable.** Writes with the writer `jezo`, like the automation history in `automations/history/`, are never recorded. The shell's before-and-after snapshot skips that folder, so a scheduler write during a shell command isn't blamed on the agent.
+
 Skill installations and removals go through the workspace, bytes included. A file that isn't text is kept in the history as a blob named by its hash, in `history-blobs/` beside `history.json`, and dropped when no kept run refers to it; like the rest of the history, it's safe to lose. Its diff in 修改紀錄 is one line, `(binary)`. Files a shell command changes are compared as text only, so bytes it writes aren't in the history.
 
 ## Open questions

@@ -121,6 +121,12 @@ Decided on 2026-09-30, after Tim: the drawer's details couldn't be edited, and a
 - **Files in the notes live in the workspace,** at `<plugin>/attachments/<item id>/<name>`, linked from the notes with an ordinary relative link (`![白板.png](../attachments/t-1/白板.png)`), so any markdown editor and the agent see them. Pasted, dropped or picked images show in the text; other files are links, listed below the notes with a button that opens them in their own app. The window loads workspace files through the `jezo-file:` scheme, which serves nothing outside the workspace; the content policy allows it for images. Like every GUI edit, adding a file isn't in 修改紀錄.
 - **Rejected:** BlockNote, the most Notion-like, because its own block format is the source and its markdown export is lossy: the agent's markdown would be rewritten on every save. MDXEditor, markdown-first but built around a toolbar rather than a "/" menu. Tiptap with its markdown extension stays the fallback; it would need the menus built by hand.
 - **Crepe's image block fails on an image without a title,** which is how people write them; a remark step gives such images an empty title while parsing, which isn't written back.
+- **Times and zones** (decided 2026-10-01, [time.md](time.md)):
+  - 時區 shows the zone the time is fixed to, and its clock there when that's another zone.
+  - When the time here differs, it shows that too, with both dates if they differ.
+  - Fixing it to another zone keeps the clock, and is previewed before saving.
+- **The calendar header names its zone,** with a switch to show another zone. Switching moves fixed times and changes nothing on disk.
+- **An automation's page** shows its state in words: waiting for a model, running, waiting for you, interrupted, the catch-up window, and the history, with Skip, Stop, Continue and Run now as [automations.md](automations.md) describes.
 
 ## Slash commands
 

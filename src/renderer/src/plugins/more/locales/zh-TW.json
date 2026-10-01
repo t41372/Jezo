@@ -145,7 +145,11 @@
     "undo": "撤銷",
     "undone": "已撤銷",
     "files_other": "改了 {{count}} 個檔案",
-    "kept_other": "撤銷了。有 {{count}} 個檔案你後來改過，那些沒動。"
+    "kept_other": "撤銷了。有 {{count}} 個檔案你後來改過，那些沒動。",
+    "interrupted": "沒跑完",
+    "interruptedSummary": "跑到一半，Jezo 就關掉或當掉了。下面是它已經改的。",
+    "continue": "接著做",
+    "continuePrefill": "上次做到一半被打斷了。看一下現在的檔案，接著把它做完；已經做過的不要重做。"
   },
   "connections": {
     "intro": "連上之後，行事曆上的事會出現在「行事曆」頁，agent 排事情時也看得到。",
@@ -217,7 +221,8 @@
     "googleWaiting": "等瀏覽器⋯",
     "googleSignedOut": "要重新連接：{{error}}",
     "googleDone": "已經連好了，可以關掉這個分頁，回到 Jezo。",
-    "googleFailedPage": "沒有連上。回到 Jezo 看看發生了什麼。"
+    "googleFailedPage": "沒有連上。回到 Jezo 看看發生了什麼。",
+    "unknownZone": "有些活動用的時區「{{zone}}」這份行事曆沒有說明，Jezo 照寫的時間顯示，不管你在哪裡。"
   },
   "install": {
     "add": "安裝",
@@ -277,6 +282,7 @@
     "add": "新增",
     "addPrefill": "幫我新增一個自動化：",
     "none": "還沒有自動化。",
+    "inZone": "{{words}}（{{city}}時間）",
     "daily": "每天 {{time}}",
     "weekly": "每{{day}} {{time}}",
     "range": "{{from}}到{{to}} {{time}}",
@@ -289,7 +295,39 @@
     "remove": "刪掉",
     "removed": "刪掉了「{{name}}」",
     "request": "要 agent 做的事",
-    "requestHint": "到時候 agent 收到的就是這段。改完離開輸入框就存好，下次跑就用新的。"
+    "requestHint": "到時候 agent 收到的就是這段。改完離開輸入框就存好，下次跑就用新的。",
+    "window": {
+      "no": "錯過了就不補跑",
+      "for": "若 {{time}} 錯過，{{minutes}} 分鐘內補跑一次",
+      "until": "若 {{time}} 錯過，當天 {{until}} 前補跑一次",
+      "untilPick": "當天這個時間前補跑一次",
+      "endOfDay": "若 {{time}} 錯過，當天結束前補跑一次",
+      "next": "若 {{time}} 錯過，下一次之前都會補跑一次",
+      "forAny": "錯過排定時間時，{{minutes}} 分鐘內補跑一次，下一次到了就不補",
+      "untilAny": "錯過排定時間時，當天 {{until}} 前補跑一次",
+      "endOfDayAny": "錯過排定時間時，當天結束前補跑一次",
+      "nextAny": "錯過排定時間時，下一次之前都會補跑一次"
+    },
+    "history": {
+      "title": "最近的紀錄",
+      "onTime": "{{slot}} 的那次",
+      "late": "{{slot}} 的那次，晚了補跑",
+      "manual": "{{at}} 手動跑的",
+      "open": "看對話",
+      "expired": "{{slot}} 錯過了，過了補跑的時間，沒跑",
+      "replaced_other": "{{count}} 次錯過了（{{slot}} 起），由後面那次代替",
+      "moved_other": "{{count}} 次在換時區時沒算到（{{slot}} 起）",
+      "waiting": "{{slot}} 的那次在等模型，時限內都還能開始",
+      "outcome": {
+        "completed": "跑完了",
+        "waiting": "在等你回答",
+        "failed": "出錯了",
+        "unreachable": "連不到模型",
+        "stopped": "被停下了",
+        "interrupted": "沒跑完，Jezo 關掉或當掉了",
+        "running": "正在跑"
+      }
+    }
   },
   "problems": {
     "intro": "這些檔案有地方跟它們的格式不合，或 id 被改掉了。它們還是會出現在該出現的地方，但有些欄位可能讀不到。",

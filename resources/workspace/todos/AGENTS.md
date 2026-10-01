@@ -10,12 +10,12 @@ One markdown file per todo, `items/<id>.md`. The body is the user's notes about 
 - `amount`: how much of the goal's measure it moves when done, when that isn't 1: `16` for a 16 km run, `0` for a gym session that serves a running goal measured in km.
 - `cue`: the situation it gets done in ("到公司倒完咖啡"), when there is one.
 - `estimate`: minutes. Base it on how long similar todos actually took, not on what sounds right.
-- `scheduled`: when it's planned, like `2026-09-29T09:30`. No `scheduled` means it's in the backlog.
+- `scheduled`: when it's planned. No `scheduled` means it's in the backlog. The tools write it for you; by hand, it's always a time with its zone, like `'2026-10-05T09:00[Asia/Taipei]'`: 09:00 by that zone's clock wherever the user is. Use the zone the time note names, or the one the user named for a call, a class or a deadline. A time without a zone is refused.
 - `proposed`: `true` when the time is your suggestion and the user hasn't accepted it. Set it whenever you schedule something the user didn't ask for at that time.
 - `rank`: the order in the backlog. Leave it to the app; tools set it.
 - `steps`: smaller steps, each `{ text, done }`.
 - `why`: your reasoning for when and how long, in a sentence the user would say back to you.
 - `started`: set by the app while the user works on it.
-- `completed`: when it was done.
+- `completed`: when it was done, as a moment with its offset (`'2026-10-05T16:00:00+09:00'`). The app writes it when the user marks it done.
 
 A todo is only `done` when the user said so or a tool result shows it. Planning it is not doing it.

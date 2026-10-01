@@ -1,6 +1,6 @@
 // The windows' view of the agent: conversations, and the history of what it changed.
 
-import { BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain } from 'electron'
 import type { CustomProviderInput, ModelRef, Schedule as ScheduleTimes } from '../../shared/bridge'
 import type { Trigger } from '../../shared/session'
 import type { Providers } from './providers'
@@ -19,6 +19,14 @@ export function serveAgent(host: AgentHost, undo: UndoLog, providers: Providers,
   ipcMain.handle('schedule:get', () => schedule.times())
   ipcMain.handle('schedule:set', (_, change: Partial<ScheduleTimes>) => schedule.setTimes(change))
   ipcMain.handle('schedule:run', (_, id: string) => schedule.run(id))
+  ipcMain.handle('schedule:history', (_, id: string) => schedule.rows(id))
+  schedule.onHistory((id) => broadcast('schedule:history-changed', id))
+  // The OS keeps this setting, so it's read from there (docs/design/automations.md, "Staying available").
+  ipcMain.handle('schedule:at-login', () => app.getLoginItemSettings().openAtLogin)
+  ipcMain.handle('schedule:set-at-login', (_, on: boolean) => {
+    app.setLoginItemSettings({ openAtLogin: on })
+    return app.getLoginItemSettings().openAtLogin
+  })
 
   ipcMain.handle('agent:list', () => host.list())
   ipcMain.handle('agent:send', (_, id: string | null, text: string, trigger?: Trigger, behavior?: 'followUp' | 'steer') => host.send(id, text, trigger, behavior))

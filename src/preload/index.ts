@@ -26,6 +26,10 @@ const bridge: JezoBridge = {
     openFile: (path) => ipcRenderer.invoke('workspace:open-file', path),
     onChange: (listener) => listen<ItemChanges>('workspace:changed', listener),
   },
+  time: {
+    zone: () => ipcRenderer.invoke('time:zone'),
+    onZone: (listener) => listen<string>('time:zone', listener),
+  },
   agent: {
     pi: {
       listThreads: () => ipcRenderer.invoke('chat:list'),
@@ -82,7 +86,7 @@ const bridge: JezoBridge = {
   },
   calendar: {
     status: () => ipcRenderer.invoke('calendar:status'),
-    events: (from, to) => ipcRenderer.invoke('calendar:events', from, to),
+    events: (from, to, zone) => ipcRenderer.invoke('calendar:events', from, to, zone),
     subscribe: (url, name) => ipcRenderer.invoke('calendar:subscribe', url, name),
     unsubscribe: (id) => ipcRenderer.invoke('calendar:unsubscribe', id),
     refresh: (id) => ipcRenderer.invoke('calendar:refresh', id),
@@ -99,6 +103,10 @@ const bridge: JezoBridge = {
     get: () => ipcRenderer.invoke('schedule:get'),
     set: (change) => ipcRenderer.invoke('schedule:set', change),
     run: (id) => ipcRenderer.invoke('schedule:run', id),
+    history: (id) => ipcRenderer.invoke('schedule:history', id),
+    onHistory: (listener) => listen<string>('schedule:history-changed', listener),
+    atLogin: () => ipcRenderer.invoke('schedule:at-login'),
+    setAtLogin: (on) => ipcRenderer.invoke('schedule:set-at-login', on),
   },
   skills: {
     list: () => ipcRenderer.invoke('skills:list'),

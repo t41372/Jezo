@@ -12,6 +12,7 @@ Status: designing ahead, not built. Tim, 2026-09-30: no phone app soon, but like
 - **Forgetting is stronger than deleting.** It wins over concurrent edits, travels on its own ahead of content, and is applied before anything reaches recall or the agent. A restore names the forget it reverses. Forget records are kept for good; they're small.
 - **Undo syncs as a new change**, never as rewinding another device. Undoing an agent run on the desktop and syncing the result works from the start; starting an undo on the phone for a desktop run needs more history on the phone, and is a separate decision.
 - **One device runs automations** at first, so two disconnected devices don't both make the morning plan. A synced result never re-runs an outside action.
+- **Which device's zone is the user's** is decided here, not before. "Today" and the hours times are shown in follow the user's zone ([time.md](time.md)). With several devices, which one counts, how a manual override works, and what a disconnected phone means are open. "The last device used" was looked at and isn't the answer: remote input into a home Mac would move the user home. The time module and the scheduler take the zone as an input, so the answer plugs in there.
 - **Transport: iroh**, paired by QR code, with membership checked before serving anything; point-to-point catch-up first. If iroh isn't ready on a platform, the same data protocol runs over LAN or encrypted export files instead.
 
 ## Done now, because it's cheap and later would be expensive

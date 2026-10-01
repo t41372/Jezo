@@ -20,6 +20,7 @@ import { Speech } from './speech/speech'
 import { registerFileScheme, serveFiles } from './workspace/attachments'
 import { serveWorkspace } from './workspace/ipc'
 import { seedWorkspace } from './workspace/seed'
+import { checkZone, deviceZone, watchZone } from './clock'
 import { Workspace } from './workspace/workspace'
 import { installer } from './install/installer'
 
@@ -123,7 +124,8 @@ const speech = new Speech()
 /** Opens the workspace, creating it on first run. The seeded skills follow the OS language. */
 async function openWorkspace() {
   const { workspace: root } = getConfig()
-  await seedWorkspace(root, app.getLocale().startsWith('zh') ? 'zh-TW' : 'en')
+  const language = app.getLocale().startsWith('zh') ? 'zh-TW' : 'en'
+  await seedWorkspace(root, language)
   workspace = new Workspace(root)
   await workspace.open()
   await installer(workspace).open()
@@ -143,18 +145,37 @@ async function openWorkspace() {
   await host.open()
   schedule = new Schedule(workspace, host, providers, openSession)
   serveAgent(host, undo, providers, schedule)
-  schedule.start()
+  void schedule.start()
   serveSpeech(speech)
   // Start the speech server early, so the first hold of ⌥X doesn't wait for Python to start.
   setTimeout(() => void speech.start(), 3000)
+  // The device may have moved to another zone (docs/design/time.md).
+  ipcMain.handle('time:zone', () => deviceZone())
+  watchZone()
   // File events can be missed; coming back to the app is a good moment to look again.
   app.on('browser-window-focus', () => {
-    void workspace?.rescan()
+    checkZone()
+    // The check reads the files again first, so it never starts a run from a stale copy.
+    if (schedule) void schedule.check({ rescan: true })
+    else void workspace?.rescan()
     calendars?.refreshIfStale()
   })
 }
 
+// One Jezo per data folder: two would each run the 08:00 plan (docs/design/automations.md,
+// "One scheduler"). The data folder is set before this (env.ts), so each test's own app is alone.
+const alone = app.requestSingleInstanceLock()
+if (!alone) app.quit()
+app.on('second-instance', () => {
+  if (!mainWindow) createMainWindow()
+  mainWindow?.show()
+  mainWindow?.focus()
+})
+
 app.whenReady().then(async () => {
+  if (!alone) return
+  // A packaged app gets its icon from the bundle; in development the Dock would show Electron's.
+  if (!app.isPackaged) app.dock?.setIcon(join(import.meta.dirname, '../../build/icon.png'))
   try {
     await openWorkspace()
   } catch (error) {
@@ -162,7 +183,8 @@ app.whenReady().then(async () => {
     app.quit()
     return
   }
-  createMainWindow()
+  // Started by the OS at login, Jezo stays in the background: automations run, and the Dock icon opens the window.
+  if (!app.getLoginItemSettings().wasOpenedAtLogin) createMainWindow()
   createQuickWindow(
     {
       ...(process.platform === 'darwin'

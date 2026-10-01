@@ -71,9 +71,8 @@ export interface SessionView {
   trigger: Trigger
   /** The automation that started it, if one did. */
   automation?: string
-  date: ISODate
-  /** Hours from midnight. */
-  time: number
+  /** When it started, in milliseconds since the epoch. The window shows it in its own zone. */
+  started: number
   messages: SessionMessage[]
   /** Tools registered in this live session. Hidden tools are left out. */
   tools?: string[]
@@ -103,6 +102,8 @@ export interface HistoryEntry {
   /** The files the change touched, and how. */
   files?: { path: string; lines: DiffLine[]; note?: string }[]
   undone?: boolean
+  /** The run was cut off, by Jezo quitting or crashing, before it finished: what it changed so far can still be undone. */
+  interrupted?: boolean
 }
 
 /** What undoing a change did: files left alone because someone changed them afterward. */

@@ -55,5 +55,11 @@
   "sourcesMore": "{{first}} 和另外 {{count}} 個",
   "mac": "Mac 行事曆",
   "manage": "管理行事曆",
-  "connect": "＋ 連接行事曆"
+  "connect": "＋ 連接行事曆",
+  "zone": {
+    "here": "{{city}}時間",
+    "preview": "預覽：{{city}}時間",
+    "device": "這台裝置的時區（{{city}}）",
+    "search": "找城市或時區"
+  }
 }

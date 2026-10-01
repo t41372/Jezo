@@ -1,6 +1,6 @@
 import type { ISODate, Session } from '@/data/types'
 import i18n from '@/i18n'
-import { dayTime } from '@/lib/time'
+import { momentTime } from '@/lib/time'
 
 /** Scheduled sessions are named after what started them. */
 export function sessionTitle(session: Session) {
@@ -8,8 +8,8 @@ export function sessionTitle(session: Session) {
 }
 
 /** "今天 08:02 · 每天早上自動開始" */
-export function sessionHeadline(session: Session, today: ISODate) {
-  const when = dayTime(session.date, session.time, today)
+export function sessionHeadline(session: Session, today: ISODate, zone: string) {
+  const when = momentTime(session.started, zone, today)
   const started = i18n.t(`trigger.${session.trigger}.started`)
   return started ? `${when} · ${started}` : when
 }

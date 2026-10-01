@@ -7,7 +7,8 @@ schema:
   properties:
     id: { type: string, pattern: "^a-" }
     name: { type: string, minLength: 1 }
-    schedule: { type: string, pattern: "^\\S+( \\S+){4}$" }
+    schedule: { type: string, format: jezo-cron }
     state: { enum: [on, off] }
-    late: { type: integer, minimum: 0 }
+    catch_up: { type: string, format: jezo-catch-up }
+    zone: { type: string, format: jezo-zone }
     trigger: { enum: [morning, evening, weekly] }

@@ -73,6 +73,12 @@ export function dayTime(date: ISODate, time: number, today: ISODate) {
   return i18n.t('time.dayTime', { day: dayLabel(date, today), time: clock(time) })
 }
 
+/** A moment as "今天 08:02", seen in `zone`. */
+export function momentTime(at: number, zone: string, today: ISODate) {
+  const { date, start } = inZone(at, zone)
+  return dayTime(date, start, today)
+}
+
 /** The Monday of the week that contains `date`. */
 export function mondayOf(date: ISODate): ISODate {
   const d = parseDate(date)
@@ -87,4 +93,16 @@ export function ago(instant: string, language: string, now = Date.now()) {
   if (seconds > -3600) return format.format(Math.round(seconds / 60), 'minute')
   if (seconds > -86_400) return format.format(Math.round(seconds / 3600), 'hour')
   return format.format(Math.round(seconds / 86_400), 'day')
+}
+
+/** A grid's Date, whose fields are a clock in `zone`, back to the moment it names there. */
+export function momentOf(date: Date, zone: string) {
+  return Temporal.PlainDateTime.from({ year: date.getFullYear(), month: date.getMonth() + 1, day: date.getDate(), hour: date.getHours(), minute: date.getMinutes() })
+    .toZonedDateTime(zone, { disambiguation: 'compatible' }).epochMilliseconds
+}
+
+/** A moment's day and hours from midnight in a zone. */
+export function inZone(at: number, zone: string): { date: ISODate; start: number } {
+  const here = Temporal.Instant.fromEpochMilliseconds(at).toZonedDateTimeISO(zone)
+  return { date: here.toPlainDate().toString(), start: here.hour + here.minute / 60 }
 }

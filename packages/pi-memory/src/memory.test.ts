@@ -20,6 +20,8 @@
 //     on 2026-09-30: it left out `replaces` two runs in three.
 // 16. A forgotten memory's file comes back (a backup, a sync, a copy) and it's
 //     recalled again, though forgotten.yaml still says it was deleted.
+// 17. Memories recorded in different zones are ordered by their clocks, so an
+//     older one recorded at 16:00 Tokyo goes before a newer one at 11:00 Phoenix.
 
 import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -230,5 +232,22 @@ describe('reading and context', () => {
     expect(text.length).toBeLessThanOrEqual(400 + 400) // 10: the budget covers the entries; the fixed guidance is extra
     expect(text).not.toContain('推測') // 10: guesses come after what the user said
     expect(text).toContain('memory_recall')
+  })
+
+  test('puts the newest first by when it happened, wherever it was recorded', async () => {
+    const { dir, memory } = setup()
+    await memory.load()
+    const tokyo = await memory.remember({ text: '在東京說的', epistemic: 'stated' })
+    const phoenix = await memory.remember({ text: '在鳳凰城說的', epistemic: 'stated', separate: true })
+    // 16:00 Tokyo is 07:00Z; 11:00 Phoenix, later the same day, is 18:00Z.
+    const stamp = (id: string, recorded: string) => {
+      const name = files(dir).find((f) => f.startsWith(id))!
+      const text = readFileSync(join(dir, 'items', name), 'utf8')
+      writeFileSync(join(dir, 'items', name), text.replace(/recorded: .*/, `recorded: '${recorded}'`))
+    }
+    stamp(tokyo.id, '2026-10-05T16:00:00+09:00')
+    stamp(phoenix.id, '2026-10-05T11:00:00-07:00')
+    await memory.load()
+    expect(memory.context().ids).toEqual([phoenix.id, tokyo.id]) // 17
   })
 })

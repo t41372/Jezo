@@ -6,7 +6,7 @@
 import { useDndMonitor } from '@dnd-kit/core'
 import { cn } from 'cn'
 import { enUS, zhTW } from 'date-fns/locale'
-import { Check, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, Globe } from 'lucide-react'
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { CalendarSource } from '../../../../shared/calendar'
@@ -28,10 +28,13 @@ import { Segmented } from '@/components/Segmented'
 import { isDraft } from '@/components/todo/format'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { cityOf, ZonePicker } from '@/components/ZonePicker'
 import { goalById, useStore } from '@/data/store'
 import type { CalendarEvent, CalendarViewName, Goal, ISODate, Todo } from '@/data/types'
 import { goalColor } from '@/lib/goal-color'
-import { addDays, ago, atTime, clock, dayLabel, hoursOf, longDate, monthDay, mondayOf, parseDate, toISODate } from '@/lib/time'
+import { addDays, ago, atTime, clock, dayLabel, hoursOf, inZone, longDate, momentOf, monthDay, mondayOf, parseDate, toISODate } from '@/lib/time'
+import { now, todayIn, type Zone } from '../../../../shared/time'
 
 /** What each block on the grid stands for. */
 type Block = { kind: 'event' } | { kind: 'todo'; todo: Todo }
@@ -47,21 +50,24 @@ export function Calendar() {
   const date = useStore((s) => s.calendarDate)
   const view = useStore((s) => s.calendarView)
   const selected = useStore((s) => s.calendarDetail)
+  // The calendar can show another zone, for planning a trip; every block is placed by its moment there.
+  const viewZone = useStore((s) => s.calendarZone ?? s.zone)
   const { setCalendarDate, setCalendarView, setCalendarDetail, moveTodo } = useStore.getState()
   const [creating, setCreating] = useState<NewTodoSlot | null>(null)
   const pointer = useRef({ x: 0, y: 0 })
 
   const draftTitle = (title: string) => t('todo.draft', { ns: 'common', title })
-  const blocks = useMemo(() => toBlocks(todos, events, goals, selected, draftTitle), [todos, events, goals, selected, i18n.language])
+  const blocks = useMemo(() => toBlocks(todos, events, goals, selected, draftTitle, viewZone), [todos, events, goals, selected, i18n.language, viewZone])
   const labels = useGridLabels()
 
   // Moving or resizing a todo on the grid schedules it there. Calendar events are read-only.
   const onEventUpdate = (update: EventCalendarProposedUpdate<Block>) => {
     const block = update.event.data
     if (block?.kind !== 'todo') return false
-    const start = update.allDay ? (block.todo.slot?.start ?? DEFAULT_HOUR) : hoursOf(update.start)
-    const minutes = update.source.startsWith('resize') ? Math.round((+update.end - +update.start) / 60_000) : undefined
-    moveTodo(block.todo.id, { date: toISODate(update.start), start }, { minutes })
+    const start = update.allDay ? (block.todo.slot ? inZone(block.todo.slot.at, viewZone).start : DEFAULT_HOUR) : hoursOf(update.start)
+    // The grid's times are clocks in the zone it shows; the length is between the real moments.
+    const minutes = update.source.startsWith('resize') ? Math.round((momentOf(update.end, viewZone) - momentOf(update.start, viewZone)) / 60_000) : undefined
+    moveTodo(block.todo.id, { date: toISODate(update.start), start }, { minutes, zone: viewZone })
     // Todos have a time, so one put on the all-day row keeps its time instead; the store already has it.
     return !update.allDay
   }
@@ -127,15 +133,19 @@ function toBlocks(
   goals: Goal[],
   selected: string | null,
   draftTitle: (title: string) => string,
+  zone: Zone,
 ): GridEvent<Block>[] {
   const ring = (id: string) => id === selected && 'inset-ring-2 inset-ring-ring/60'
+  // The grid draws clocks. Each end is the end's own clock, not the start plus a length,
+  // so a block across a clock change ends where the event does.
+  const ending = (start: Date, end: Date) => (+end - +start < 15 * 60_000 ? new Date(+start + 15 * 60_000) : end)
   return [
     ...events.map((e) => ({
       id: e.id,
       title: e.title,
       start: atTime(e.date, e.start),
       // A deadline has no length (a school feed's "due 23:59"); it still needs a block to show.
-      end: atTime(e.date, e.start + Math.max(e.hours, 0.25)),
+      end: ending(atTime(e.date, e.start), e.ends ? atTime(e.ends.date, e.ends.hour) : atTime(e.date, e.start + e.hours)),
       allDay: e.allDay,
       readOnly: true,
       color: 'var(--muted-foreground)',
@@ -147,11 +157,13 @@ function toBlocks(
       .map((todo) => {
         const draft = isDraft(todo)
         const done = todo.state === 'done'
+        const { date, start } = inZone(todo.slot!.at, zone)
+        const end = inZone(todo.slot!.at + todo.estimateMinutes * 60_000, zone)
         return {
           id: todo.id,
           title: draft ? draftTitle(todo.title) : todo.title,
-          start: atTime(todo.slot!.date, todo.slot!.start),
-          end: atTime(todo.slot!.date, todo.slot!.start + todo.estimateMinutes / 60),
+          start: atTime(date, start),
+          end: ending(atTime(date, start), atTime(end.date, end.start)),
           color: goalColor(goalById(goals, todo.goalId)?.hue),
           className: cn(
             'text-[color-mix(in_oklch,var(--ec-event-color)_66%,var(--foreground))]',
@@ -213,7 +225,7 @@ function useArrival(todoId: string | null) {
     const order = proposal.ids
       .map((id) => ({ id, slot: todos.find((t) => t.id === id)?.slot }))
       .filter((x) => x.slot)
-      .sort((a, b) => a.slot!.date.localeCompare(b.slot!.date) || a.slot!.start - b.slot!.start)
+      .sort((a, b) => a.slot!.at - b.slot!.at)
       .findIndex((x) => x.id === todoId)
     if (order < 0) return
     const still = matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -277,7 +289,9 @@ function Header() {
   const { t, i18n } = useTranslation('calendar')
   const date = useStore((s) => s.calendarDate)
   const view = useStore((s) => s.calendarView)
-  const today = useStore((s) => s.now.date)
+  // Today in the zone the calendar shows: in Tokyo's hours it can already be tomorrow.
+  const viewZone = useStore((s) => s.calendarZone ?? s.zone)
+  const today = useStore((s) => (s.calendarZone ? todayIn(s.calendarZone, now()).toString() : s.now.date))
   const todos = useStore((s) => s.todos)
   const { setCalendarDate, setCalendarView, openSession, navigate } = useStore.getState()
   const { api } = useEventCalendar()
@@ -296,7 +310,10 @@ function Header() {
             : t('week.earlier', { count: -weeksAway })
   const { title, range } = headerTitle(view, date, today, weekTitle, i18n.language)
   const sync = useSyncLine()
-  const weekHasTodos = todos.some((x) => x.slot && x.slot.date >= monday && x.slot.date <= addDays(monday, 6))
+  const weekHasTodos = todos.some((x) => {
+    const day = x.slot && inZone(x.slot.at, viewZone).date
+    return day && day >= monday && day <= addDays(monday, 6)
+  })
 
   const needsPlan = view === 'week' && weeksAway !== 0 && !weekHasTodos
 
@@ -305,6 +322,7 @@ function Header() {
       {/* The month view has no range line; the space stays so the title doesn't move between views. */}
       <div className="truncate text-[13px] text-muted-foreground">{range || '\u00a0'}</div>
       <div className="flex items-center justify-end gap-3 text-xs whitespace-nowrap text-muted-foreground">
+        <ZoneSwitch />
         {sync && (
           <span className="flex min-w-0 items-center gap-1.5">
             <span className={cn('size-1.5 shrink-0 rounded-full', sync.ok ? 'bg-ok' : 'bg-destructive')} />
@@ -352,6 +370,42 @@ function Header() {
 }
 
 /**
+ * Which zone the calendar shows, always named (docs/design/time.md). It's the
+ * device's; another can be picked to plan a trip. Picking one changes nothing
+ * on disk, and a todo placed while it's showing is fixed to that zone.
+ */
+function ZoneSwitch() {
+  const { t } = useTranslation('calendar')
+  const zone = useStore((s) => s.zone)
+  const calendarZone = useStore((s) => s.calendarZone)
+  const { setCalendarZone } = useStore.getState()
+  const [open, setOpen] = useState(false)
+  const shown = calendarZone ?? zone
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        className={cn('flex items-center gap-1 transition-colors duration-150 hover:text-foreground', calendarZone && 'text-draft-ink')}
+        data-calendar-zone={shown}
+      >
+        <Globe className="size-3.5" />
+        {calendarZone ? t('zone.preview', { city: cityOf(shown) }) : t('zone.here', { city: cityOf(shown) })}
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-auto p-2">
+        <ZonePicker
+          value={calendarZone}
+          placeholder={t('zone.search')}
+          first={[{ value: null, label: t('zone.device', { city: cityOf(zone) }) }]}
+          onPick={(picked) => {
+            setCalendarZone(picked === zone ? null : picked)
+            setOpen(false)
+          }}
+        />
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+/**
  * Toolbar buttons don't take focus when clicked, like buttons in a macOS
  * toolbar, so no focus ring is left behind. Tab still reaches them.
  */
@@ -377,6 +431,7 @@ function headerTitle(view: CalendarViewName, date: ISODate, today: ISODate, week
  */
 function DropArea() {
   const moveTodo = useStore((s) => s.moveTodo)
+  const viewZone = useStore((s) => s.calendarZone ?? s.zone)
   const { internals } = useEventCalendar()
   const [ghost, setGhost] = useState<{ left: number; top: number; width: number; height: number } | null>(null)
   const content = useSlideOnNavigate()
@@ -394,8 +449,8 @@ function DropArea() {
       const slot = landing(rect)
       if (!slot) return
       const todo = useStore.getState().todos.find((x) => x.id === item.id)
-      const start = slot.minutes === undefined ? (todo?.slot?.start ?? DEFAULT_HOUR) : snap(slot.minutes, lengthOf(item.id)) / 60
-      moveTodo(item.id, { date: toISODate(slot.day), start })
+      const start = slot.minutes === undefined ? (todo?.slot ? inZone(todo.slot.at, viewZone).start : DEFAULT_HOUR) : snap(slot.minutes, lengthOf(item.id)) / 60
+      moveTodo(item.id, { date: toISODate(slot.day), start }, { zone: viewZone })
     },
   })
 
@@ -475,6 +530,7 @@ function newTodoSlot(slot: EventCalendarSlotDraft, at: { x: number; y: number })
 function NewTodo({ slot, onClose }: { slot: NewTodoSlot; onClose: () => void }) {
   const { t } = useTranslation('calendar')
   const addTodo = useStore((s) => s.addTodo)
+  const viewZone = useStore((s) => s.calendarZone ?? s.zone)
   const { api } = useEventCalendar()
   const [text, setText] = useState('')
   const close = () => {
@@ -499,7 +555,7 @@ function NewTodo({ slot, onClose }: { slot: NewTodoSlot; onClose: () => void }) 
         onKeyDown={(e) => {
           if (e.key === 'Escape') close()
           if (e.key === 'Enter' && !e.nativeEvent.isComposing && text.trim()) {
-            addTodo(text.trim(), { date: slot.date, start: slot.start }, slot.minutes)
+            addTodo(text.trim(), { date: slot.date, start: slot.start }, slot.minutes, viewZone)
             close()
           }
         }}

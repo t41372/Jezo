@@ -15,7 +15,8 @@
     "today": "Today",
     "yesterday": "Yesterday",
     "tomorrow": "Tomorrow",
-    "dayTime": "{{day}} {{time}}"
+    "dayTime": "{{day}} {{time}}",
+    "moved": "Now on {{city}} time. Times fixed to other places are shown in local hours."
   },
   "timeField": {
     "hours": "Hours",
@@ -87,7 +88,19 @@
     "title": "Title",
     "cuePlaceholder": "When it gets done, like: back at my desk after lunch",
     "at": "Time",
-    "minutes": "minutes"
+    "minutes": "minutes",
+    "meaning": {
+      "here": "{{city}} time",
+      "there": "{{time}} {{city}} time",
+      "moment": "A fixed moment, in no zone",
+      "zone": "Time zone",
+      "will": "It will be {{own}} {{city}} time, {{here}} here",
+      "reading": "In {{city}} time",
+      "keep": "Change",
+      "search": "Find a city or zone",
+      "device": "This device’s zone ({{city}})",
+      "cancel": "Keep it"
+    }
   },
   "event": {
     "readOnly": "From {{source}}. Change the time there.",

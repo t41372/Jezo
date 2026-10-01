@@ -25,6 +25,8 @@ export interface MacEvent {
   end: string
   allDay: boolean
   repeats: boolean
+  /** The event's zone; none when it floats. */
+  zone?: string
   location?: string
   notes?: string
   url?: string
@@ -59,9 +61,9 @@ export async function requestMacAccess(): Promise<MacAccess> {
 
 export const macCalendars = () => run<MacCalendar[]>(['calendars'])
 
-/** Events between two local dates, `to` exclusive, with repeats expanded. */
-export const macEvents = (from: string, to: string, calendars: string[]) =>
-  calendars.length ? run<MacEvent[]>(['events', from, to, ...calendars]) : Promise.resolve([])
+/** Events between two moments, `to` exclusive, with repeats expanded. */
+export const macEvents = (from: Temporal.Instant, to: Temporal.Instant, calendars: string[]) =>
+  calendars.length ? run<MacEvent[]>(['events', from.toString(), to.toString(), ...calendars]) : Promise.resolve([])
 
 /** Calls back whenever anything on the Mac's calendars changes, until stopped. */
 export function watchMac(changed: () => void): () => void {

@@ -49,7 +49,11 @@ export function namedFolders(said: string[]): string[] {
   return [...folders]
 }
 
-/** Text files in the workspace, to see what a command changed. Sessions and dot folders aren't the user's items. */
+/**
+ * Text files in the workspace, to see what a command changed. Sessions, dot
+ * folders and the automations' history aren't the user's items: the scheduler
+ * writes the history while commands run, and it isn't undone.
+ */
 async function snapshot(root: string): Promise<Map<string, string>> {
   const files = new Map<string, string>()
   const visit = async (dir: string) => {
@@ -57,7 +61,7 @@ async function snapshot(root: string): Promise<Map<string, string>> {
       if (entry.name.startsWith('.') || entry.name === 'node_modules') continue
       const path = join(dir, entry.name)
       if (entry.isDirectory()) {
-        if (relative(root, path) !== 'sessions') await visit(path)
+        if (!['sessions', 'automations/history'].includes(relative(root, path))) await visit(path)
       } else if (entry.isFile() && (await lstat(path)).size <= 1024 * 1024) {
         const text = textOf(await readFile(path))
         if (text !== null) files.set(relative(root, path), text)

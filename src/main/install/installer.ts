@@ -162,7 +162,7 @@ export class Installer {
     return this.serial(async () => {
       const prepared = this.previews.get(token)
       if (!prepared) throw new Error('Read the source again before installing it.')
-      const origin: InstallOrigin = { source: prepared.source, installed: new Date().toISOString(), by: currentActing().actor.by }
+      const origin: InstallOrigin = { source: prepared.source, installed: new Date().toISOString(), by: currentActing().actor.by === 'agent' ? 'agent' : 'user' }
       if (prepared.kind === 'mcp') {
         const config = await this.config()
         const previousSecrets = Object.values(config.mcpServers).flatMap(secretRefs)

@@ -10,8 +10,12 @@ import { type Content, hashOf, newId, readContent, readIfExists, TEMP_SUFFIX, wr
 import { FrontmatterError, parse, patch } from './frontmatter'
 import { compileSchema, type Check } from './schema'
 
-/** Who is writing. An explicit user history action may carry a run too (docs/design/undo.md). */
-export type Actor = { by: 'user'; run?: string } | { by: 'agent'; run: string }
+/**
+ * Who is writing. An explicit user history action may carry a run too
+ * (docs/design/undo.md). Jezo's own records, like an automation's history,
+ * are written by `jezo` and never undone.
+ */
+export type Actor = { by: 'user'; run?: string } | { by: 'agent'; run: string } | { by: 'jezo'; run?: undefined }
 
 /** A file about to change. `before` or `after` is null when the file is created or deleted; bytes when it isn't text. */
 export interface Write {
@@ -43,7 +47,7 @@ export class Workspace {
   private byPath = new Map<string, string>()
   private listeners = new Set<(changes: ItemChanges) => void>()
   private fileListeners = new Set<(path: string) => void>()
-  private writeListeners = new Set<(write: Write) => void>()
+  private writeListeners = new Set<(write: Write) => unknown>()
   private watcher: FSWatcher | null = null
   private pending = new Set<string>()
   private flushTimer: NodeJS.Timeout | null = null
@@ -122,8 +126,12 @@ export class Workspace {
     return () => this.listeners.delete(listener)
   }
 
-  /** Called before any file is written through the workspace. */
-  onWrite(listener: (write: Write) => void) {
+  /**
+   * Called before any file is written through the workspace. A listener that
+   * returns a promise is waited for, so undo has saved the change before the file
+   * itself changes.
+   */
+  onWrite(listener: (write: Write) => unknown) {
     this.writeListeners.add(listener)
     return () => this.writeListeners.delete(listener)
   }
@@ -181,7 +189,7 @@ export class Workspace {
     if (!item) return
     await this.serial(item.path, async () => {
       const text = await readIfExists(this.abs(item.path))
-      for (const listener of this.writeListeners) listener({ path: item.path, before: text, after: null, actor })
+      await this.beforeWrite({ path: item.path, before: text, after: null, actor })
       await rm(this.abs(item.path), { force: true })
       this.drop(item.path)
     })
@@ -193,7 +201,7 @@ export class Workspace {
     await this.serial(path, async () => {
       const text = await readContent(this.abs(path))
       if (text === null) return
-      for (const listener of this.writeListeners) listener({ path, before: text, after: null, actor })
+      await this.beforeWrite({ path, before: text, after: null, actor })
       await rm(this.abs(path), { force: true })
       for (const listener of this.fileListeners) listener(path)
       const id = this.drop(path)
@@ -220,7 +228,7 @@ export class Workspace {
    */
   async changedOutside(path: string, before: string | null, after: string | null, actor: Actor) {
     await this.serial(path, async () => {
-      for (const listener of this.writeListeners) listener({ path, before, after, actor })
+      await this.beforeWrite({ path, before, after, actor })
       for (const listener of this.fileListeners) listener(path)
       const changes = await this.reread(path, after ?? undefined)
       if (changes) this.emit(changes)
@@ -228,11 +236,15 @@ export class Workspace {
   }
 
   private async writeNow(path: string, text: Content, actor: Actor, before: Content | null) {
-    for (const listener of this.writeListeners) listener({ path, before, after: text, actor })
+    await this.beforeWrite({ path, before, after: text, actor })
     await writeAtomic(this.abs(path), text)
     for (const listener of this.fileListeners) listener(path)
     const changes = await this.reread(path, typeof text === 'string' ? text : undefined)
     if (changes) this.emit(changes)
+  }
+
+  private async beforeWrite(write: Write) {
+    await Promise.all([...this.writeListeners].map((listener) => Promise.resolve(listener(write)).catch(console.error)))
   }
 
   private serial<T>(path: string, work: () => Promise<T>): Promise<T> {
@@ -293,7 +305,8 @@ export class Workspace {
 
   /** Reads one item file into the index. Returns what changed, or null if nothing did. */
   private async reread(path: string, known?: string): Promise<ItemChanges | null> {
-    const kind = this.kindForDir(path.split('/')[0])
+    // Only `<plugin>/items/<id>.md` is an item; a plugin's AGENTS.md or skills aren't.
+    const kind = ITEM.test(path) ? this.kindForDir(path.split('/')[0]) : undefined
     if (!kind) return null
     const text = known ?? (await readIfExists(this.abs(path)))
     if (text === null) {

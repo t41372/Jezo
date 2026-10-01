@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { ListCard, Row } from '@/components/ListCard'
 import { Segmented } from '@/components/Segmented'
 import { Kbd } from '@/components/ui/kbd'
+import { Switch } from '@/components/ui/switch'
 import { useStore } from '@/data/store'
 import { LANGUAGE_NAMES, LANGUAGES } from '@/i18n'
 import { ModelsCard } from './ModelsCard'
@@ -13,8 +14,10 @@ import { SpeechRow } from './SpeechRow'
 export function Settings() {
   const { t } = useTranslation('settings')
   const [canHold, setCanHold] = useState(true)
+  const [atLogin, setAtLogin] = useState(false)
   useEffect(() => {
     window.jezo.quick.canHold().then(setCanHold)
+    window.jezo.schedule.atLogin().then(setAtLogin)
   }, [])
   const settings = useStore((s) => s.settings)
   const { setTheme, setLanguage } = useStore.getState()
@@ -51,6 +54,9 @@ export function Settings() {
         </Row>
         <SpeechRow />
         <ScheduleRows />
+        <Row title={t('atLogin.title')} description={t('atLogin.hint')}>
+          <Switch checked={atLogin} onCheckedChange={(on) => void window.jezo.schedule.setAtLogin(on).then(setAtLogin)} aria-label={t('atLogin.title')} />
+        </Row>
       </ListCard>
       </div>
     </div>

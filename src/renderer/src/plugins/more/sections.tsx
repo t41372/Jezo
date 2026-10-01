@@ -175,12 +175,22 @@ export function History() {
       <SectionHeader title={t('sections.history.title')}>{t('history.intro')}</SectionHeader>
       <ListCard>
         {history.map((h) => (
-          <div key={h.id} className="flex items-start gap-3 px-4 py-3.5">
+          <div key={h.id} className="flex items-start gap-3 px-4 py-3.5" data-history={h.id}>
             <div className="min-w-0 flex-1">
               <div className="text-xs text-muted-foreground">
                 {dayTime(h.date, h.time, today)} · {t(`history.source.${h.source}`)}
+                {h.interrupted && <span className="text-warn"> · {t('history.interrupted')}</span>}
               </div>
-              <div className={cn('mt-0.5 text-[14.5px]', h.undone && 'text-muted-foreground line-through')}>{h.summary}</div>
+              <div className={cn('mt-0.5 text-[14.5px]', h.undone && 'text-muted-foreground line-through')}>{h.summary || (h.interrupted ? t('history.interruptedSummary') : '')}</div>
+              {/* Cut off mid-way: the conversation can pick up from the files as they are, not from the start. */}
+              {h.interrupted && h.session && !h.undone && (
+                <button
+                  className="mt-1 text-[12.5px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                  onClick={() => useStore.getState().openSession(h.session!, t('history.continuePrefill'))}
+                >
+                  {t('history.continue')}
+                </button>
+              )}
               {h.check && (
                 <div className="mt-0.5 text-[12.5px] text-warn">
                   {t('history.retried', { count: h.check.retries })}

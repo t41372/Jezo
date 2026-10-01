@@ -14,7 +14,8 @@
     "today": "今天",
     "yesterday": "昨天",
     "tomorrow": "明天",
-    "dayTime": "{{day}} {{time}}"
+    "dayTime": "{{day}} {{time}}",
+    "moved": "現在用{{city}}時間了。固定在其他地方的時間已經換成這裡的鐘點。"
   },
   "timeField": {
     "hours": "小時",
@@ -86,7 +87,19 @@
     "title": "標題",
     "cuePlaceholder": "什麼情境下做，例如：午餐回座位",
     "at": "時間",
-    "minutes": "分鐘"
+    "minutes": "分鐘",
+    "meaning": {
+      "here": "{{city}}時間",
+      "there": "{{city}}時間 {{time}}",
+      "moment": "固定的時刻，不跟任何時區",
+      "zone": "時區",
+      "will": "會變成{{city}}時間 {{own}}，在這裡是 {{here}}",
+      "reading": "以{{city}}時間填寫",
+      "keep": "確定",
+      "search": "找城市或時區",
+      "device": "這台裝置的時區（{{city}}）",
+      "cancel": "不改"
+    }
   },
   "event": {
     "readOnly": "來自 {{source}}，時間要在那邊改。",

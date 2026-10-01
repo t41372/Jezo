@@ -36,6 +36,8 @@ interface Run {
   retries: number
   finished: boolean
   undone?: boolean
+  /** It never finished: Jezo quit or crashed while it ran. */
+  interrupted?: boolean
 }
 
 /** How many runs are kept. Older ones are dropped; losing them is fine. */
@@ -54,6 +56,8 @@ export class UndoLog {
     } catch {
       // No history yet, or an unreadable one. History is safe to lose.
     }
+    // A run still open from before was cut off; what it changed was saved as it went, and can be undone.
+    for (const run of this.runs) if (!run.finished) run.interrupted = true
     workspace.onWrite((write) => this.record(write))
   }
 
@@ -129,6 +133,8 @@ export class UndoLog {
     // Written twice in one run: what was there before the run is still the first `before`.
     if (existing) existing.after = this.keep(write.after)
     else run.files.push({ path: write.path, before: this.keep(write.before), after: this.keep(write.after) })
+    // Saved before the file itself is written (the workspace waits for this), so a run cut off by a quit or a crash can still be undone (docs/design/undo.md).
+    return this.save()
   }
 
   /** Restores what the run changed, file by file, skipping files changed since. */
@@ -155,7 +161,7 @@ export class UndoLog {
   /** Finished runs that changed something, newest first, as the history shows them. */
   list(): HistoryEntry[] {
     return this.runs
-      .filter((r) => r.finished && r.files.length)
+      .filter((r) => (r.finished || r.interrupted) && r.files.length)
       .map((r) => ({
         id: r.id,
         date: r.at.slice(0, 10),
@@ -166,10 +172,18 @@ export class UndoLog {
         ...(r.retries > 0 && { check: { retries: r.retries } }),
         files: r.files.map((f) => ({ path: f.path, lines: diff(f.before, f.after) })),
         ...(r.undone && { undone: true }),
+        ...(r.interrupted && { interrupted: true }),
       }))
   }
 
-  private async save() {
+  /** Saves one after another, so an earlier save finishing late can't put back an older history. */
+  private saving: Promise<void> = Promise.resolve()
+  private save() {
+    this.saving = this.saving.then(() => this.write(), () => this.write())
+    return this.saving
+  }
+
+  private async write() {
     await writeAtomic(this.file, JSON.stringify(this.runs))
     // Blobs no run refers to any more, once old runs are dropped.
     const used = new Set(this.runs.flatMap((r) => r.files.flatMap((f) => [f.before, f.after])).flatMap((k) => (k && typeof k !== 'string' ? [k.blob] : [])))
@@ -179,7 +193,7 @@ export class UndoLog {
 }
 
 /** The changed lines of a file, with a line of context around each change. A file that isn't text is one line. */
-function diff(before: Kept | null, after: Kept | null): DiffLine[] {
+export function diff(before: Kept | null, after: Kept | null): DiffLine[] {
   if ((before && typeof before !== 'string') || (after && typeof after !== 'string')) {
     return [{ kind: after === null ? 'remove' : before === null ? 'add' : 'context', text: '(binary)' }]
   }

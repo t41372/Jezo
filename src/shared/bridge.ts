@@ -124,6 +124,11 @@ export interface JezoBridge {
     openFile(path: string): Promise<void>
     onChange(listener: (changes: ItemChanges) => void): () => void
   }
+  /** The device's zone, as the main process reads it from the OS, and when it changes (docs/design/time.md). */
+  time: {
+    zone(): Promise<string>
+    onZone(listener: (zone: string) => void): () => void
+  }
   /** Conversations with Jezo's agent. */
   agent: {
     pi: ChatBridge
@@ -173,7 +178,8 @@ export interface JezoBridge {
   calendar: {
     status(): Promise<CalendarStatus>
     /** Events between two local dates, `to` exclusive, from every calendar that isn't hidden. */
-    events(from: string, to: string): Promise<CalendarEvent[]>
+    /** Events between two days (`to` exclusive), the days being in `zone`: the one the calendar shows. */
+    events(from: string, to: string, zone: string): Promise<CalendarEvent[]>
     /** Adds a subscription. Rejects with the reason when the address doesn't give a calendar. */
     subscribe(url: string, name?: string): Promise<CalendarSource>
     unsubscribe(id: string): Promise<void>
@@ -198,6 +204,13 @@ export interface JezoBridge {
     set(change: Partial<Schedule>): Promise<Schedule>
     /** Runs an automation now; resolves to its conversation. */
     run(id: string): Promise<string>
+    /** What happened to its times, newest first (docs/design/automations.md). */
+    history(id: string): Promise<AutomationRow[]>
+    /** Called with an automation's id when its history gets an event. */
+    onHistory(listener: (id: string) => void): () => void
+    /** Whether Jezo starts, without a window, when the user logs in, so automations run while the computer's awake. */
+    atLogin(): Promise<boolean>
+    setAtLogin(on: boolean): Promise<boolean>
   }
   /** The agent's methods, from the workspace. */
   skills: {
@@ -273,3 +286,10 @@ export interface JezoBridge {
     onCommand(listener: (command: QuickCommand) => void): () => void
   }
 }
+
+/** One line of an automation's history, as its page shows it. Slots are a date and clock, like "2026-10-01T08:00". */
+export type AutomationRow =
+  /** `session` is the run's conversation; `zone` the schedule's zone its slot is in. */
+  | { kind: 'run'; at: string; slot?: string; zone?: string; late: boolean; manual: boolean; session?: string; outcome: 'completed' | 'waiting' | 'failed' | 'unreachable' | 'stopped' | 'interrupted' | 'running' }
+  | { kind: 'skipped'; at: string; slots: string[]; reason: 'expired' | 'replaced' | 'zone-changed' }
+  | { kind: 'waiting'; at: string; slot: string }

@@ -11,9 +11,10 @@ import type { ThemeSource } from '../../../shared/bridge'
 import type { CalendarStatus } from '../../../shared/calendar'
 import type { Fields, Item, ItemChanges } from '../../../shared/workspace'
 import i18n, { applyLanguage, storedLanguage, type LanguageSetting } from '@/i18n'
-import { entities, localDate, stamp, toExperiment, toGoal, toMemory, toNote, toTodo, todoFields } from './entities'
+import { formatTime, now, place, readTime, stamp, type Zone } from '../../../shared/time'
+import { entities, localDate, toExperiment, toGoal, toMemory, toNote, toSlot, toTodo, todoFields, type TimeContext } from './entities'
 import { connectCalendar } from './calendar'
-import type { CalendarEvent, CalendarViewName, Experiment, Goal, HistoryEntry, ISODate, Memory, Note, NoteKind, NoteOutcome, NoteProposal, Session, Skill, Todo, Trigger } from './types'
+import type { CalendarEvent, CalendarViewName, Experiment, Goal, HistoryEntry, ISODate, Memory, Note, NoteKind, NoteOutcome, NoteProposal, Session, SlotInput, Skill, Todo, Trigger } from './types'
 
 export interface Nav {
   page: string
@@ -21,7 +22,9 @@ export interface Nav {
   sub: string | null
 }
 
-type Slot = NonNullable<Todo['slot']>
+type Slot = SlotInput
+/** A change to a todo; a new time is a day and hours, read in the zone the change happens in. */
+type TodoChange = Partial<Omit<Todo, 'slot'>> & { slot?: SlotInput | null }
 
 /** The current date, and hours from midnight. */
 export interface Now {
@@ -30,6 +33,11 @@ export interface Now {
 }
 
 interface State {
+  /** The device's zone, as the main process reads it from the OS (docs/design/time.md). */
+  zone: Zone
+  /** Another zone the calendar is shown in, for planning a trip; null shows the device's. Changes nothing on disk. */
+  calendarZone: Zone | null
+  setCalendarZone(zone: Zone | null): void
   now: Now
   goals: Goal[]
   todos: Todo[]
@@ -73,7 +81,8 @@ interface State {
    * changes how long it takes. `before` places it in the backlog: in front of
    * that todo, or with null at the end. The backlog's order is the order here.
    */
-  moveTodo(id: string, slot: Slot | null, options?: { minutes?: number; before?: string | null }): void
+  /** `zone` is the zone the slot's day and hours are read in: the calendar's, when it shows another. */
+  moveTodo(id: string, slot: Slot | null, options?: { minutes?: number; before?: string | null; zone?: Zone }): void
   /** Hands the backlog to the agent, which proposes times in a conversation of its own. */
   proposeSlots(): void
   /** That conversation, while the agent works in it. */
@@ -81,7 +90,9 @@ interface State {
   /** The todos the agent just proposed times for, so the calendar can bring them in one by one. */
   lastProposal: { ids: string[]; at: number } | null
   confirmSlot(id: string): void
-  addTodo(title: string, slot?: Slot, minutes?: number): void
+  addTodo(title: string, slot?: Slot, minutes?: number, zone?: Zone): void
+  /** Fixes a todo's time to another zone, keeping its clock (docs/design/time.md). */
+  setTimeMeaning(todoId: string, to: Zone): void
   /** Changes a todo's own fields from its detail: title, cue, how long. Times go through moveTodo. */
   editTodo(todoId: string, change: Pick<Partial<Todo>, 'title' | 'cue' | 'estimateMinutes'>): void
   /** Saves a todo's notes, its markdown body. */
@@ -153,7 +164,14 @@ function storedTheme(): ThemeSource {
 
 const mapTodo = (todos: Todo[], id: string, f: (t: Todo) => Todo) => todos.map((t) => (t.id === id ? f(t) : t))
 
-const clock = (at = new Date()): Now => ({ date: localDate(at), hour: at.getHours() + at.getMinutes() / 60 })
+const clock = (zone: Zone): Now => {
+  const at = now().toZonedDateTimeISO(zone)
+  return { date: at.toPlainDate().toString(), hour: at.hour + at.minute / 60 }
+}
+
+/** Until the main process says, the zone the window's own runtime reports. */
+const startZone = Intl.DateTimeFormat().resolvedOptions().timeZone
+const zone = () => useStore.getState().zone
 
 // ─── The workspace ───
 
@@ -175,7 +193,7 @@ const newestMemory = (a: Memory, b: Memory) => b.date.localeCompare(a.date) || b
 /** Running ones first, then the most recently started. */
 const started = (x: Experiment) => x.arms.flatMap((a) => a.periods.map((p) => p.from)).sort()[0] ?? ''
 const byExperiment = (a: Experiment, b: Experiment) => (a.state === b.state ? started(b).localeCompare(started(a)) : a.state === 'running' ? -1 : 1)
-const byCreated = (a: Note, b: Note) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`) || a.id.localeCompare(b.id)
+const byCreated = (a: Note, b: Note) => a.at - b.at || a.id.localeCompare(b.id)
 
 /** Replaces the entities that changed, leaving the others, which may have writes of their own on the way. */
 function upsert<T extends { id: string }>(list: T[], changed: T[], removed: string[], order: (a: T, b: T) => number) {
@@ -194,15 +212,15 @@ function applyChanges({ changed, removed }: ItemChanges) {
   for (const id of removed) goalItems.delete(id)
   for (const item of changed) if (item.kind === 'goal' && !item.id.startsWith('?')) goalItems.set(item.id, item)
   useStore.setState((s) => {
-    const todos = upsert(s.todos, entities(changed, 'todo', toTodo), removed, byRank)
+    const todos = upsert(s.todos, entities(changed, 'todo', (i) => toTodo(i, s.zone)), removed, byRank)
     // Times the agent just proposed, wherever it did: the calendar brings them in one by one.
     const proposed = todos.filter((t) => t.slot?.proposed && !s.todos.some((o) => o.id === t.id && o.slot?.proposed && o.slot.date === t.slot!.date && o.slot.start === t.slot!.start))
-    const memories = upsert(s.memories, entities(changed, 'memory', toMemory).filter((m): m is Memory => m !== null), removed, newestMemory)
+    const memories = upsert(s.memories, entities(changed, 'memory', (i) => toMemory(i, s.zone)).filter((m): m is Memory => m !== null), removed, newestMemory)
     // A memory that was just replaced comes back as superseded; it leaves the list.
     const replaced = changed.filter((i) => i.kind === 'memory' && i.data.status === 'superseded').map((i) => i.id)
     return {
       todos,
-      notes: upsert(s.notes, entities(changed, 'note', toNote), removed, byCreated),
+      notes: upsert(s.notes, entities(changed, 'note', (i) => toNote(i, s.zone)), removed, byCreated),
       experiments: upsert(s.experiments, entities(changed, 'experiment', toExperiment), removed, byExperiment),
       goals: deriveGoals(todos, s.now.date),
       memories: memories.filter((m) => !replaced.includes(m.id)),
@@ -211,7 +229,7 @@ function applyChanges({ changed, removed }: ItemChanges) {
   })
 }
 
-const newestFirst = (a: Session, b: Session) => (a.date + a.time < b.date + b.time ? 1 : -1)
+const newestFirst = (a: Session, b: Session) => b.started - a.started
 
 function applySession(view: Session) {
   useStore.setState((s) => ({ sessions: [view, ...s.sessions.filter((x) => x.id !== view.id)].sort(newestFirst) }))
@@ -234,13 +252,14 @@ function storedClosed(): string[] {
 async function loadWorkspace() {
   const items: Item[] = await workspace().list()
   goalItems = new Map(items.filter((i) => i.kind === 'goal' && !i.id.startsWith('?')).map((i) => [i.id, i]))
-  const todos = entities(items, 'todo', toTodo).sort(byRank)
+  const { zone } = useStore.getState()
+  const todos = entities(items, 'todo', (i) => toTodo(i, zone)).sort(byRank)
   useStore.setState((s) => ({
     todos,
-    notes: entities(items, 'note', toNote).sort(byCreated),
+    notes: entities(items, 'note', (i) => toNote(i, zone)).sort(byCreated),
     experiments: entities(items, 'experiment', toExperiment).sort(byExperiment),
     goals: deriveGoals(todos, s.now.date),
-    memories: entities(items, 'memory', toMemory)
+    memories: entities(items, 'memory', (i) => toMemory(i, zone))
       .filter((m): m is Memory => m !== null)
       .sort(newestMemory),
   }))
@@ -248,6 +267,17 @@ async function loadWorkspace() {
 
 /** Reads the workspace and follows its changes. Called once, when the window opens. */
 export async function connectWorkspace() {
+  // Every time on screen is seen from the device's zone; when it changes, everything is drawn from the new one.
+  const follow = (zone: Zone) => {
+    const before = useStore.getState().zone
+    useStore.setState({ zone, now: clock(zone) })
+    void loadWorkspace()
+    // One quiet line; fixing the plan, if it needs it, is the user's call or the agent's when asked.
+    if (before !== zone) toast(i18n.t('time.moved', { city: zone.split('/').pop()!.replace(/_/g, ' ') }))
+  }
+  window.jezo.time.onZone(follow)
+  const deviceZone = await window.jezo.time.zone()
+  if (deviceZone !== startZone) useStore.setState({ zone: deviceZone, now: clock(deviceZone), calendarDate: localDate(deviceZone) })
   workspace().onChange(applyChanges)
   window.jezo.agent.onChange(applySession)
   window.jezo.skills.onChange(() => useStore.getState().loadSkills())
@@ -260,16 +290,52 @@ export async function connectWorkspace() {
     connectCalendar(),
   ])
   // The clock moves on; the day changes at midnight.
-  window.setInterval(() => useStore.setState({ now: clock() }), 30_000)
+  window.setInterval(() => useStore.setState({ now: clock(zone()) }), 30_000)
 }
 
-/** Changes a todo right away and writes it. */
-function writeTodo(id: string, change: Partial<Todo>) {
+/** A time string with the same clock, fixed to another zone: 09:00 Taipei becomes 09:00 Tokyo. */
+export function withMeaning(scheduled: string, to: Zone, device: Zone): string | null {
+  const value = readTime(scheduled)
+  if (value?.kind !== 'zoned' && value?.kind !== 'moment') return null
+  const wall = value.kind === 'moment' ? value.at.withTimeZone(device).toPlainDateTime() : value.wall
+  const [date, clock] = wall.toString({ smallestUnit: 'minute' }).split('T')
+  return formatTime(place(date, clock, to).value)
+}
+
+/** Where a change made now happens; `at` is the zone its clock is read in, the device's unless the calendar shows another. */
+function timeContext(at?: Zone): TimeContext {
+  const s = useStore.getState()
+  return { zone: at ?? s.zone, device: s.zone }
+}
+
+/**
+ * Changes a todo right away and writes it. What's shown until the file comes
+ * back is read from the fields being written, so a second change made before
+ * then starts from the first.
+ */
+function writeTodo(id: string, change: TodoChange, at?: Zone) {
+  const before = useStore.getState().todos.find((t) => t.id === id)
+  writeFields(id, change, todoFields(change, timeContext(at), before))
+}
+
+/** Shows a todo's change and writes its fields. */
+function writeFields(id: string, change: Partial<Omit<Todo, 'slot'>> & { slot?: unknown }, fields: Fields) {
   useStore.setState((s) => {
-    const todos = mapTodo(s.todos, id, (t) => ({ ...t, ...change })).sort(byRank)
+    const { slot: _, ...rest } = change
+    const todos = mapTodo(s.todos, id, (t) => ({
+      ...t,
+      ...rest,
+      ...('scheduled' in fields && { slot: toSlot(fields.scheduled, s.zone, fields.proposed === true) }),
+      times: {
+        ...t.times,
+        ...('scheduled' in fields && { scheduled: (fields.scheduled as string | null) ?? undefined }),
+        ...('started' in fields && { started: (fields.started as string | null) ?? undefined }),
+        ...('completed' in fields && { completed: (fields.completed as string | null) ?? undefined }),
+      },
+    })).sort(byRank)
     return { todos, goals: deriveGoals(todos, s.now.date) }
   })
-  workspace().update(id, todoFields(change)).catch(failed)
+  workspace().update(id, fields).catch(failed)
 }
 
 function writeNote(id: string, fields: Fields, body?: string) {
@@ -290,15 +356,22 @@ function rankBefore(todos: Todo[], id: string, before: string | null) {
 
 const lastRank = (todos: Todo[]) => todos.reduce<string | null>((max, t) => (t.rank && (!max || t.rank > max) ? t.rank : max), null)
 
-/** All the fields of a todo, to write it back as it was. */
+/** All the fields of a todo, to write it back as it was: its times as the file had them, not as they were shown then. */
 const allTodoFields = (todo: Todo): Fields => ({
   title: todo.title,
   state: todo.state,
-  ...todoFields({ goalId: todo.goalId, cue: todo.cue, estimateMinutes: todo.estimateMinutes, slot: todo.slot, subtasks: todo.subtasks, why: todo.why, startedAt: todo.startedAt, rank: todo.rank }),
+  ...todoFields({ goalId: todo.goalId, cue: todo.cue, estimateMinutes: todo.estimateMinutes, subtasks: todo.subtasks, why: todo.why, rank: todo.rank }, timeContext(), todo),
+  scheduled: todo.times?.scheduled ?? null,
+  proposed: todo.slot?.proposed ? true : null,
+  started: todo.times?.started ?? null,
+  completed: todo.times?.completed ?? null,
 })
 
 export const useStore = create<State>()((set, get) => ({
-  now: clock(),
+  zone: startZone,
+  calendarZone: null,
+  setCalendarZone: (calendarZone) => set({ calendarZone }),
+  now: clock(startZone),
   goals: [],
   todos: [],
   events: [],
@@ -317,7 +390,7 @@ export const useStore = create<State>()((set, get) => ({
   composer: '',
   todayDetail: null,
   calendarDetail: null,
-  calendarDate: localDate(new Date()),
+  calendarDate: localDate(startZone),
   calendarView: 'week',
 
   navigate: (page, sub = null) => set({ nav: { page, sub } }),
@@ -362,7 +435,7 @@ export const useStore = create<State>()((set, get) => ({
     workspace().remove(id).catch(failed)
   },
   // Moving a todo yourself settles it: the time is yours, and a draft becomes a real todo.
-  moveTodo: (id, slot, { minutes, before } = {}) => {
+  moveTodo: (id, slot, { minutes, before, zone: at } = {}) => {
     const todo = get().todos.find((t) => t.id === id)
     if (!todo) return
     const rank = before === undefined ? undefined : rankBefore(get().todos, id, before)
@@ -371,7 +444,7 @@ export const useStore = create<State>()((set, get) => ({
       ...(minutes !== undefined && { estimateMinutes: minutes }),
       ...(todo.state === 'draft' && { state: 'open' }),
       ...(rank && { rank }),
-    })
+    }, at)
     if (!slot) set((s) => ({ calendarDetail: s.calendarDetail === id ? null : s.calendarDetail }))
   },
   proposeSlots: () => {
@@ -383,12 +456,17 @@ export const useStore = create<State>()((set, get) => ({
     const todo = get().todos.find((t) => t.id === id)
     if (todo?.slot) writeTodo(id, { slot: { ...todo.slot, proposed: false } })
   },
-  addTodo: (title, slot, minutes = 30) => {
-    const fields = { title, state: 'open', ...todoFields({ estimateMinutes: minutes, slot: slot ?? null, rank: generateKeyBetween(lastRank(get().todos), null) }) }
-    workspace().create('todo', { ...fields, created: stamp() }).catch(failed)
+  addTodo: (title, slot, minutes = 30, at) => {
+    const fields = { title, state: 'open', ...todoFields({ estimateMinutes: minutes, slot: slot ?? null, rank: generateKeyBetween(lastRank(get().todos), null) }, timeContext(at)) }
+    workspace().create('todo', { ...fields, created: stamp(zone()) }).catch(failed)
   },
 
   editTodo: (todoId, change) => writeTodo(todoId, change),
+  setTimeMeaning: (todoId, to) => {
+    const todo = get().todos.find((t) => t.id === todoId)
+    const meant = todo?.times?.scheduled && withMeaning(todo.times.scheduled, to, get().zone)
+    if (meant) writeFields(todoId, {}, { scheduled: meant, proposed: todo.slot?.proposed ? true : null })
+  },
   setNotes: (todoId, notes) => {
     useStore.setState((s) => ({ todos: mapTodo(s.todos, todoId, (t) => ({ ...t, notes })) }))
     workspace().update(todoId, {}, { body: notes }).catch(failed)
@@ -400,7 +478,7 @@ export const useStore = create<State>()((set, get) => ({
   },
   setStarted: (todoId, startedAt) => writeTodo(todoId, { startedAt: startedAt ?? undefined }),
   restoreTodo: (todo) => {
-    if (get().todos.some((t) => t.id === todo.id)) writeTodo(todo.id, todo)
+    if (get().todos.some((t) => t.id === todo.id)) writeFields(todo.id, todo, allTodoFields(todo))
     else workspace().create('todo', { id: todo.id, ...allTodoFields(todo) }).catch(failed)
   },
 
@@ -410,7 +488,7 @@ export const useStore = create<State>()((set, get) => ({
   setCalendarView: (calendarView) => set({ calendarView }),
 
   addNote: (text, source) => {
-    workspace().create('note', { created: stamp(), source, state: 'new' }, `${text}\n`).catch(failed)
+    workspace().create('note', { created: stamp(zone()), source, state: 'new' }, `${text}\n`).catch(failed)
   },
   editNote: (id, text) => {
     set((s) => ({ notes: s.notes.map((n) => (n.id === id ? { ...n, text } : n)) }))
@@ -421,8 +499,7 @@ export const useStore = create<State>()((set, get) => ({
     workspace().remove(id).catch(failed)
   },
   restoreNote: (note) => {
-    const created = `${note.date}T${String(Math.floor(note.time)).padStart(2, '0')}:${String(Math.round((note.time % 1) * 60)).padStart(2, '0')}`
-    const fields = { id: note.id, created, source: note.source, state: note.state, proposal: note.proposal, became: note.became }
+    const fields = { id: note.id, created: note.created ?? stamp(zone()), source: note.source, state: note.state, proposal: note.proposal, became: note.became }
     workspace().create('note', fields, `${note.text}\n`).catch(failed)
   },
   flushNotes: () => {
@@ -444,7 +521,7 @@ export const useStore = create<State>()((set, get) => ({
     }
     if (!accept) return settle(null)
     if (kind === 'todo') {
-      const fields = { title, state: 'open', estimate: 30, why: i18n.t('notes:fromNote', { text: note.text }), rank: generateKeyBetween(lastRank(get().todos), null), created: stamp() }
+      const fields = { title, state: 'open', estimate: 30, why: i18n.t('notes:fromNote', { text: note.text }), rank: generateKeyBetween(lastRank(get().todos), null), created: stamp(zone()) }
       workspace()
         .create('todo', fields)
         .then((todo) => settle({ kind: 'todo', ref: todo.id }), failed)

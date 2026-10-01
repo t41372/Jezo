@@ -3,7 +3,7 @@
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { expect, localModel, open, test } from './jezo'
+import { expect, localModel, momentOf, open, test } from './jezo'
 
 test.beforeEach(async () => {
   test.skip(!(await localModel()), 'No local model server (LM Studio or Ollama) is running.')
@@ -34,8 +34,8 @@ test('the agent does what the user asks, and undo takes it back', async ({ jezo 
   await box.press('Enter')
   await settled(page)
 
-  // The time the user named is theirs, not a proposal.
-  expect(read('todos/items/t-u2.md').data).toMatchObject({ scheduled: `${tomorrow()}T20:00` })
+  // The time the user named is theirs, not a proposal. It's fixed to the device's zone, the default for new times.
+  expect(read('todos/items/t-u2.md').data).toMatchObject({ scheduled: `${tomorrow()}T20:00[Asia/Taipei]` })
   expect(read('todos/items/t-u2.md').data.proposed).toBeUndefined()
   await expect(page.locator('main')).toContainText('打給媽')
 
@@ -74,7 +74,7 @@ test('a turn that changed nothing says so, and one tap asks the agent to act wit
   await box.fill('把「打給媽」排到明天晚上 20:00')
   await box.press('Enter')
   await settled(page)
-  expect(read('todos/items/t-u2.md').data.scheduled).toBe(`${tomorrow()}T20:00`)
+  expect(read('todos/items/t-u2.md').data.scheduled).toBe(`${tomorrow()}T20:00[Asia/Taipei]`)
   await expect(unchanged).toHaveCount(before)
   await expect(nudge).toHaveCount(0)
   expect(jezo.errors).toEqual([])
@@ -209,7 +209,7 @@ test('a conversation picked up two hours later plans from the new time', async (
 
   // Planned from the time now, not from when the conversation started.
   const scheduled = read('todos/items/t-u2.md').data.scheduled as string
-  const minutes = (new Date(scheduled).getTime() - then.getTime()) / 60_000
+  const minutes = (momentOf(scheduled) - then.getTime()) / 60_000
   expect(minutes, `scheduled ${scheduled}, two hours later it was ${then.toString()}`).toBeGreaterThanOrEqual(45)
   // Later is fine when it moves past a todo in the way; from the old time it would be about an hour early.
   expect(minutes).toBeLessThanOrEqual(120)
@@ -238,7 +238,7 @@ test('a plan changed in the conversation is one plan, and the new version shows 
   expect(draft('洗衣服')).toHaveLength(1)
   expect(draft('繳電費')).toHaveLength(0)
   expect(draft('修腳踏車')).toHaveLength(1)
-  expect(draft('買菜').map((t) => t.data.scheduled)).toEqual([`${tomorrow()}T19:00`])
+  expect(draft('買菜').map((t) => t.data.scheduled)).toEqual([`${tomorrow()}T19:00[Asia/Taipei]`])
   expect(planned()).toHaveLength(3)
 
   // The new version is the last card, saying what changed; the first one points down to it.
@@ -252,10 +252,11 @@ test('a plan changed in the conversation is one plan, and the new version shows 
 test('the agent runs a command, and undo takes back what it changed', async ({ jezo }) => {
   const { page, root } = jezo
   const box = page.locator('main textarea').first()
-  await box.fill('用 bash 指令在 notes 資料夾建立 hello.md，內容寫 hi。')
+  // A folder no plugin owns: notes/ has its own conventions, which a model sometimes followed (items/, frontmatter).
+  await box.fill('用 bash 指令在工作區建立 scratch/hello.md，內容就只寫 hi 兩個字母。')
   await box.press('Enter')
   await settled(page)
-  const file = join(root, 'notes/hello.md')
+  const file = join(root, 'scratch/hello.md')
   expect(readFileSync(file, 'utf8').trim()).toBe('hi')
   const session = readdirSync(join(root, 'sessions')).find((f) => f.endsWith('.jsonl'))!
   expect(readFileSync(join(root, 'sessions', session), 'utf8')).toContain('"name":"bash"')
@@ -456,7 +457,7 @@ test('the agent plans around the calendar, reading days it wasn’t shown', asyn
     const scheduled = String(items('todos').find((t) => t.data.id === 't-u3')!.data.scheduled)
     expect(scheduled.slice(0, 10)).toBe(date)
     // 45 minutes that don't touch 19:00–21:00, in the evening.
-    const [h, m] = scheduled.slice(11).split(':').map(Number)
+    const [h, m] = scheduled.slice(11, 16).split(':').map(Number)
     const start = h * 60 + m
     expect(start >= 17 * 60).toBe(true)
     expect(start + 45 <= 19 * 60 || start >= 21 * 60).toBe(true)

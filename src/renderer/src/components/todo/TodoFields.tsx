@@ -5,9 +5,12 @@ import { Button } from '@/components/ui/button'
 import { Calendar } from '@/components/ui/calendar'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { useStore } from '@/data/store'
+import { useStore, withMeaning } from '@/data/store'
+import { cityOf, ZonePicker } from '@/components/ZonePicker'
+import { epochOf, now, readTime, todayIn } from '../../../../shared/time'
+import { meaningLabel } from './format'
 import type { Todo } from '@/data/types'
-import { clock, duration, parseDate, toISODate } from '@/lib/time'
+import { clock, duration, inZone, monthDay, parseDate, toISODate, weekday } from '@/lib/time'
 import { slotLabel } from './format'
 
 const MINUTES = [10, 15, 20, 30, 45, 60, 90, 120]
@@ -63,23 +66,29 @@ export function CueField({ todo }: { todo: Todo }) {
   )
 }
 
-/** When it's on the calendar: a day from a month view and a time; or back to the backlog. */
-export function SlotField({ todo }: { todo: Todo }) {
+/**
+ * When it's on the calendar: a day from a month view and a time; or back to the
+ * backlog. The day and time are read in `zone`, the zone the calendar shows (the
+ * device's unless it shows another), the same as dragging on the grid.
+ */
+export function SlotField({ todo, zone: shown }: { todo: Todo; zone?: string }) {
   const { t, i18n } = useTranslation()
   const { moveTodo } = useStore.getState()
-  const today = useStore((s) => s.now.date)
+  const device = useStore((s) => s.zone)
+  const zone = shown ?? device
+  const today = useStore((s) => (zone === s.zone ? s.now.date : todayIn(zone, now()).toString()))
   const [open, setOpen] = useState(false)
-  const slot = todo.slot
+  const slot = todo.slot && { ...todo.slot, ...inZone(todo.slot.at, zone) }
   const time = slot ? clock(slot.start) : '09:00'
   const place = (date: string, at: string) => {
     const [h, m] = at.split(':').map(Number)
-    moveTodo(todo.id, { date, start: h + m / 60 })
+    moveTodo(todo.id, { date, start: h + m / 60 }, { zone })
   }
-  if (todo.fromCalendar) return <span className="text-[13.5px]">{slotLabel(todo)}</span>
+  if (todo.fromCalendar) return <span className="text-[13.5px]">{slotLabel(todo, zone)}</span>
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger className={`${row} w-full`} data-slot-field>
-        {slotLabel(todo)}
+        {slotLabel(todo, zone)}
       </PopoverTrigger>
       <PopoverContent side="bottom" align="start" className="w-auto p-2">
         <Calendar
@@ -91,7 +100,7 @@ export function SlotField({ todo }: { todo: Todo }) {
           className="bg-transparent"
         />
         <div className="flex items-center gap-2 border-t px-1 pt-2">
-          <span className="text-[12.5px] text-muted-foreground">{t('todo.at')}</span>
+          <span className="text-[12.5px] text-muted-foreground">{zone === device ? t('todo.at') : `${t('todo.meaning.reading', { city: cityOf(zone) })} ${t('todo.at')}`}</span>
           <Input
             type="time"
             className="h-8 w-32"
@@ -168,6 +177,53 @@ export function EstimateField({ todo }: { todo: Todo }) {
           />
           {t('todo.minutes')}
         </label>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+/**
+ * The zone the time is fixed to (docs/design/time.md). Changing it keeps the
+ * clock and says what the time becomes before it's saved.
+ */
+export function ZoneField({ todo }: { todo: Todo }) {
+  const { t } = useTranslation()
+  const device = useStore((s) => s.zone)
+  const [open, setOpen] = useState(false)
+  const [picked, setPicked] = useState<string | null>(null)
+  const current = todo.slot?.zone ?? null
+  const result = picked && todo.times?.scheduled ? withMeaning(todo.times.scheduled, picked, device) : null
+  // Both clocks with their dates: 09:00 Tokyo on Mon Oct 5 is Sun Oct 4 17:00 in Phoenix.
+  const resultLabel = (() => {
+    const value = result && readTime(result)
+    if (!value || !picked) return ''
+    const at = epochOf(value, device)!
+    const when = ({ date, start }: { date: string; start: number }) => `${monthDay(date)} ${weekday(date)} ${clock(start)}`
+    return t('todo.meaning.will', { city: cityOf(picked), own: when(inZone(at, picked)), here: when(inZone(at, device)) })
+  })()
+  if (!todo.slot || todo.fromCalendar) return null
+  return (
+    <Popover open={open} onOpenChange={(o) => { setOpen(o); setPicked(null) }}>
+      <PopoverTrigger className={`${row} w-full`} data-zone-field>
+        {meaningLabel(todo, device)}
+      </PopoverTrigger>
+      <PopoverContent side="bottom" align="start" className="w-auto p-2">
+        {picked ? (
+          <div className="flex w-64 flex-col gap-2 p-1 text-[13px]" data-zone-result>
+            <span>{resultLabel}</span>
+            <div className="flex justify-end gap-1.5">
+              <Button size="sm" variant="ghost" onClick={() => setPicked(null)}>{t('todo.meaning.cancel')}</Button>
+              <Button size="sm" onClick={() => { useStore.getState().setTimeMeaning(todo.id, picked); setOpen(false) }}>{t('todo.meaning.keep')}</Button>
+            </div>
+          </div>
+        ) : (
+          <ZonePicker
+            value={current}
+            placeholder={t('todo.meaning.search')}
+            first={[{ value: device, label: t('todo.meaning.device', { city: cityOf(device) }) }]}
+            onPick={(zone) => zone && zone !== current && setPicked(zone)}
+          />
+        )}
       </PopoverContent>
     </Popover>
   )

@@ -6,7 +6,7 @@ schema:
   required: [id, created, source, state]
   properties:
     id: { type: string, pattern: "^n-" }
-    created: { type: string, pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}" }
+    created: { type: string, format: jezo-record }
     source: { enum: [page, hotkey] }
     state: { enum: [new, sorting, sorted] }
     proposal:

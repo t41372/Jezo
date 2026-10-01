@@ -107,7 +107,12 @@ const normalize = (text: string) => text.normalize('NFKC').toLowerCase().replace
 const hashOf = (text: string) => createHash('sha256').update(normalize(text)).digest('hex').slice(0, 32)
 
 const pad = (n: number) => String(n).padStart(2, '0')
-const local = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+/** When a record was written, with the offset of the zone it was written in: "2026-10-05T16:00:00+09:00". */
+const local = (d: Date) => {
+  const offset = -d.getTimezoneOffset()
+  const sign = offset < 0 ? '-' : '+'
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}${sign}${pad(Math.floor(Math.abs(offset) / 60))}:${pad(Math.abs(offset) % 60)}`
+}
 
 export class MemoryError extends Error {}
 
@@ -334,7 +339,7 @@ export class Memory {
   context(): { text: string; ids: string[] } {
     const budget = this.options.budget ?? 2400
     const rank = (r: MemoryRecord) => (r.epistemic === 'stated' ? 0 : r.confidence === 'high' ? 1 : r.confidence === 'medium' ? 2 : 3)
-    const candidates = [...this.records.values()].filter((r) => this.current(r)).sort((a, b) => rank(a) - rank(b) || b.recorded.localeCompare(a.recorded))
+    const candidates = [...this.records.values()].filter((r) => this.current(r)).sort((a, b) => rank(a) - rank(b) || Date.parse(b.recorded) - Date.parse(a.recorded))
     const lines: string[] = []
     const ids: string[] = []
     let used = 0

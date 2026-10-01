@@ -24,6 +24,6 @@ Every item is one markdown file in the directory's `items/`, with YAML frontmatt
 - `id` never changes, and a file's name is its id.
 - To link items, write a standard markdown link to the other item's file, relative to this one: `[寫第五段](../../todos/items/t-01j8z4.md)`. Any markdown editor opens it. In frontmatter, a link is just the other item's id (`goal: g-01j8z1`, `blocked_by: [t-01j8z4]`). `item_links` shows what an item links to and what links to it.
 - Create new items with the tools when there is one for it. They fill in ids and fields correctly. Editing a file directly is fine for changes the tools don't cover.
-- Times are local, without a time zone: `2026-09-29T09:30`.
+- Times are quoted strings; todos/AGENTS.md says which forms they take. Never convert between time zones yourself.
 - After each step, the app checks what you changed against the manifests and tells you if something is wrong. Fix it before you go on.
 - The user can undo anything you change here, so act; don't ask for permission to change the workspace.

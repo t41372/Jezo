@@ -91,7 +91,7 @@ test('the drawer edits every field, the notes keep their markdown, and files go 
   await page.locator(`[data-day="${nextDay.toLocaleDateString('zh-TW')}"]`).click()
   await page.getByLabel('時間').fill('18:30')
   const day = `${nextDay.getFullYear()}-${String(nextDay.getMonth() + 1).padStart(2, '0')}-${String(nextDay.getDate()).padStart(2, '0')}`
-  await expect.poll(() => read('todos/items/t-1.md').data.scheduled).toBe(`${day}T18:30`)
+  await expect.poll(() => read('todos/items/t-1.md').data.scheduled).toBe(`${day}T18:30[Asia/Taipei]`)
   expect(read('todos/items/t-1.md').data.proposed).toBeUndefined()
   await page.keyboard.press('Escape')
 

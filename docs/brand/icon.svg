@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="glass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FDFCFF"/>
+      <stop offset="1" stop-color="#DCDBFB"/>
+    </linearGradient>
+  </defs>
+  <!-- The tile follows Apple's macOS icon grid: 824 × 824 in a 1024 canvas. -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#glass)"/>
+  <rect x="102" y="102" width="820" height="820" rx="183" fill="none" stroke="#FFFFFF" stroke-opacity="0.9" stroke-width="4"/>
+  <g transform="translate(227 234.1) scale(5.7)">
+    <path d="M71 9 V27" stroke="#918BE3" stroke-width="13" fill="none"/>
+    <path d="M71 34 V52 M71 59 V61 A21 21 0 0 1 29 61" stroke="#171B26" stroke-width="13" fill="none"/>
+  </g>
+</svg>

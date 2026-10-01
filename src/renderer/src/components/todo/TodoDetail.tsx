@@ -15,10 +15,11 @@ import { offerUndo } from '@/lib/undo'
 import { attachmentsIn, fileUrl, isImage, linkedPath } from '@/lib/files'
 import { whenLabel } from './format'
 import { Related } from './Related'
-import { CueField, EstimateField, SlotField, TitleField } from './TodoFields'
+import { CueField, EstimateField, SlotField, TitleField, ZoneField } from './TodoFields'
 
 /** Everything about one todo, and what you can do with it. */
-export function TodoDetail({ todo, onClose }: { todo: Todo; onClose: () => void }) {
+/** `zone` is the zone the calendar shows, when the details open from it: times are picked in it. */
+export function TodoDetail({ todo, onClose, zone }: { todo: Todo; onClose: () => void; zone?: string }) {
   const { t } = useTranslation()
   const goal = useStore((s) => goalById(s.goals, todo.goalId))
   const { accept, discard, confirmSlot, moveTodo, setDone, openSession, restoreTodo, toggleSubtask, setNotes } = useStore.getState()
@@ -50,7 +51,13 @@ export function TodoDetail({ todo, onClose }: { todo: Todo; onClose: () => void 
         <dt className="text-muted-foreground">{t('todo.when')}</dt>
         <dd>{todo.fromCalendar ? whenLabel(todo) : <CueField todo={todo} />}</dd>
         <dt className="text-muted-foreground">{t('todo.slot')}</dt>
-        <dd><SlotField todo={todo} /></dd>
+        <dd><SlotField todo={todo} zone={zone} /></dd>
+        {todo.slot && !todo.fromCalendar && (
+          <>
+            <dt className="text-muted-foreground">{t('todo.meaning.zone')}</dt>
+            <dd><ZoneField todo={todo} /></dd>
+          </>
+        )}
         <dt className="text-muted-foreground">{t('todo.estimate')}</dt>
         <dd><EstimateField todo={todo} /></dd>
       </dl>

@@ -29,7 +29,7 @@ A directory the user picks, `~/Jezo` by default. It isn't under `~/Documents`, w
 
 Adding, updating and removing skills, their provenance, and the source checks are described in [skills.md](skills.md).
 
-Each built-in plugin that stores data owns a directory like the ones above. The files Jezo ships (AGENTS.md, manifest, skills) are copied in when the workspace is created. They're the user's from then on, and the agent may edit them (AGENTS.md, principle 6). What happens to them when a new version of Jezo changes its copy isn't decided yet.
+Each built-in plugin that stores data owns a directory like the ones above. The files Jezo ships (AGENTS.md, manifest, skills) are copied in when the workspace is created. They're the user's from then on, and the agent may edit them (AGENTS.md, principle 6). What happens to them when a new version of Jezo changes its copy isn't decided: Jezo isn't released, and there's nothing to migrate yet (Tim, 2026-10-01).
 
 ### Reading
 
@@ -55,7 +55,7 @@ After a write, or when the watcher sees an outside change, the main process send
 
 ## Entities on disk
 
-The formats follow [storage.md](storage.md): markdown with frontmatter, one file per entity, an immutable `id`. Field names are single English words where possible, since the agent reads and writes them. Times are local, with no time zone, written the way a person would: `2026-09-29T09:30`.
+The formats follow [storage.md](storage.md): markdown with frontmatter, one file per entity, an immutable `id`. Field names are single English words where possible, since the agent reads and writes them. Times are one quoted string each, and always say their zone, as [time.md](time.md) describes: a scheduled time is a time in a zone (`'2026-10-05T09:00[America/New_York]'`), and a record is a moment (`'2026-09-29T09:31:00+08:00'`).
 
 **A todo** (`todos/items/<id>.md`):
 
@@ -67,14 +67,14 @@ state: open            # draft | open | done
 goal: g-01J8Z1         # optional
 cue: 到公司倒完咖啡       # optional: the situation it's done in
 estimate: 70           # minutes
-scheduled: 2026-09-29T09:30   # optional; no time means it's in the backlog
+scheduled: '2026-09-29T09:30[Asia/Taipei]'   # optional; no time means it's in the backlog
 proposed: true         # optional: the time is the agent's suggestion, not yet accepted
 rank: a0V              # position in the backlog
 steps:                 # optional
   - text: 找上次的草稿
     done: true
 why: 你早上最有精神，而且這段要專心。   # optional, the agent's reasoning
-started: 2026-09-29T09:31     # while the user is working on it
+started: '2026-09-29T09:31:00+08:00'   # while the user is working on it
 ---
 Anything else about it, in prose.
 ```
@@ -111,7 +111,7 @@ The user may use pi on their own. Jezo's agent must not read their settings, key
 
 Each session is a pi session saved as JSONL in `<workspace>/sessions/`. Conversations are the user's, so they're in the workspace, not the app's data. The index lists them; the watcher and the undo record skip that directory, because only pi appends to it.
 
-- **A session starts** with Jezo's system prompt, the workspace's AGENTS.md, and the digest in pi's appended system prompt. The AGENTS.md is the workspace's map, as a project's is for a coding agent, and only that one: pi would also load every AGENTS.md in the folders above, and a workspace may sit inside someone's repository. Until 2026-09-30 the digest only said the file existed, and a model asked for an automation never learned that `automations/` was there. The digest has today's date, the next fourteen days with their weekdays, today's todos, active goals, the last check-in and a map of the workspace. The memory and calendar extensions add their own sections at the start of each run. Each message from the user is followed by a hidden one with the time (`jezo.time`), and with the next fourteen days again once the date has moved on. The digest's time is from when the session started, so a conversation picked up at 11:46 was planned from 11:10 (Tim, 2026-09-30); the E2E test "a conversation picked up two hours later" moves the main process's clock and failed that way before the fix (the call went at start time plus an hour). It's a message rather than a prompt section so a local server doesn't have to read the whole conversation again for a new minute. A request Jezo sends on its own (an automation, sorting notes, finding times) has no user message, so the time goes at the top of the request instead: on 2026-09-30, asked to find times "in the next seven days" with the date only in the system prompt, qwen3.6-35b looked at the calendar from 2026-01-01, three runs of three. pi puts it after the user's message, which left the clock as the model's last input; the `context` hook moves it in front for the model (the session file keeps pi's order). With it after, a local model answered "已更新" to a changed guitar lesson and called nothing in two runs of three; in front, three of three saved it.
+- **A session starts** with Jezo's system prompt, the workspace's AGENTS.md, and the digest in pi's appended system prompt. The AGENTS.md is the workspace's map, as a project's is for a coding agent, and only that one: pi would also load every AGENTS.md in the folders above, and a workspace may sit inside someone's repository. Until 2026-09-30 the digest only said the file existed, and a model asked for an automation never learned that `automations/` was there. The digest has today's date and the device's zone and UTC offset (since 2026-10-01, [time.md](time.md)), the next fourteen days with their weekdays, today's todos, active goals, the last check-in and a map of the workspace. The memory and calendar extensions add their own sections at the start of each run. Each message from the user is followed by a hidden one with the time (`jezo.time`), and with the next fourteen days again once the date has moved on. The digest's time is from when the session started, so a conversation picked up at 11:46 was planned from 11:10 (Tim, 2026-09-30); the E2E test "a conversation picked up two hours later" moves the main process's clock and failed that way before the fix (the call went at start time plus an hour). It's a message rather than a prompt section so a local server doesn't have to read the whole conversation again for a new minute. A request Jezo sends on its own (an automation, sorting notes, finding times) has no user message, so the time goes at the top of the request instead: on 2026-09-30, asked to find times "in the next seven days" with the date only in the system prompt, qwen3.6-35b looked at the calendar from 2026-01-01, three runs of three. pi puts it after the user's message, which left the clock as the model's last input; the `context` hook moves it in front for the model (the session file keeps pi's order). With it after, a local model answered "已更新" to a changed guitar lesson and called nothing in two runs of three; in front, three of three saved it.
 - **What started it** (the morning, the evening, ⌥X, the user, 隨手記) is saved in the session as a custom entry, so the chat list can show it.
 - **The chat transport** is react-pi's browser-safe `PiClient` over the preload IPC bridge. AgentHost remains the session factory and run owner. Token updates carry the live message, at most every 50 ms; completed display messages are cached until the branch leaf changes. Entry deltas keep the renderer's tree current, and snapshots recover reading, navigation and completion. The renderer extends the adapter with pi entry identity, card parts and an assistant-ui branch repository ([frontend.md](frontend.md), "Chat").
 - **Versions** are paths in the same pi JSONL. Edit and retry use `navigateTree` without an abandoned-path summary, then start a new run. A `jezo.retry` custom entry links repeated input to its original displayed turn; `jezo.branch` saves a selected leaf by appending on that path. Switching versions does not change the workspace or call undo.
@@ -189,11 +189,11 @@ Tool parameters are plain: strings, numbers, booleans and objects, with no regex
 
 ### Automations
 
-Sessions Jezo starts on its own are automations: files in the workspace's `automations/items/`, one per automation. The frontmatter has a name, a cron schedule in local time, on or off, how many minutes late it may still start (120 unless it says), and for the built-in ones which kind it is. **The body is what the agent is asked when it runs**, so what the morning plan does is editable like a skill (AGENTS.md, principle 6), and the agent can add, change or turn off automations when the user asks, with undo like any other change.
+Sessions Jezo starts on its own are automations: files in the workspace's `automations/items/`, one per automation. The frontmatter has a name, a cron schedule (in local time unless its `zone` says otherwise), on or off, how late it may still start (`catch_up`), and for the built-in ones which kind it is. **The body is what the agent is asked when it runs**, so what the morning plan does is editable like a skill (AGENTS.md, principle 6), and the agent can add, change or turn off automations when the user asks, with undo like any other change.
 
-- **Built in:** the morning plan (08:00, may start until 14:00), the evening check-in (21:30), and the weekly review (Sundays 20:00, may start a day late). The rows in 設定 set the first two's times and turn them on or off by editing their files.
-- **Running them:** Jezo's own timer looks every 30 seconds, and ten seconds after launch. For each automation that's on, it takes the most recent time its schedule was due (croner); if that was no longer ago than it may be late, and no session of that automation has started since, it starts one. It doesn't start without a usable model, which would only record a failure every time. pi has no scheduler of its own; Hermes has one, but Jezo doesn't use Hermes.
-- **When it's done,** a system notification names it, and clicking it opens the conversation.
+- **Built in:** the morning plan (08:00, may start until 18:00), the evening check-in (21:30, until the end of the day), and the weekly review (Sundays 20:00, for 24 hours). The rows in 設定 set the first two's times and turn them on or off by editing their files.
+- **Running them,** including after the computer was asleep or off, is in [automations.md](automations.md): occurrences, one pending per automation, the catch-up window, attempts, and the history in `automations/history/`. pi has no scheduler of its own; Hermes has one, but Jezo doesn't use Hermes.
+- **When it's done,** a system notification names it, and clicking it opens the conversation. Catch-up runs share one notification per batch.
 - **What it may do:** the morning plan only proposes; todos it adds are drafts and times it suggests are proposals, which the E2E test checks.
 - **Seeding:** a plugin's directory is copied into the workspace only when the workspace doesn't have it yet, so a built-in automation the user deleted stays deleted.
 - **更多 → 自動化** lists them in the order of the day, with the schedule in words (「每天 08:00」「每週日 20:00」「週一到週五 09:00」; other shapes through cronstrue, whose Chinese reads stiffly for the common ones) and a switch. An automation's page has its time (for a schedule with a plain hour and minute), what it's asked (the body, saved when the box loses focus), when it last ran with a link to that conversation, 現在跑一次, and 刪掉 with undo. 新增 opens the chat with 「幫我新增一個自動化：」 in the box: the agent writes the file, as it would when asked anywhere else. A form would have to ask for everything the body says in words. Read on 2026-09-30: qwen3.6-35b made such a request into a todo until the workspace's AGENTS.md was in its instructions (below), and then once saved the file as `.yaml`; `automations/AGENTS.md` now names the file `items/<id>.md`, and a write into `items/` that isn't markdown is refused with the right name.

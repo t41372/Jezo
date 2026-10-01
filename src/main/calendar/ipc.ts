@@ -6,7 +6,7 @@ import type { Calendars } from './calendars'
 
 export function serveCalendars(calendars: Calendars) {
   ipcMain.handle('calendar:status', () => calendars.status())
-  ipcMain.handle('calendar:events', (_, from: string, to: string) => calendars.events(from, to))
+  ipcMain.handle('calendar:events', (_, from: string, to: string, zone: string) => calendars.events(from, to, zone))
   ipcMain.handle('calendar:subscribe', (_, url: string, name?: string) => calendars.subscribe(url, name))
   ipcMain.handle('calendar:unsubscribe', (_, id: string) => calendars.unsubscribe(id))
   ipcMain.handle('calendar:refresh', (_, id?: string) => calendars.refresh(id))

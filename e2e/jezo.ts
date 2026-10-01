@@ -110,6 +110,14 @@ export const test = base.extend<{ jezo: Jezo; prepare: Prepare }>({
       }
       next.on('pageerror', (e) => errors.push(String(e)))
       next.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
+      // A crash can lose what the window had stored, so the language and theme are set again.
+      if (await next.evaluate(() => localStorage.getItem('jezo.language') !== 'zh-TW')) {
+        await next.evaluate(() => {
+          localStorage.setItem('jezo.language', 'zh-TW')
+          localStorage.setItem('jezo.theme', 'light')
+        })
+        await next.reload()
+      }
       await next.locator('nav button').first().waitFor()
       jezo.app = app
       jezo.page = next
@@ -139,6 +147,10 @@ export async function localModel() {
 
 /** Goes to a page by its rail label. */
 export const open = (page: Page, label: string) => page.locator('nav button', { hasText: label }).first().click()
+
+/** When a time from a todo's file happens, in milliseconds; a local time is read in Taipei, the tests' zone. */
+export const momentOf = (time: string) =>
+  (time.includes('[') || /[+-]\d{2}:\d{2}$|Z$/.test(time) ? Temporal.ZonedDateTime.from(time.includes('[') ? time : `${time}[UTC]`, { offset: 'use' }) : Temporal.PlainDateTime.from(time).toZonedDateTime('Asia/Taipei')).epochMilliseconds
 
 /** Drags with the mouse in small steps, the way a hand does, so drag libraries see a real gesture. */
 export async function drag(page: Page, from: { x: number; y: number }, to: { x: number; y: number }) {

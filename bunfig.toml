@@ -1,0 +1,3 @@
+[test]
+# Bun has no Temporal yet (scripts/temporal.ts).
+preload = ["./scripts/temporal.ts"]

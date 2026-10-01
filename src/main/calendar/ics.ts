@@ -1,12 +1,14 @@
 // Reads an iCalendar feed (RFC 5545) into the events that fall in a range,
 // with repeating events expanded. ical.js does the parsing and the repeat
-// rules; this file turns its times into Jezo's local times. Feeds get time
-// zones wrong in several ways (see ics.test.ts), so each is handled here:
-// zones described in the feed itself (Outlook's Windows names), IANA names
-// with no description, UTC, and floating times.
+// rules; this file keeps what each time meant (docs/design/calendar.md, "Times
+// from each source"). Feeds get time zones wrong in several ways (see
+// ics.test.ts), so each is handled here: zones described in the feed itself
+// (Outlook's Windows names), IANA names with no description, UTC, and
+// floating times.
 
 import ICAL from 'ical.js'
 import type { CalendarEvent } from '../../shared/calendar'
+import { stamp, type Zone } from '../../shared/time'
 
 export interface IcsEvent extends Omit<CalendarEvent, 'calendar'> {}
 
@@ -14,45 +16,27 @@ export interface IcsCalendar {
   /** X-WR-CALNAME, which most feeds send. */
   name?: string
   events: IcsEvent[]
+  /** Time zones events name that the feed doesn't define; their times are shown as written. */
+  unknownZones: string[]
 }
 
 const pad = (n: number) => String(n).padStart(2, '0')
-const localDate = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-const localTime = (d: Date) => `${localDate(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 const dateOf = (t: ICAL.Time) => `${t.year}-${pad(t.month)}-${pad(t.day)}`
+const wallOf = (t: ICAL.Time) => `${dateOf(t)}T${pad(t.hour)}:${pad(t.minute)}${t.second ? `:${pad(t.second)}` : ''}`
 
 const knownZone = (name: string) => {
   try {
-    new Intl.DateTimeFormat('en', { timeZone: name })
+    Temporal.Instant.fromEpochMilliseconds(0).toZonedDateTimeISO(name)
     return true
   } catch {
     return false
   }
 }
 
-/** How far a zone is from UTC at an instant, in milliseconds. */
-function offsetAt(zone: string, at: number) {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: zone, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric',
-  }).formatToParts(new Date(at))
-  const get = (type: string) => Number(parts.find((p) => p.type === type)!.value)
-  return Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'), get('second')) - at
-}
+/** A UTC offset in seconds as "-05:00". */
+const offsetName = (seconds: number) => `${seconds < 0 ? '-' : '+'}${pad(Math.floor(Math.abs(seconds) / 3600))}:${pad(Math.floor((Math.abs(seconds) % 3600) / 60))}`
 
-/**
- * The instant a wall-clock time in an IANA zone names. Around a daylight-saving
- * change, RFC 5545 decides: a time that happens twice is the first one, and a
- * time that doesn't happen (the skipped hour) uses the offset from before the change.
- */
-function inZone(t: ICAL.Time, zone: string): Date {
-  const wall = Date.UTC(t.year, t.month - 1, t.day, t.hour, t.minute, t.second)
-  const before = offsetAt(zone, wall - 86_400_000)
-  const after = offsetAt(zone, wall + 86_400_000)
-  const fits = [...new Set([before, after])].map((o) => wall - o).filter((at) => offsetAt(zone, at) === wall - at)
-  return new Date(fits.length ? Math.min(...fits) : wall - before)
-}
-
-export function readIcs(text: string, from: string, to: string): IcsCalendar {
+function parse(text: string) {
   let root: ICAL.Component
   try {
     root = new ICAL.Component(ICAL.parse(text) as unknown[])
@@ -60,7 +44,6 @@ export function readIcs(text: string, from: string, to: string): IcsCalendar {
     throw new Error(`This isn't a calendar feed: ${(error as Error).message}`)
   }
   if (root.name !== 'vcalendar') throw new Error("This isn't a calendar feed.")
-
   // Zones the feed describes itself are the only way to read names like "Pacific Standard Time".
   const zones = new Map<string, ICAL.Timezone>()
   for (const vtz of root.getAllSubcomponents('vtimezone')) {
@@ -68,21 +51,70 @@ export function readIcs(text: string, from: string, to: string): IcsCalendar {
     zones.set(zone.tzid, zone)
   }
   const defaultZone = String(root.getFirstPropertyValue('x-wr-timezone') ?? '') || undefined
+  return { root, zones, defaultZone }
+}
 
-  /** A time from the feed as a local Date. */
-  const instant = (t: ICAL.Time, tzid: string | undefined): Date => {
-    if (t.zone === ICAL.Timezone.utcTimezone) return t.toJSDate()
-    if (tzid && zones.has(tzid)) return new Date(t.toUnixTime() * 1000)
-    const zone = tzid ?? defaultZone
-    if (zone && knownZone(zone)) return inZone(t, zone)
-    // Floating time, or a zone nobody can name: the time as written, here.
-    return new Date(t.year, t.month - 1, t.day, t.hour, t.minute, t.second)
+/**
+ * Zones the feed names that neither it nor Temporal defines, in any of its
+ * events, whatever dates are asked about: the warning belongs to the feed.
+ */
+export function unknownZonesIn(text: string): string[] {
+  const { root, zones, defaultZone } = parse(text)
+  const names = new Set<string>(defaultZone ? [defaultZone] : [])
+  for (const vevent of root.getAllSubcomponents('vevent')) {
+    for (const property of vevent.getAllProperties()) {
+      const tzid = property.getParameter('tzid')
+      if (typeof tzid === 'string') names.add(tzid)
+    }
+  }
+  return [...names].filter((name) => !zones.has(name) && !knownZone(name))
+}
+
+/** A time as Jezo keeps it, with when it happens from where the user is, for the range and the order. */
+interface Point {
+  value: string
+  at: number
+  zone?: string
+}
+
+/** The events between two days (`to` exclusive), as days in `zone`, the device's. */
+export function readIcs(text: string, from: string, to: string, zone: Zone): IcsCalendar {
+  const { root, zones, defaultZone } = parse(text)
+  const unknownZones = new Set<string>()
+
+  /**
+   * A time from the feed, keeping its meaning: a moment in the zone it was given
+   * in, or a local time when it floats. Around a daylight-saving change, RFC 5545
+   * and Temporal agree: a time that happens twice is the first, and one in the
+   * skipped hour is moved by the gap.
+   */
+  const point = (t: ICAL.Time, tzid: string | undefined): Point => {
+    if (t.zone === ICAL.Timezone.utcTimezone) {
+      const at = t.toJSDate().getTime()
+      return { value: stamp('UTC', at), at }
+    }
+    const name = tzid ?? defaultZone
+    if (name && zones.has(name)) {
+      // The feed defines this zone, so the moment and its offset are the feed's, even when Temporal knows
+      // the name: the feed's rules are what its author meant. A floating time takes X-WR-TIMEZONE's.
+      const local = tzid ? t : Object.assign(t.clone(), { zone: zones.get(name)! })
+      const at = local.toUnixTime() * 1000
+      return { value: stamp(offsetName(local.utcOffset()), at), at, zone: name }
+    }
+    if (name && knownZone(name)) {
+      const at = Temporal.PlainDateTime.from(wallOf(t)).toZonedDateTime(name, { disambiguation: 'compatible' }).epochMilliseconds
+      return { value: stamp(name, at), at, zone: name }
+    }
+    if (name) unknownZones.add(name)
+    // Floating: the clock as written, wherever the user is.
+    const value = wallOf(t)
+    return { value, at: Temporal.PlainDateTime.from(value).toZonedDateTime(zone, { disambiguation: 'compatible' }).epochMilliseconds }
   }
 
+  const rangeStart = Temporal.PlainDate.from(from).toZonedDateTime(zone).epochMilliseconds
+  const rangeEnd = Temporal.PlainDate.from(to).toZonedDateTime(zone).epochMilliseconds
   const start = ICAL.Time.fromDateString(from)
   const end = ICAL.Time.fromDateString(to)
-  const rangeStart = new Date(`${from}T00:00`)
-  const rangeEnd = new Date(`${to}T00:00`)
 
   /** A UID for events that have none, from what they say: the same on every read. */
   const uidOf = (e: ICAL.Event) => e.uid || `no-uid:${e.summary ?? ''}:${e.startDate?.toString() ?? ''}`
@@ -114,11 +146,11 @@ export function readIcs(text: string, from: string, to: string): IcsCalendar {
     }
   }
 
-  const events: IcsEvent[] = []
+  const events: (IcsEvent & { at: number })[] = []
   const add = (e: ICAL.Event, startTime: ICAL.Time, endTime: ICAL.Time, id: string, repeats: boolean) => {
     if (String(e.component.getFirstPropertyValue('status') ?? '').toUpperCase() === 'CANCELLED') return
     const allDay = startTime.isDate
-    let s: string, en: string
+    let s: string, en: string, at: number, eventZone: string | undefined
     if (allDay) {
       s = dateOf(startTime)
       // DTEND is exclusive; with none, or none after the start, the event is that one day.
@@ -126,13 +158,16 @@ export function readIcs(text: string, from: string, to: string): IcsCalendar {
       if (last.compare(startTime) <= 0) last.adjust(1, 0, 0, 0)
       en = dateOf(last)
       if (en <= from || s >= to) return
+      at = Temporal.PlainDate.from(s).toZonedDateTime(zone).epochMilliseconds
     } else {
       const zoneOf = (p: string) => (e.component.getFirstProperty(p)?.getParameter('tzid') as string | undefined) ?? undefined
-      const a = instant(startTime, zoneOf('dtstart'))
-      const b = endTime ? instant(endTime, zoneOf('dtend') ?? zoneOf('dtstart')) : a
-      if (a >= rangeEnd || (b <= rangeStart && a < rangeStart)) return
-      s = localTime(a)
-      en = localTime(b)
+      const a = point(startTime, zoneOf('dtstart'))
+      const b = endTime ? point(endTime, zoneOf('dtend') ?? zoneOf('dtstart')) : a
+      if (a.at >= rangeEnd || (b.at <= rangeStart && a.at < rangeStart)) return
+      s = a.value
+      en = b.value
+      at = a.at
+      eventZone = a.zone
     }
     const text = (p: string) => {
       const v = e.component.getFirstPropertyValue(p)
@@ -140,10 +175,12 @@ export function readIcs(text: string, from: string, to: string): IcsCalendar {
     }
     events.push({
       id,
+      at,
       title: e.summary ?? '',
       start: s,
       end: en,
       ...(allDay && { allDay: true }),
+      ...(eventZone && { zone: eventZone }),
       ...(text('location') && { location: text('location') }),
       ...(text('description') && { notes: text('description') }),
       ...(text('url') && { url: text('url') }),
@@ -181,7 +218,7 @@ export function readIcs(text: string, from: string, to: string): IcsCalendar {
     }
   }
 
-  events.sort((a, b) => a.start.localeCompare(b.start) || a.title.localeCompare(b.title))
+  events.sort((a, b) => a.at - b.at || a.title.localeCompare(b.title))
   // Feeds repeat UIDs they shouldn't; every event still needs its own id.
   const seen = new Map<string, number>()
   for (const e of events) {
@@ -189,5 +226,5 @@ export function readIcs(text: string, from: string, to: string): IcsCalendar {
     seen.set(e.id, n + 1)
     if (n) e.id = `${e.id}#${n}`
   }
-  return { name: String(root.getFirstPropertyValue('x-wr-calname') ?? '') || undefined, events }
+  return { name: String(root.getFirstPropertyValue('x-wr-calname') ?? '') || undefined, events: events.map(({ at: _at, ...e }) => e), unknownZones: [...unknownZones] }
 }

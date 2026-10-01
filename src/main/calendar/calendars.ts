@@ -19,8 +19,10 @@ import type { CalendarEvent, CalendarInfo, CalendarSource, CalendarStatus } from
 import { getConfig, setConfig } from '../config'
 import { getSecret, storeSecret } from '../secrets'
 import type { Workspace } from '../workspace/workspace'
+import { dateOf, epochOf, now, readTime, todayIn, type Zone } from '../../shared/time'
+import { deviceZone } from '../clock'
 import { googleCalendars, googleClient, googleEvents, GoogleSignedOut, setGoogleClient, signIn, signOut, type GoogleCalendar, type SignInPage } from './google'
-import { readIcs } from './ics'
+import { readIcs, unknownZonesIn } from './ics'
 import { macAccess, macAvailable, macCalendars, macEvents, requestMacAccess, watchMac, type MacAccess } from './mac'
 
 const SUBSCRIPTIONS = 'calendar/subscriptions.yaml'
@@ -44,6 +46,8 @@ interface Fetched {
   etag?: string
   lastModified?: string
   error?: string
+  /** Zones the feed names that nothing defines, found when it was fetched. */
+  unknownZones?: string[]
 }
 
 interface GoogleAccount {
@@ -53,7 +57,7 @@ interface GoogleAccount {
   hidden?: string[]
 }
 
-/** The last read of one Google account, kept so it shows offline. */
+/** The last read of one Google account, kept so it shows offline. Each event keeps its own zone. */
 interface GoogleCopy {
   syncedAt?: string
   error?: string
@@ -68,12 +72,14 @@ const googleSource = (account: string) => `google:${account}`
 /** A Google calendar's id in Jezo: calendar ids repeat across accounts (a shared calendar is in both). */
 const googleCalendarId = (account: string, calendar: string) => `google:${account}/${calendar}`
 
-const pad = (n: number) => String(n).padStart(2, '0')
-const localDate = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-const daysFromToday = (days: number) => {
-  const d = new Date()
-  d.setDate(d.getDate() + days)
-  return localDate(d)
+/** The start of a day in a zone. */
+const dayStart = (date: string, zone: Zone) => Temporal.PlainDate.from(date).toZonedDateTime(zone)
+
+/** When an event starts and ends, from `zone`, in milliseconds. A day runs from midnight there. */
+export function span(e: Pick<CalendarEvent, 'start' | 'end' | 'allDay'>, zone: Zone) {
+  if (e.allDay) return { start: dayStart(e.start, zone).epochMilliseconds, end: dayStart(e.end, zone).epochMilliseconds }
+  const at = (text: string) => epochOf(readTime(text, 'event'), zone) ?? 0
+  return { start: at(e.start), end: at(e.end) }
 }
 
 const secretName = (id: string) => `calendar:${id}`
@@ -166,12 +172,12 @@ export class Calendars {
     const response = await fetch(address, { signal: AbortSignal.timeout(20_000), headers: { accept: 'text/calendar, */*' } })
     if (!response.ok) throw new Error(`${response.status} ${response.statusText}`.trim())
     const text = await response.text()
-    const today = new Date().toISOString().slice(0, 10)
-    const { name: feedName } = readIcs(text, today, today)
+    const today = todayIn(deviceZone()).toString()
+    const { name: feedName } = readIcs(text, today, today, deviceZone())
     const id = `s-${randomBytes(4).toString('hex')}`
     await storeSecret(secretName(id), address)
     await writeFile(join(this.cacheDir(), `${id}.ics`), text)
-    const meta: Fetched = { syncedAt: new Date().toISOString(), etag: response.headers.get('etag') ?? undefined, lastModified: response.headers.get('last-modified') ?? undefined }
+    const meta: Fetched = { syncedAt: new Date().toISOString(), etag: response.headers.get('etag') ?? undefined, lastModified: response.headers.get('last-modified') ?? undefined, unknownZones: unknownZonesIn(text) }
     await writeFile(join(this.cacheDir(), `${id}.json`), JSON.stringify(meta))
     const subscription = { id, name: name?.trim() || feedName || new URL(address).hostname }
     await this.saveSubscriptions([...(await this.subscriptions()), subscription])
@@ -218,10 +224,11 @@ export class Calendars {
           if (response.status !== 304) {
             if (!response.ok) throw new Error(`${response.status} ${response.statusText}`.trim())
             const text = await response.text()
-            readIcs(text, '2000-01-01', '2000-01-02')
+            readIcs(text, '2000-01-01', '2000-01-02', 'UTC')
             // Removed while this was on its way: don't leave a copy behind.
             if (!(await this.subscriptions()).some((s) => s.id === id)) return
             await writeFile(join(this.cacheDir(), `${id}.ics`), text)
+            meta.unknownZones = unknownZonesIn(text)
             meta.etag = response.headers.get('etag') ?? undefined
             meta.lastModified = response.headers.get('last-modified') ?? undefined
           }
@@ -321,12 +328,13 @@ export class Calendars {
     const work = (async () => {
       const copy = await this.googleCopy(account)
       try {
-        const from = daysFromToday(-GOOGLE_BACK)
-        const to = daysFromToday(GOOGLE_AHEAD)
+        const today = now().toZonedDateTimeISO(deviceZone()).startOfDay()
+        const from = today.subtract({ days: GOOGLE_BACK }).toInstant()
+        const to = today.add({ days: GOOGLE_AHEAD }).toInstant()
         const calendars = await googleCalendars(account)
         const events: GoogleCopy['events'] = {}
         for (const c of calendars) events[c.id] = await googleEvents(account, c.id, from, to)
-        Object.assign(copy, { calendars, events, from, to, syncedAt: new Date().toISOString(), error: undefined, signedOut: undefined })
+        Object.assign(copy, { calendars, events, from: from.toString(), to: to.toString(), syncedAt: new Date().toISOString(), error: undefined, signedOut: undefined })
       } catch (error) {
         copy.error = (error as Error).message
         copy.signedOut = error instanceof GoogleSignedOut || undefined
@@ -392,7 +400,8 @@ export class Calendars {
     for (const s of await this.subscriptions()) {
       const meta = await this.fetched(s.id)
       const state = this.fetching.has(s.id) ? 'syncing' : meta.error ? 'error' : 'ok'
-      sources.push({ id: s.id, kind: 'ics', name: s.name, state, syncedAt: meta.syncedAt, ...(meta.error && { error: meta.error }) })
+      const problems = meta.unknownZones?.map((zone) => ({ kind: 'unknown-zone' as const, zone }))
+      sources.push({ id: s.id, kind: 'ics', name: s.name, state, syncedAt: meta.syncedAt, ...(meta.error && { error: meta.error }), ...(problems?.length && { problems }) })
       calendars.push({ id: s.id, name: s.name, color: s.color, account: s.name, source: s.id, hidden: !!s.hidden })
     }
     for (const account of await this.googleAccounts()) {
@@ -407,56 +416,92 @@ export class Calendars {
     return { sources, calendars, googleClient: !!googleClient() }
   }
 
-  /** Timed events that overlap a stretch of time, like a todo's slot. All-day events don't block a time. */
-  async overlapping(start: string, minutes: number): Promise<CalendarEvent[]> {
-    const date = start.slice(0, 10)
-    const next = new Date(`${date}T00:00`)
-    next.setDate(next.getDate() + 1)
-    const to = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`
-    const from = new Date(`${start}`).getTime()
+  /**
+   * Timed events that overlap a todo's slot, read from where the device is. All-day
+   * events don't block a time. Calendars that couldn't be read are named, so a
+   * clash check never says "nothing there" about a calendar it couldn't see.
+   */
+  async overlapping(scheduled: string, minutes: number): Promise<{ events: CalendarEvent[]; unchecked: string[] }> {
+    const zone = deviceZone()
+    const value = readTime(scheduled)
+    const from = epochOf(value, zone)
+    if (from === undefined || !value) return { events: [], unchecked: [] }
     const until = from + minutes * 60_000
-    return (await this.events(date, to)).filter((e) => !e.allDay && new Date(e.start).getTime() < until && new Date(e.end).getTime() > from)
+    // From the day before (an event that started earlier) to the day after the slot ends, however long it is.
+    const first = dateOf(value, zone).subtract({ days: 1 })
+    const last = Temporal.Instant.fromEpochMilliseconds(until).toZonedDateTimeISO(zone).toPlainDate().add({ days: 2 })
+    const { events, unchecked } = await this.read(first.toString(), last.toString(), zone)
+    return {
+      events: events.filter((e) => {
+        if (e.allDay) return false
+        const { start, end } = span(e, zone)
+        return start < until && end > from
+      }),
+      unchecked,
+    }
   }
 
-  /** Events from every calendar that isn't hidden, between two local dates (`to` exclusive). */
-  async events(from: string, to: string): Promise<CalendarEvent[]> {
-    const { calendars } = await this.status()
+  /** Events from every calendar that isn't hidden, between two days in `zone` (`to` exclusive). */
+  async events(from: string, to: string, zone: Zone = deviceZone()): Promise<CalendarEvent[]> {
+    return (await this.read(from, to, zone)).events
+  }
+
+  /**
+   * The events, and the calendars that couldn't be read for this range: not
+   * connected, access taken away, a read that failed, no saved copy, or a range
+   * past what's kept of Google. An empty answer then never means "nothing there".
+   */
+  async read(from: string, to: string, zone: Zone = deviceZone()): Promise<{ events: CalendarEvent[]; unchecked: string[] }> {
+    const { sources, calendars } = await this.status()
+    const unchecked = new Set(sources.filter((s) => s.state === 'error' || s.state === 'needs-access' || s.state === 'denied').map((s) => s.name))
     const shown = calendars.filter((c) => !c.hidden)
     const events: CalendarEvent[] = []
+    const rangeStart = dayStart(from, zone).epochMilliseconds
+    const rangeEnd = dayStart(to, zone).epochMilliseconds
+    const inRange = (e: Pick<CalendarEvent, 'start' | 'end' | 'allDay'>) => {
+      const { start, end } = span(e, zone)
+      return start < rangeEnd && (end > rangeStart || start >= rangeStart)
+    }
 
     const mac = shown.filter((c) => c.source === 'mac').map((c) => c.id)
     if (mac.length) {
       try {
-        for (const e of await macEvents(from, to, mac)) {
+        for (const e of await macEvents(dayStart(from, zone).toInstant(), dayStart(to, zone).toInstant(), mac)) {
           if (e.cancelled) continue
           const { cancelled: _c, allDay, repeats, ...rest } = e
           events.push({ ...rest, ...(allDay && { allDay }), ...(repeats && { repeats }) })
         }
       } catch (error) {
         console.error("Can't read the Mac's calendars:", error)
+        unchecked.add('Mac')
       }
     }
 
     for (const c of shown.filter((c) => c.source !== 'mac' && !c.source.startsWith('google:'))) {
       const text = await this.feed(c.id)
-      if (!text) continue
+      if (!text) {
+        unchecked.add(c.name)
+        continue
+      }
       try {
-        for (const e of readIcs(text, from, to).events) events.push({ ...e, id: `${c.id}:${e.id}`, calendar: c.id })
+        const feed = readIcs(text, from, to, zone)
+        for (const e of feed.events) events.push({ ...e, id: `${c.id}:${e.id}`, calendar: c.id })
       } catch (error) {
         console.error(`Can't read the calendar ${c.name}:`, error)
+        unchecked.add(c.name)
       }
     }
     const copies = new Map<string, GoogleCopy>()
     for (const c of shown.filter((c) => c.source.startsWith('google:'))) {
       const account = c.source.slice('google:'.length)
       if (!copies.has(account)) copies.set(account, await this.googleCopy(account))
+      const copy = copies.get(account)!
+      // Kept for a fixed stretch around today; past it, Jezo doesn't know.
+      if (!copy.from || !copy.to || rangeStart < Temporal.Instant.from(copy.from).epochMilliseconds || rangeEnd > Temporal.Instant.from(copy.to).epochMilliseconds) unchecked.add(account)
       const calendar = c.id.slice(c.source.length + 1)
-      for (const e of copies.get(account)!.events[calendar] ?? []) {
-        // Kept for a fixed stretch around today; overlapping the asked range is what counts.
-        const overlaps = e.allDay ? e.end > from && e.start < to : e.start < `${to}T00:00` && (e.end > `${from}T00:00` || e.start >= `${from}T00:00`)
-        if (overlaps) events.push({ ...e, id: `${c.id}:${e.id}`, calendar: c.id })
-      }
+      // Kept for a fixed stretch around today; overlapping the asked range is what counts.
+      for (const e of copies.get(account)!.events[calendar] ?? []) if (inRange(e)) events.push({ ...e, id: `${c.id}:${e.id}`, calendar: c.id })
     }
-    return events.sort((a, b) => a.start.localeCompare(b.start))
+    return { events: events.sort((a, b) => span(a, zone).start - span(b, zone).start), unchecked: [...unchecked] }
   }
 }

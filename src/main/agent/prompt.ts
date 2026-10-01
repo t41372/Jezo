@@ -2,6 +2,7 @@
 // agent inside the app, not for whoever builds Jezo.
 
 import type { Item } from '../../shared/workspace'
+import { dateOf, epochOf, readTime, resolve, type Zone } from '../../shared/time'
 import type { Trigger } from '../../shared/session'
 
 export const SYSTEM_PROMPT = `You are Jezo, a personal agent that helps one person manage their life: their todos, goals, calendar and habits. The user sets the direction. You plan and follow up. The user does the work.
@@ -44,16 +45,26 @@ export const REQUESTS: Partial<Record<Trigger, (items: Item[]) => string>> = {
 }
 
 const pad = (n: number) => String(n).padStart(2, '0')
-const localDate = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+const clock = (at: Temporal.ZonedDateTime | Temporal.PlainDateTime) => `${pad(at.hour)}:${pad(at.minute)}`
+const weekday = (date: Temporal.PlainDate, style: 'long' | 'short') => date.toLocaleString('en-US', { weekday: style })
 
-const nowLine = (now: Date) =>
-  `Now: ${now.toLocaleDateString('en-US', { weekday: 'long' })} ${localDate(now)} ${pad(now.getHours())}:${pad(now.getMinutes())} (local time).`
+/**
+ * "Now: Thursday 2026-10-01 08:19, America/Phoenix (UTC-07:00)." The zone is
+ * named, and so is how a time the agent gives a todo is read, so it never has
+ * to work out a zone itself (docs/design/time.md).
+ */
+const nowLine = (now: Temporal.ZonedDateTime) =>
+  [
+    `Now: ${weekday(now.toPlainDate(), 'long')} ${now.toPlainDate()} ${clock(now)}, ${now.timeZoneId} (UTC${now.offset}).`,
+    `Times you give todos are ${now.timeZoneId} times, and stay fixed to ${now.timeZoneId}. Add a zone only when the user names a place.`,
+  ].join('\n')
 
 /** Working out "next Wednesday" is where models most often slip, so the dates are spelled out. */
-const daysLine = (now: Date) => {
+const daysLine = (now: Temporal.ZonedDateTime) => {
+  const today = now.toPlainDate()
   const days = Array.from({ length: 14 }, (_, i) => {
-    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i + 1)
-    return `${i === 0 ? 'tomorrow ' : ''}${d.toLocaleDateString('en-US', { weekday: 'short' })} ${localDate(d)}`
+    const d = today.add({ days: i + 1 })
+    return `${i === 0 ? 'tomorrow ' : ''}${weekday(d, 'short')} ${d}`
   })
   return `The days after today: ${days.join(', ')}.`
 }
@@ -61,28 +72,59 @@ const daysLine = (now: Date) => {
 /**
  * The time, sent with each of the user's messages. The prompt's time is from when
  * the conversation started, and a conversation picked up again an hour later, or
- * the next day, would otherwise plan from then. It's a message after the user's,
- * not a change to the prompt, so a local server can keep what it already read.
+ * the next day, or in another zone, would otherwise plan from then. It's a message
+ * after the user's, not a change to the prompt, so a local server can keep what
+ * it already read.
  */
-export function timeNote(now: Date, started: Date) {
-  return localDate(now) === localDate(started) ? nowLine(now) : `${nowLine(now)}\n${daysLine(now)}`
+export function timeNote(now: Temporal.ZonedDateTime, started: Temporal.ZonedDateTime) {
+  const sameDay = now.toPlainDate().equals(started.toPlainDate()) && now.timeZoneId === started.timeZoneId
+  return sameDay ? nowLine(now) : `${nowLine(now)}\n${daysLine(now)}`
+}
+
+/** A gap between two of the model's steps longer than this is a sleep, not thinking. */
+export const JUMP_MS = 30 * 60_000
+
+/**
+ * Said before a model call when time jumped since the last one: the computer
+ * slept mid-run, moved to another zone, or the date changed (docs/design/time.md).
+ */
+export function jumpNote(last: Temporal.ZonedDateTime, now: Temporal.ZonedDateTime) {
+  const moved = last.timeZoneId !== now.timeZoneId ? ` The device moved from ${last.timeZoneId} to ${now.timeZoneId}.` : ''
+  const jumped = now.epochMilliseconds - last.epochMilliseconds > JUMP_MS || moved
+  return `${jumped ? 'Time jumped' : 'The date changed'} since your last step: it was ${weekday(last.toPlainDate(), 'short')} ${last.toPlainDate()} ${clock(last)}, it's now ${weekday(now.toPlainDate(), 'short')} ${now.toPlainDate()} ${clock(now)} ${now.timeZoneId}.${moved} Check that what you're doing still fits the time.\n${daysLine(now)}`
+}
+
+/** How a todo's time reads from here: "09:00", or "22:00 (09:00 America/New_York)" for a time fixed elsewhere. */
+export function whenText(scheduled: unknown, zone: Zone) {
+  const value = readTime(scheduled)
+  if (!value) return null
+  if (value.kind === 'day') return `${value.date} (no time)`
+  const at = resolve(value, zone)!.at
+  const own = value.kind === 'zoned' && value.zone !== zone ? ` (${clock(value.wall)} ${value.zone}${value.wall.toPlainDate().equals(at.toPlainDate()) ? '' : ` on ${value.wall.toPlainDate()}`})` : ''
+  return `${clock(at)}${own}`
 }
 
 /**
  * A short picture of where things stand, given at the start of every session so
  * the agent doesn't have to guess where to look (docs/design/concept.md, "Session 模型").
  */
-export function digest(items: Item[], now = new Date()) {
-  const today = localDate(now)
+export function digest(items: Item[], now: Temporal.ZonedDateTime) {
+  const zone = now.timeZoneId
+  const today = now.toPlainDate().toString()
   const todos = items.filter((i) => i.kind === 'todo')
   const line = (t: Item) => {
     const d = t.data
-    const when = typeof d.scheduled === 'string' ? d.scheduled.slice(11) : 'no time'
+    const when = whenText(d.scheduled, zone) ?? 'no time'
     const flags = [d.state !== 'open' && d.state, d.proposed && 'time proposed'].filter(Boolean).join(', ')
     return `- ${when} ${d.title} (${t.id}, ${d.estimate ?? '?'} min${flags ? `, ${flags}` : ''})`
   }
-  const todayTodos = todos.filter((t) => typeof t.data.scheduled === 'string' && t.data.scheduled.startsWith(today))
-  todayTodos.sort((a, b) => String(a.data.scheduled).localeCompare(String(b.data.scheduled)))
+  // Today is where each time falls from here, not the date written in front of it (docs/design/time.md, "Days").
+  const scheduled = (t: Item) => readTime(t.data.scheduled)
+  const todayTodos = todos.filter((t) => {
+    const value = scheduled(t)
+    return value !== null && dateOf(value, zone).toString() === today
+  })
+  todayTodos.sort((a, b) => (epochOf(scheduled(a), zone) ?? 0) - (epochOf(scheduled(b), zone) ?? 0))
   const backlog = todos.filter((t) => !t.data.scheduled && t.data.state !== 'done')
   const waitingNotes = items.filter((i) => i.kind === 'note' && i.data.state === 'new').length
   const goals = items.filter((i) => i.kind === 'goal' && i.data.state === 'active')

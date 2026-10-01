@@ -9,6 +9,7 @@ import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { shell } from 'electron'
 import type { CalendarEvent } from '../../shared/calendar'
+import { stamp } from '../../shared/time'
 import { getSecret, storeSecret } from '../secrets'
 
 // Tests point these at a local server that answers the way Google does.
@@ -184,7 +185,9 @@ export async function googleCalendars(account: string): Promise<GoogleCalendar[]
 
 interface GoogleTime {
   date?: string
+  /** RFC 3339 with an offset, or without one when `timeZone` says which. */
   dateTime?: string
+  timeZone?: string
 }
 
 interface GoogleEvent {
@@ -216,18 +219,28 @@ export function plainText(html: string) {
     .trim()
 }
 
-const pad = (n: number) => String(n).padStart(2, '0')
-const local = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+/**
+ * A Google time as Jezo keeps it (docs/design/calendar.md, "Times from each
+ * source"): the moment, with the offset of the event's own zone when Google
+ * names one, so its clock there can be shown.
+ */
+function moment(time: GoogleTime, fallbackZone?: string): string {
+  const zone = time.timeZone ?? fallbackZone
+  const at = /([+-]\d{2}:\d{2}|Z)$/.test(time.dateTime!)
+    ? Temporal.Instant.from(time.dateTime!)
+    : Temporal.PlainDateTime.from(time.dateTime!).toZonedDateTime(zone ?? 'UTC', { disambiguation: 'compatible' }).toInstant()
+  return stamp(zone ?? 'UTC', at)
+}
 
-/** One calendar's events between two local dates (`to` exclusive), repeats expanded by Google. */
-export async function googleEvents(account: string, calendar: string, from: string, to: string): Promise<Omit<CalendarEvent, 'calendar'>[]> {
+/** One calendar's events between two moments, repeats expanded by Google. */
+export async function googleEvents(account: string, calendar: string, from: Temporal.Instant, to: Temporal.Instant): Promise<Omit<CalendarEvent, 'calendar'>[]> {
   const token = await accessToken(account)
   const events: Omit<CalendarEvent, 'calendar'>[] = []
   let page: string | undefined
   do {
-    const got = await request<{ items: GoogleEvent[]; nextPageToken?: string }>(token, `/calendars/${encodeURIComponent(calendar)}/events`, {
-      timeMin: new Date(`${from}T00:00`).toISOString(),
-      timeMax: new Date(`${to}T00:00`).toISOString(),
+    const got = await request<{ items: GoogleEvent[]; nextPageToken?: string; timeZone?: string }>(token, `/calendars/${encodeURIComponent(calendar)}/events`, {
+      timeMin: from.toString(),
+      timeMax: to.toString(),
       singleEvents: 'true',
       orderBy: 'startTime',
       maxResults: '2500',
@@ -239,9 +252,10 @@ export async function googleEvents(account: string, calendar: string, from: stri
       events.push({
         id: e.id,
         title: e.summary ?? '',
-        start: allDay ? e.start.date! : local(new Date(e.start.dateTime!)),
-        end: allDay ? (e.end.date ?? e.start.date!) : local(new Date(e.end.dateTime ?? e.start.dateTime!)),
+        start: allDay ? e.start.date! : moment(e.start, got.timeZone),
+        end: allDay ? (e.end.date ?? e.start.date!) : moment(e.end.dateTime ? e.end : e.start, got.timeZone),
         ...(allDay && { allDay: true }),
+        ...(!allDay && (e.start.timeZone ?? got.timeZone) && { zone: e.start.timeZone ?? got.timeZone }),
         ...(e.location && { location: e.location }),
         ...(e.description && { notes: plainText(e.description) }),
         ...(e.htmlLink && { url: e.htmlLink }),

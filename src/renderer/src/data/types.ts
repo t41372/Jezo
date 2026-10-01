@@ -61,10 +61,12 @@ export interface Todo {
   cue?: string
   estimateMinutes: number
   /**
-   * When it's scheduled, in hours from midnight. Null means it's in the backlog.
-   * A proposed slot is a time the agent suggested and the user hasn't accepted.
+   * When it's scheduled: its day and hours from midnight in the device's zone,
+   * the moment, and what kind of time it is (docs/design/time.md). Null means
+   * it's in the backlog. A proposed slot is a time the agent suggested and the
+   * user hasn't accepted.
    */
-  slot: { date: ISODate; start: number; proposed?: boolean } | null
+  slot: (SlotInput & { at: number; kind: 'zoned' | 'moment'; zone?: string }) | null
   subtasks?: { text: string; done: boolean }[]
   /** The agent's reasoning for when and how long. */
   why?: string
@@ -78,6 +80,10 @@ export interface Todo {
   amount?: number
   /** When it was done, in milliseconds since the epoch. */
   completedAt?: number
+  /** How long it took, from two exact records; not for records written before they carried a zone. */
+  elapsedMinutes?: number
+  /** The time fields as written, so a change keeps what it doesn't touch (docs/design/time.md). */
+  times?: { scheduled?: string; started?: string; completed?: string }
   /** Items it links to (docs/design/backend.md, "Links"). */
   links?: string[]
 }
@@ -92,6 +98,10 @@ export interface Note {
   date: ISODate
   /** Hours from midnight. */
   time: number
+  /** When it was written, in milliseconds since the epoch: what notes are ordered by. */
+  at: number
+  /** When it was written, as the file says it, so undoing a delete writes it back the same. */
+  created?: string
   /** Typed on the page, or sent from the ⌥X window. */
   source: 'page' | 'hotkey'
   /**
@@ -150,6 +160,8 @@ export interface CalendarEvent {
   date: ISODate
   start: number
   hours: number
+  /** Where a timed event ends, seen from the same zone: its own date and hours, which a clock change in between doesn't shift. */
+  ends?: { date: ISODate; hour: number }
   /** An all-day event starts at 0 and lasts whole days, so its hours are 24 per day. */
   allDay?: boolean
   /** The calendar's name, like 工作 or a subscription's name. */
@@ -203,4 +215,11 @@ export interface Experiment {
   arms: { label: string; condition?: string; periods: { from: ISODate; to: ISODate }[]; value?: string; basis?: string }[]
   conclusion?: string
   decision?: 'adopt' | 'rerun' | 'drop'
+}
+
+/** A time a GUI action names: a day and hours from midnight, read in the zone the action happened in. */
+export interface SlotInput {
+  date: ISODate
+  start: number
+  proposed?: boolean
 }

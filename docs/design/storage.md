@@ -113,6 +113,7 @@ Files don't make sync between devices impossible (SilverBullet merges outside an
 | Memory | the memory plugin's own choice (now MD + frontmatter) | its own directory | yes |
 | Local events | MD + frontmatter with `rrule` | 1 file per series | yes |
 | Habit, completion, and time logs | JSONL, append-only | 1 file per plugin per month | yes |
+| Automation history | JSONL, append-only (`automations/history/<id>.jsonl`) | 1 file per automation | yes; written by Jezo, not undoable ([automations.md](automations.md)) |
 | Manifests and schemas | YAML / JSON Schema | per plugin | yes |
 | Page layouts and overrides | YAML | 1 file per page | yes |
 | Connector mirrors | `.ics` / JSON cache | 1 per item | no (rebuildable) |

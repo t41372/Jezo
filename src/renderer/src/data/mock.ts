@@ -6,8 +6,12 @@
 
 import type {
   Note,
+  SlotInput,
   Todo,
 } from './types'
+
+/** A sample todo as the fixture writes it: its time is a day and hours, like a GUI change. */
+export type SampleTodo = Omit<Todo, 'slot'> & { slot: SlotInput | null }
 
 export const NOW = { date: '2026-09-29', hour: 8 + 40 / 60 }
 export const THIS_WEEK_MONDAY = '2026-09-28'
@@ -20,9 +24,9 @@ const day = (offset: number) => {
 const at = (h: number, m = 0) => h + m / 60
 
 let n = 0
-const todo = (t: Omit<Todo, 'id' | 'notes'> & { id?: string; notes?: string }): Todo => ({ id: `t-x${n++}`, notes: '', ...t })
+const todo = (t: Omit<SampleTodo, 'id' | 'notes'> & { id?: string; notes?: string }): SampleTodo => ({ id: `t-x${n++}`, notes: '', ...t })
 
-export const todos: Todo[] = [
+export const todos: SampleTodo[] = [
   // Today. The morning session proposed everything except the run, which was already done.
   todo({ id: 't-1', goalId: 'g-2', title: '晨跑 5 km', amount: 5, cue: '起床喝完水', state: 'done', estimateMinutes: 35, slot: { date: day(1), start: at(7) } }),
   todo({
@@ -78,8 +82,8 @@ export const todos: Todo[] = [
 
 /** Where the agent would put backlog items if asked to find time, and why. */
 
-/** Things jotted down in 隨手記, one of each kind the agent sorts into. */
-export const notes: Note[] = [
+/** Things jotted down in 隨手記, one of each kind the agent sorts into, as the fixture writes them: a day and hours. */
+export const notes: Omit<Note, 'at'>[] = [
   { id: 'n-1', text: '記得回房東訊息，問冷氣什麼時候修', date: day(0), time: at(22, 14), source: 'hotkey', state: 'new' },
   { id: 'n-2', text: '想學吉他，至少能彈幾首歌', date: day(0), time: at(23, 2), source: 'page', state: 'new' },
   { id: 'n-3', text: '我早上腦袋比較清楚，下午開會比較不累', date: day(1), time: at(7, 48), source: 'page', state: 'new' },

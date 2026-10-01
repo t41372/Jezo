@@ -155,7 +155,11 @@
     "files_one": "Changed {{count}} file",
     "files_other": "Changed {{count}} files",
     "kept_one": "Undone. You changed {{count}} file afterward, so it was left alone.",
-    "kept_other": "Undone. You changed {{count}} files afterward, so they were left alone."
+    "kept_other": "Undone. You changed {{count}} files afterward, so they were left alone.",
+    "interrupted": "didn’t finish",
+    "interruptedSummary": "Jezo quit or crashed partway through. Below is what it had changed.",
+    "continue": "Continue",
+    "continuePrefill": "Last time this was cut off partway. Look at the files as they are now and finish it; don't redo what's already done."
   },
   "connections": {
     "intro": "Once connected, your calendars’ events show on the Calendar page, and the agent sees them when it plans.",
@@ -227,7 +231,8 @@
     "googleWaiting": "Waiting for the browser…",
     "googleSignedOut": "Needs connecting again: {{error}}",
     "googleDone": "You're connected. Close this tab and go back to Jezo.",
-    "googleFailedPage": "That didn't connect. Go back to Jezo to see what happened."
+    "googleFailedPage": "That didn't connect. Go back to Jezo to see what happened.",
+    "unknownZone": "Some events use the time zone “{{zone}}”, which this calendar doesn’t define. Jezo shows their times as written, wherever you are."
   },
   "install": {
     "add": "Install",
@@ -289,6 +294,7 @@
     "add": "Add",
     "addPrefill": "Add an automation for me: ",
     "none": "No automations yet.",
+    "inZone": "{{words}} ({{city}} time)",
     "daily": "Every day at {{time}}",
     "weekly": "Every {{day}} at {{time}}",
     "range": "{{from}} to {{to}} at {{time}}",
@@ -301,7 +307,41 @@
     "remove": "Delete",
     "removed": "Deleted “{{name}}”",
     "request": "What the agent is asked",
-    "requestHint": "This is what the agent gets when it runs. Changes are saved when you leave the box, and used from the next run."
+    "requestHint": "This is what the agent gets when it runs. Changes are saved when you leave the box, and used from the next run.",
+    "window": {
+      "no": "If missed, it doesn’t run late",
+      "for": "If {{time}} is missed, it runs once within {{minutes}} minutes",
+      "until": "If {{time}} is missed, it runs once before {{until}} that day",
+      "untilPick": "Runs once before this time that day",
+      "endOfDay": "If {{time}} is missed, it runs once before the day ends",
+      "next": "If {{time}} is missed, it runs once any time before the next one",
+      "forAny": "If a time is missed, it runs once within {{minutes}} minutes, unless the next one comes first",
+      "untilAny": "If a time is missed, it runs once before {{until}} that day",
+      "endOfDayAny": "If a time is missed, it runs once before the day ends",
+      "nextAny": "If a time is missed, it runs once any time before the next one"
+    },
+    "history": {
+      "title": "Recently",
+      "onTime": "The {{slot}} run",
+      "late": "The {{slot}} run, started late",
+      "manual": "Run by hand {{at}}",
+      "open": "Open the conversation",
+      "expired": "{{slot}} was missed and its window closed; it didn’t run",
+      "replaced_one": "{{count}} time missed (from {{slot}}), replaced by a later one",
+      "replaced_other": "{{count}} times missed (from {{slot}}), replaced by a later one",
+      "moved_one": "{{count}} time not worked out while changing zones (from {{slot}})",
+      "moved_other": "{{count}} times not worked out while changing zones (from {{slot}})",
+      "waiting": "The {{slot}} run is waiting for a model; it can still start within its window",
+      "outcome": {
+        "completed": "finished",
+        "waiting": "waiting for your answer",
+        "failed": "went wrong",
+        "unreachable": "couldn’t reach the model",
+        "stopped": "stopped",
+        "interrupted": "didn’t finish: Jezo quit or crashed",
+        "running": "running now"
+      }
+    }
   },
   "problems": {
     "intro": "These files don’t match their format, or their id was changed. They still show where they belong, but some fields may not be read.",

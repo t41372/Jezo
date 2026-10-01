@@ -3,6 +3,7 @@
     "target": "ES2023",
     "lib": [
       "ES2023",
+      "ESNext.Temporal",
       "DOM",
       "DOM.Iterable"
     ],
@@ -23,5 +24,8 @@
     "src/renderer/src/**/*",
     "src/preload/*.d.ts",
     "src/shared/**/*"
+  ],
+  "exclude": [
+    "**/*.test.ts"
   ]
 }

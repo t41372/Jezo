@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Kbd } from '@/components/ui/kbd'
 import { useTranslation } from 'react-i18next'
 import { useStore } from '@/data/store'
-import { clock, dayLabel } from '@/lib/time'
+import { clock, dayLabel, inZone } from '@/lib/time'
 import { sessionTitle } from './session'
 
 /** Past conversations, newest first, grouped by day. */
@@ -13,8 +13,10 @@ export function Sessions() {
   const current = useStore((s) => s.sessionId)
   const openSession = useStore((s) => s.openSession)
   const today = useStore((s) => s.now.date)
+  const zone = useStore((s) => s.zone)
   const { t } = useTranslation('chat')
-  const days = [...new Set(sessions.map((s) => s.date))]
+  const when = (s: (typeof sessions)[number]) => inZone(s.started, zone)
+  const days = [...new Set(sessions.map((s) => when(s).date))]
 
   return (
     <div className="flex w-[250px] shrink-0 flex-col gap-1 overflow-auto border-r px-2.5 py-3">
@@ -27,7 +29,7 @@ export function Sessions() {
         <section key={day} className="flex flex-col gap-1">
           <h3 className="px-2.5 pt-2.5 pb-1 text-[11.5px] text-muted-foreground">{dayLabel(day, today)}</h3>
           {sessions
-            .filter((s) => s.date === day)
+            .filter((s) => when(s).date === day)
             .map((s) => (
               <button
                 key={s.id}
@@ -39,7 +41,7 @@ export function Sessions() {
               >
                 <span className={cn('text-[13.5px]', s.id === current ? 'font-semibold' : 'font-medium')}>{sessionTitle(s)}</span>
                 <span className="text-[11.5px] text-muted-foreground">
-                  {clock(s.time)} · {t(`trigger.${s.trigger}.short`, { ns: 'common' })}
+                  {clock(when(s).start)} · {t(`trigger.${s.trigger}.short`, { ns: 'common' })}
                 </span>
               </button>
             ))}

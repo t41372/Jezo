@@ -1,5 +1,10 @@
-# Jezo
-AI native todo, goal, life manager to let you focus on the present
+<p align="center"><img src="docs/brand/icon.svg" width="128" alt=""></p>
+
+<h1 align="center">Jezo</h1>
+
+<p align="center">A local-first personal agent that helps turn your goals into plans and follow-through so you can focus on the present.</p>
+
+The name comes from 節奏 (jiézòu), Chinese for rhythm.
 
 ## Development
 

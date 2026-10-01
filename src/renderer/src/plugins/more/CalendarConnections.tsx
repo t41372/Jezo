@@ -18,6 +18,20 @@ import { ago } from '@/lib/time'
 const reason = (error: unknown) => String((error as Error)?.message ?? error).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
 
 function SourceState({ source }: { source: CalendarSource }) {
+  const { t } = useTranslation('more')
+  return (
+    <>
+      <SourceSync source={source} />
+      {source.problems?.map((p) => (
+        <span key={p.zone} className="block text-warn" data-source-problem={p.kind}>
+          {t('calendars.unknownZone', { zone: p.zone })}
+        </span>
+      ))}
+    </>
+  )
+}
+
+function SourceSync({ source }: { source: CalendarSource }) {
   const { t, i18n } = useTranslation('more')
   if (source.state === 'syncing') return <>{t('calendars.syncing')}</>
   if (source.state === 'error') return <span className="text-destructive">{t('calendars.failed', { error: source.error })}</span>

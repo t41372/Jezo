@@ -25,7 +25,7 @@ import { Kbd } from '@/components/ui/kbd'
 import type { QuickCommand } from '../../shared/bridge'
 import type { SessionView } from '../../shared/session'
 import { markPlatform, useDarkClass } from './app/theme'
-import { stamp } from './data/entities'
+import { stamp } from '../../shared/time'
 import { traditional } from './lib/chinese'
 import { useDictation } from './lib/mic'
 
@@ -74,7 +74,7 @@ function Quick() {
   const note = (content: string) => {
     setMode({ kind: 'noted' })
     setText('')
-    window.jezo.workspace.create('note', { created: stamp(), source: 'hotkey', state: 'new' }, `${content}\n`).catch(console.error)
+    window.jezo.time.zone().then((zone) => window.jezo.workspace.create('note', { created: stamp(zone), source: 'hotkey', state: 'new' }, `${content}\n`)).catch(console.error)
     window.setTimeout(() => window.jezo.quick.hide(), 600)
   }
 

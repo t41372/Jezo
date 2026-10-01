@@ -12,7 +12,7 @@ schema:
     cue: { type: string }
     estimate: { type: integer, minimum: 1 }
     amount: { type: number, minimum: 0 }
-    scheduled: { type: string, pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$" }
+    scheduled: { type: string, format: jezo-time }
     proposed: { type: boolean }
     rank: { type: string }
     steps:
@@ -24,6 +24,6 @@ schema:
           text: { type: string }
           done: { type: boolean }
     why: { type: string }
-    started: { type: string, pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}" }
-    completed: { type: string, pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}" }
-    created: { type: string }
+    started: { type: string, format: jezo-record }
+    completed: { type: string, format: jezo-record }
+    created: { type: string, format: jezo-record }

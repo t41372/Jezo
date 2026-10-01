@@ -1,6 +1,8 @@
 // Calendars as the main process sends them to the windows
-// (docs/design/calendar.md). Times are local, written like the rest of Jezo:
-// 2026-09-29T09:30, or 2026-09-29 for a whole day.
+// (docs/design/calendar.md). An event's times keep the meaning its calendar
+// gave them, in the time module's forms (docs/design/time.md): a moment with
+// the offset of the event's own zone ('2026-10-05T09:00:00-04:00'), a local
+// time for an event that floats ('2026-10-05T09:00'), or a day ('2026-10-05').
 
 /** An event on one of the user's calendars. Read-only in Jezo. */
 export interface CalendarEvent {
@@ -13,6 +15,8 @@ export interface CalendarEvent {
   /** Exclusive: an all-day event on the 1st ends on the 2nd. */
   end: string
   allDay?: boolean
+  /** The zone the calendar keeps the event in, when it says: "America/New_York", or a name only the feed defines. For showing the event's own clock. */
+  zone?: string
   location?: string
   /** The event's description. Outside content: it can say anything. */
   notes?: string
@@ -44,7 +48,13 @@ export interface CalendarSource {
   syncedAt?: string
   /** What went wrong, in the words of whatever failed. */
   error?: string
+  /** What it read but couldn't be sure of. */
+  problems?: SourceProblem[]
 }
+
+export type SourceProblem =
+  /** Events use a time zone the feed names but doesn't define; they're shown as the clock written. */
+  { kind: 'unknown-zone'; zone: string }
 
 export interface CalendarStatus {
   sources: CalendarSource[]
