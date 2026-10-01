@@ -10,7 +10,7 @@
 
 import { Cron } from 'croner'
 import { BrowserWindow, Notification, powerMonitor } from 'electron'
-import type { AutomationRow, Schedule as ScheduleTimes } from '../../shared/bridge'
+import type { AutomationHistoryView, AutomationRow, Schedule as ScheduleTimes } from '../../shared/bridge'
 import type { Trigger } from '../../shared/session'
 import { now, stamp, type Zone } from '../../shared/time'
 import type { Item } from '../../shared/workspace'
@@ -18,7 +18,7 @@ import { deviceZone } from '../clock'
 import { newId } from '../workspace/files'
 import type { Workspace } from '../workspace/workspace'
 import { parseCatchUp, type CatchUp } from '../../shared/catch-up'
-import { AutomationHistory, summarize, type HistoryEvent, type Slot } from './history'
+import { AutomationHistory, summarize, type HistoryEvent, type HistoryProblem, type Slot } from './history'
 import type { AgentHost, Outcome } from './host'
 import type { Providers } from './providers'
 
@@ -54,8 +54,12 @@ export function latestStart(catchUp: CatchUp, due: Temporal.ZonedDateTime, next:
         return due.toInstant()
       case 'for':
         return due.toInstant().add({ minutes: catchUp.minutes })
-      case 'until':
-        return day.toZonedDateTime({ timeZone: due.timeZoneId, plainTime: { hour: catchUp.hour, minute: catchUp.minute } }).toInstant()
+      case 'until': {
+        // That clock after the due time: on its date, or the next day's for an evening run "until 02:00".
+        // The date moves, then the clock is placed, so a clock in a gap shifts the way every time does.
+        const on = (date: Temporal.PlainDate) => date.toZonedDateTime({ timeZone: due.timeZoneId, plainTime: { hour: catchUp.hour, minute: catchUp.minute } }).toInstant()
+        return Temporal.Instant.compare(on(day), due.toInstant()) > 0 ? on(day) : on(day.add({ days: 1 }))
+      }
       case 'end-of-day':
         return day.add({ days: 1 }).toZonedDateTime(due.timeZoneId).toInstant()
       case 'next':
@@ -107,9 +111,15 @@ interface Due {
 
 export class Schedule {
   private timer: NodeJS.Timeout | null = null
+  private launchTimer: NodeJS.Timeout | null = null
+  private stopped = false
   private history: AutomationHistory
-  /** One check at a time, whatever asked for it: launch, waking, unlocking, focus, the tick. */
+  /** One check at a time, whatever asked for it: launch, waking, unlocking, focus, the tick. A check never waits for a run. */
   private checking: Promise<void> = Promise.resolve()
+  /** Times found due and not started yet, one per automation: the worker starts them one at a time. */
+  private pending = new Map<string, Due>()
+  /** The worker, while it's going. */
+  private working: Promise<void> | null = null
   /**
    * Automations with a run going or about to start, and its conversation once there
    * is one. Taken before anything is awaited, so two starts can't both get through.
@@ -119,6 +129,7 @@ export class Schedule {
   private seenOff = new Set<string>()
   /** The automations there when Jezo started: their latest time may still be due. One added since starts fresh. */
   private atLaunch = new Set<string>()
+  private historyListeners = new Set<(id: string) => void>()
 
   constructor(
     private workspace: Workspace,
@@ -131,8 +142,6 @@ export class Schedule {
     })
   }
 
-  private historyListeners = new Set<(id: string) => void>()
-
   /** Called when an automation's history gets an event. */
   onHistory(listener: (id: string) => void) {
     this.historyListeners.add(listener)
@@ -141,13 +150,16 @@ export class Schedule {
 
   async start() {
     this.atLaunch = new Set(this.automations().map((i) => i.id))
-    // Turned off and on again between two checks (or while a long run held them up) is still a pause.
+    // Turned off and on again between two checks is still a pause.
     this.workspace.onChange(({ changed }) => {
       for (const item of changed) if (item.kind === 'automation' && item.data.state !== 'on') this.seenOff.add(item.id)
     })
-    // A conversation retried by the user after its model couldn't be reached: its outcome is the attempt's now.
+    // Retrying a run that couldn't reach its model, in its conversation, takes its time back first.
+    this.host.beforeRetry((session) => this.resume(session))
+    // A run ending frees the worker, and a chat ending lets waiting background work start.
     this.host.onFinished((session, automation, outcome) => {
-      if (automation && outcome && outcome !== 'unreachable') void this.reclaim(automation.id, session, outcome)
+      if (automation && outcome) void this.endResumed(automation.id, session, outcome)
+      this.work()
     })
     await this.endInterrupted()
     this.timer = setInterval(() => void this.check(), 30_000)
@@ -158,10 +170,7 @@ export class Schedule {
     this.launchTimer = setTimeout(() => void this.check(), 10_000)
   }
 
-  private launchTimer: NodeJS.Timeout | null = null
-  private stopped = false
-
-  /** Quitting: nothing new starts, and a check already going admits nothing more. */
+  /** Quitting: nothing new starts. */
   stop() {
     this.stopped = true
     if (this.timer) clearInterval(this.timer)
@@ -175,15 +184,18 @@ export class Schedule {
   /** Runs that were going when Jezo quit or crashed. They aren't run again: they may already have changed files. */
   private async endInterrupted() {
     for (const item of this.automations()) {
-      for (const claim of summarize(await this.history.read(item.id)).unfinished) {
+      const { events, problems } = await this.history.read(item.id)
+      if (problems.length) continue
+      for (const claim of summarize(events).unfinished) {
         await this.history.append(item.id, { type: 'ended', attempt: claim.attempt, outcome: 'interrupted', at: stamp(deviceZone()) })
       }
     }
   }
 
   /**
-   * Looks at every automation, and runs what's due, one at a time. Calls made while
-   * one is going wait for it. `rescan` reads the workspace's files again first.
+   * Looks at every automation and notes what's due, then lets the worker start
+   * it. `rescan` reads the workspace's files again first. A check is short: it
+   * never waits for a run, so a time that comes due during one is seen on time.
    */
   check(options: { rescan?: boolean } = {}) {
     this.checking = this.checking.then(() => this.checkNow(options)).catch((error) => console.error('Checking automations failed:', error))
@@ -193,33 +205,52 @@ export class Schedule {
   private async checkNow({ rescan = false }: { rescan?: boolean }) {
     if (this.stopped) return
     if (rescan) await this.workspace.rescan()
-    const due: Due[] = []
     for (const item of this.automations()) {
       if (this.running.has(item.id)) continue
       try {
-        const found = await this.dueNow(item)
-        if (found) due.push(found)
+        const queued = this.pending.get(item.id)
+        const found = await this.dueNow(item, { found: queued })
+        if (found) this.pending.set(item.id, found)
+        else this.pending.delete(item.id)
       } catch (error) {
         console.error(`Checking ${item.id} failed:`, error)
       }
     }
-    // The oldest first: Sunday's review before Monday's morning plan, which can then use it.
-    due.sort((a, b) => Temporal.ZonedDateTime.compare(a.due, b.due) || Temporal.Instant.compare(a.latest, b.latest))
-    const batch: { attempt: string; name: string; session: string; outcome: Outcome }[] = []
-    for (const d of due) {
-      if (this.stopped || !this.reserve(d.item.id)) continue
-      try {
-        const ran = await this.runDue(d)
-        if (ran?.late) batch.push({ ...ran, name: d.data.name })
-      } finally {
-        this.release(d.item.id)
+    this.work()
+  }
+
+  /**
+   * Starts pending times one at a time, the oldest due first: Sunday's review
+   * before Monday's morning plan, which can then use it. Background work waits
+   * while the user is chatting. Late runs started together share one notification.
+   */
+  private work() {
+    if (this.working || this.stopped) return
+    this.working = (async () => {
+      const batch: { attempt: string; name: string; session: string; outcome: Outcome; id: string }[] = []
+      while (!this.stopped && this.pending.size && !this.host.userBusy()) {
+        const next = [...this.pending.values()].sort((a, b) => Temporal.ZonedDateTime.compare(a.due, b.due) || Temporal.Instant.compare(a.latest, b.latest))[0]
+        this.pending.delete(next.item.id)
+        if (!this.reserve(next.item.id)) continue
+        try {
+          const ran = await this.runDue(next)
+          if (ran?.late) batch.push({ ...ran, name: next.data.name, id: next.item.id })
+        } catch (error) {
+          console.error(`Running ${next.item.id} failed:`, error)
+        } finally {
+          this.release(next.item.id)
+        }
       }
-    }
-    // Late runs found together get one notification, once they've all ended; none when nothing is waiting for the user.
-    const ready = batch.filter((b) => b.outcome === 'completed' || b.outcome === 'waiting')
-    if (ready.length && this.notify(ready[0].session, ready.length === 1 ? ready[0].name : null, ready.length)) {
-      await this.history.append(due[0].item.id, { type: 'notified', attempts: ready.map((r) => r.attempt), at: stamp(deviceZone()) })
-    }
+      // None when nothing is waiting for the user.
+      const ready = batch.filter((b) => b.outcome === 'completed' || b.outcome === 'waiting')
+      if (ready.length && this.notify(ready[0].session, ready.length === 1 ? ready[0].name : null, ready.length)) {
+        await this.history.append(ready[0].id, { type: 'notified', attempts: ready.map((r) => r.attempt), at: stamp(deviceZone()) })
+      }
+    })().finally(() => {
+      this.working = null
+      // Found while the last one ran.
+      if (this.pending.size && !this.host.userBusy()) this.work()
+    })
   }
 
   /** Takes an automation for one run. False when one is going or starting. */
@@ -243,22 +274,48 @@ export class Schedule {
     this.running.delete(id)
   }
 
-  /** A retried conversation of an attempt that couldn't reach its model ended otherwise: the attempt did run. */
-  private async reclaim(id: string, session: string, outcome: Outcome) {
-    const events = await this.history.read(id)
-    const claim = [...events].reverse().find((e) => e.type === 'claimed' && e.session === session)
-    if (claim?.type !== 'claimed') return
-    const ended = [...events].reverse().find((e) => e.type === 'ended' && e.attempt === claim.attempt)
-    if (ended?.type === 'ended' && ended.outcome === 'unreachable') await this.history.append(id, { type: 'ended', attempt: claim.attempt, outcome, at: stamp(deviceZone()) })
+  /**
+   * Before the user retries an automation's conversation: if its attempt couldn't
+   * reach the model, its time was given back, so it's taken again first, or the
+   * scheduler could start the same time beside it.
+   */
+  private async resume(session: string) {
+    for (const item of this.automations()) {
+      const { events } = await this.history.read(item.id)
+      const claim = events.find((e) => e.type === 'claimed' && e.session === session)
+      if (claim?.type !== 'claimed') continue
+      if (summarize(events).ended.get(claim.attempt)?.outcome !== 'unreachable') return
+      if (!this.reserve(item.id)) throw new Error(`${String(item.data.name)} is already running.`)
+      this.running.get(item.id)!.started(session)
+      this.pending.delete(item.id)
+      await this.history.append(item.id, { type: 'resumed', attempt: claim.attempt, at: stamp(deviceZone()) })
+      return
+    }
   }
+
+  /** A resumed attempt's conversation ended: so does the attempt. One the scheduler started ends in attempt(). */
+  private async endResumed(id: string, session: string, outcome: Outcome) {
+    if (this.attempts.has(session) || this.running.get(id)?.id !== session) return
+    this.release(id)
+    const { events } = await this.history.read(id)
+    const claim = events.find((e) => e.type === 'claimed' && e.session === session)
+    if (claim?.type === 'claimed' && !summarize(events).ended.has(claim.attempt)) {
+      await this.history.append(id, { type: 'ended', attempt: claim.attempt, outcome, at: stamp(deviceZone()) })
+    }
+  }
+
+  /** Conversations the scheduler started and is waiting on. */
+  private attempts = new Set<string>()
 
   /**
    * The automation's most recent time, if it should run now; records times that
    * pass without a run. `manual` is Run now, which takes a time that's waiting
    * for a model whenever the user presses it, not when the next retry is due.
-   * `found` is when an earlier check found it, for the look right before starting.
+   * `found` is the same time as an earlier check found it: on time or late is
+   * decided when it was first found, however long it then waits. A newer time
+   * that replaced it is found now.
    */
-  private async dueNow(item: Item, { manual = false, found }: { manual?: boolean; found?: Temporal.Instant } = {}): Promise<Due | null> {
+  private async dueNow(item: Item, { manual = false, found }: { manual?: boolean; found?: Due } = {}): Promise<Due | null> {
     const data = item.data as unknown as AutomationData
     if (data.state !== 'on') {
       this.seenOff.add(item.id)
@@ -266,7 +323,9 @@ export class Schedule {
     }
     const zone = data.zone && data.zone !== 'local' ? data.zone : deviceZone()
     const at = now()
-    const events = await this.history.read(item.id)
+    const { events, problems } = await this.history.read(item.id)
+    // A history that can't be fully read doesn't say what ran: no time starts on its own until it's fixed.
+    if (problems.length) return null
     let summary = summarize(events)
     const runs = cron(data.schedule, zone)
     if (!runs) return null
@@ -281,7 +340,7 @@ export class Schedule {
     if (!summary.watching) {
       const latest = latestRun(runs, at)
       await this.history.append(item.id, { type: 'watching', at: stamp(zone, latest ? latest.getTime() : at), zone })
-      summary = summarize(await this.history.read(item.id))
+      summary = summarize((await this.history.read(item.id)).events)
     }
     const previous = latestRun(runs, at)
     if (!previous) return null
@@ -290,7 +349,7 @@ export class Schedule {
     if (Temporal.Instant.compare(due.toInstant(), watchingAt) < 0) return null
     const slot = slotOf(due)
     // The same slot never runs twice: crossing between Arizona and California, or flying west into the same date.
-    if (summary.claimed.has(slot)) return null
+    if (summary.claimed.has(slot) || summary.skippedByUser.has(slot)) return null
     let catchUp: CatchUp
     try {
       catchUp = parseCatchUp(data)
@@ -300,7 +359,7 @@ export class Schedule {
     const nextRun = runs.nextRun(new Date(due.epochMilliseconds))
     const latest = latestStart(catchUp, due, nextRun ? Temporal.Instant.fromEpochMilliseconds(nextRun.getTime()) : null)
     // Picked up within two minutes, it's on time whatever its window, even if it then waits behind another run.
-    const pickedUp = found ?? at
+    const pickedUp = found?.slot === slot ? found.found : at
     const late = pickedUp.epochMilliseconds - due.epochMilliseconds > ON_TIME_MS
     // A zone change is recorded, so a relaunch doesn't announce the same move again.
     const previousZone = summary.zone
@@ -326,7 +385,7 @@ export class Schedule {
     const fresh = missed.filter((m) => !summary.skipped.has(m))
     if (fresh.length) {
       await this.history.append(item.id, { type: 'skipped', slots: fresh, count: fresh.length, reason: previousZone !== zone ? 'zone-changed' : 'replaced', at: stamp(zone, at) })
-      summary = summarize(await this.history.read(item.id))
+      summary = summarize((await this.history.read(item.id)).events)
     }
 
     if (late && Temporal.Instant.compare(at, latest) >= 0) {
@@ -348,14 +407,13 @@ export class Schedule {
   }
 
   /**
-   * Runs a time that was found due, with the automation already reserved. It's
-   * looked at again right before starting, from the file as it is now: a run
-   * queued at 17:59 behind another doesn't start at 18:02, and one turned off
-   * meanwhile doesn't start at all.
+   * Runs a pending time, with the automation already reserved. It's looked at
+   * again right before starting, from the file as it is now: a late run queued at
+   * 17:59 doesn't start at 18:02, and one turned off meanwhile doesn't start.
    */
   private async runDue(queued: Due) {
     const item = this.workspace.get(queued.item.id)
-    const d = item?.kind === 'automation' && !item.problems?.length ? await this.dueNow(item, { found: queued.found }) : null
+    const d = item?.kind === 'automation' && !item.problems?.length ? await this.dueNow(item, { found: queued }) : null
     if (!d) return null
     // Without a model it would only record a failure every time; it waits, and the window keeps it.
     // A local server that wasn't running a moment ago may be now.
@@ -383,13 +441,18 @@ export class Schedule {
         ...(scheduled && { slot: scheduled.slot, due: stamp(scheduled.due.timeZoneId, scheduled.due.toInstant()), late: scheduled.late }),
       }),
     })
+    this.attempts.add(session)
     this.running.get(item.id)?.started(session)
-    const outcome = await done
-    await this.history.append(item.id, { type: 'ended', attempt, outcome, at: stamp(zone) })
-    if (outcome === 'unreachable' && scheduled) await this.history.append(item.id, { type: 'retry', slot: scheduled.slot, at: stamp(zone) })
-    // On time, it says so itself; late runs found together share one notification.
-    if (scheduled && !scheduled.late && (outcome === 'completed' || outcome === 'waiting')) this.notify(session, data.name, 1)
-    return { attempt, session, outcome }
+    try {
+      const outcome = await done
+      await this.history.append(item.id, { type: 'ended', attempt, outcome, at: stamp(zone) })
+      if (outcome === 'unreachable' && scheduled) await this.history.append(item.id, { type: 'retry', slot: scheduled.slot, at: stamp(zone) })
+      // On time, it says so itself; late runs started together share one notification.
+      if (scheduled && !scheduled.late && (outcome === 'completed' || outcome === 'waiting')) this.notify(session, data.name, 1)
+      return { attempt, session, outcome }
+    } finally {
+      this.attempts.delete(session)
+    }
   }
 
   /**
@@ -399,7 +462,7 @@ export class Schedule {
    */
   private async note(d: Due) {
     const at = now().toZonedDateTimeISO(d.zone)
-    const summary = summarize(await this.history.read(d.item.id))
+    const summary = summarize((await this.history.read(d.item.id)).events)
     const day = (z: Temporal.ZonedDateTime | Temporal.PlainDateTime) => `${z.toPlainDate().toLocaleString('en-US', { weekday: 'short' })} ${z.toPlainDate()}`
     const clock = (z: Temporal.ZonedDateTime | Temporal.PlainDateTime) => `${String(z.hour).padStart(2, '0')}:${String(z.minute).padStart(2, '0')}`
     const lateBy = Math.round((at.epochMilliseconds - d.due.epochMilliseconds) / 60_000)
@@ -428,6 +491,7 @@ export class Schedule {
     if (!this.reserve(id)) return this.running.get(id)!.session
     const { session } = this.running.get(id)!
     const data = item.data as unknown as AutomationData
+    this.pending.delete(id)
     void (async () => {
       // A time that's due and not yet run is taken by this run; otherwise it's a run of its own, and 08:00 still comes.
       const found = await this.dueNow(item, { manual: true })
@@ -440,14 +504,29 @@ export class Schedule {
     return session
   }
 
+  /** Skips the time that's due or waiting for a model, from the automation's page. The next time comes as usual. */
+  async skip(id: string) {
+    const item = this.workspace.get(id)
+    if (!item || item.kind !== 'automation' || this.running.has(id)) return
+    const due = await this.dueNow(item, { manual: true })
+    this.pending.delete(id)
+    if (due) await this.history.append(id, { type: 'skipped', slots: [due.slot], count: 1, reason: 'skipped', at: stamp(due.zone) })
+  }
+
+  /** Every automation history that can't be fully read, for 有問題的檔案. */
+  async problems(): Promise<HistoryProblem[]> {
+    const all = await Promise.all(this.automations().map(async (i) => (await this.history.read(i.id)).problems))
+    return all.flat()
+  }
+
   /**
    * What happened to an automation's times, newest first, for its page in 更多
    * (docs/design/automations.md, "What the GUI shows"): one row per time or run.
    */
-  async rows(id: string): Promise<AutomationRow[]> {
-    const events = await this.history.read(id)
+  async rows(id: string): Promise<AutomationHistoryView> {
+    const { events, problems } = await this.history.read(id)
     const summary = summarize(events)
-    const ended = new Map(events.filter((e) => e.type === 'ended').map((e) => [e.attempt, e]))
+    const ended = summary.ended
     const rows: AutomationRow[] = []
     let zone: string | undefined
     for (const e of events) {
@@ -464,7 +543,7 @@ export class Schedule {
       // Waiting for a model: only while that time can still run.
       if (e.type === 'retry' && !summary.claimed.has(e.slot) && !summary.skipped.has(e.slot) && !rows.some((r) => r.kind === 'waiting' && r.slot === e.slot)) rows.push({ kind: 'waiting', at: e.at, slot: e.slot })
     }
-    return rows.reverse().slice(0, 20)
+    return { rows: rows.reverse().slice(0, 20), problems }
   }
 
   /** Says the runs are ready. Clicking it opens the conversation. */

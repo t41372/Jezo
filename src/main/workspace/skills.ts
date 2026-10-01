@@ -5,7 +5,7 @@
 import { readdir, lstat } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { SkillInfo } from '../../shared/bridge'
-import { readIfExists } from './files'
+import { readIfExists, TEMP_SUFFIX } from './files'
 import { parse, patch } from './frontmatter'
 import type { Workspace } from './workspace'
 import { installedSkills } from './skill-install'
@@ -74,9 +74,13 @@ async function hasPrograms(root: string, prefix = ''): Promise<boolean> {
     if (entry.isDirectory()) {
       if (entry.name.startsWith('.') || entry.name === 'node_modules') continue
       if (await hasPrograms(join(root, entry.name), `${path}/`)) return true
-    } else if (entry.isFile()) {
-      const executable = !!((await lstat(join(root, entry.name))).mode & 0o111)
-      if (looksLikeProgram({ path, executable })) return true
+    } else if (entry.isFile() && !entry.name.endsWith(TEMP_SUFFIX)) {
+      // A write in progress is its temp file until it's renamed; a file can also go between readdir and lstat.
+      const info = await lstat(join(root, entry.name)).catch((error: NodeJS.ErrnoException) => {
+        if (error.code === 'ENOENT') return null
+        throw error
+      })
+      if (info && looksLikeProgram({ path, executable: !!(info.mode & 0o111) })) return true
     }
   }
   return false

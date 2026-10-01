@@ -64,7 +64,7 @@ test('every time keeps its zone and shows right wherever the device is, and reco
   moveTo('Asia/Tokyo')
   await app.evaluate(({ app }) => app.emit('browser-window-focus'))
   await expect.poll(() => app.evaluate(() => process.env.TZ)).toBe('Asia/Tokyo')
-  await expect(page.getByText('現在用Tokyo時間了')).toBeVisible()
+  await expect(page.getByText('現在用東京時間了')).toBeVisible()
 
   // Both show at the right moment in Tokyo's hours: 09:00 New York is 22:00, 07:00 Phoenix is 23:00.
   await openTodo('跟紐約的同事通話')
@@ -72,7 +72,7 @@ test('every time keeps its zone and shows right wherever the device is, and reco
   await page.keyboard.press('Escape')
   await openTodo('早上散步')
   await expect(drawerTime).toContainText('23:00')
-  await expect(page.locator('aside [data-zone-field]')).toContainText('Phoenix時間 07:00')
+  await expect(page.locator('aside [data-zone-field]')).toContainText('鳳凰城時間 07:00')
   await page.keyboard.press('Escape')
 
   // Nothing was rewritten by the move.
@@ -173,12 +173,15 @@ test.describe('planning in another zone', () => {
     },
   })
 
-  test('with the calendar showing Tokyo, found by its name in the app’s language, the picker reads clocks in Tokyo', async ({ jezo }) => {
+  test('with the calendar showing Tokyo, found by its city in the app’s language, the picker reads clocks in Tokyo', async ({ jezo }) => {
     const { page, read } = jezo
     await open(page, '行事曆')
     await page.locator('[data-calendar-zone]').click()
+    // Its city in Chinese is CLDR's; 日本, the name of its time, finds it too.
     await page.locator('[data-zone-picker] input').fill('日本')
-    await page.locator('[data-zone-picker] button').filter({ hasText: 'Tokyo' }).first().click()
+    await expect(page.locator('[data-zone-picker] button').filter({ hasText: '東京' }).first()).toBeVisible()
+    await page.locator('[data-zone-picker] input').fill('東京')
+    await page.locator('[data-zone-picker] button').filter({ hasText: '東京' }).first().click()
     await expect(page.locator('[data-calendar-zone]')).toHaveAttribute('data-calendar-zone', 'Asia/Tokyo')
 
     // 09:00 New York is 22:00 in Tokyo; the picker says which zone it reads.
@@ -186,7 +189,7 @@ test.describe('planning in another zone', () => {
     const drawerTime = page.locator('aside [data-slot-field]')
     await expect(drawerTime).toContainText('22:00')
     await drawerTime.click()
-    await expect(page.getByText('以Tokyo時間填寫')).toBeVisible()
+    await expect(page.getByText('以東京時間填寫')).toBeVisible()
     // 23:00 Tokyo is 10:00 New York, and the call stays a New York time.
     await page.getByLabel('時間').fill('23:00')
     await expect.poll(() => read('todos/items/t-call.md').data.scheduled).toBe(`${today}T10:00[America/New_York]`)

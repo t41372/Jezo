@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 import type { SkillInstallResult, SkillOrigin, SkillPreview } from '../../shared/skills'
 import { currentActing } from '../agent/acting'
-import { hashOf, newId, readIfExists } from './files'
+import { hashOf, newId, readIfExists, TEMP_SUFFIX } from './files'
 import { patch } from './frontmatter'
 import { archiveEntries, checkDownloadSize, discoverSkills, normalizeName, parseSource, textOf, usableEntries, type FoundSkill, type SkillFile, type Skipped } from './skill-source'
 import type { Workspace } from './workspace'
@@ -107,9 +107,14 @@ export async function folderFiles(root: string, includeHidden = false): Promise<
       if (entry.isSymbolicLink()) files.push({ path, type: 'symlink', data: new Uint8Array() })
       else if (entry.isDirectory()) {
         if (includeHidden || (!entry.name.startsWith('.') && entry.name !== 'node_modules')) await visit(absolute, `${path}/`)
-      } else if (entry.isFile()) {
-        const info = await lstat(absolute)
-        files.push({ path, type: 'file', data: await readFile(absolute), executable: !!(info.mode & 0o111) })
+      } else if (entry.isFile() && !entry.name.endsWith(TEMP_SUFFIX)) {
+        // A write in progress is its temp file until it's renamed; a file can also go between readdir and reading it.
+        try {
+          const info = await lstat(absolute)
+          files.push({ path, type: 'file', data: await readFile(absolute), executable: !!(info.mode & 0o111) })
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+        }
       }
     }
   }

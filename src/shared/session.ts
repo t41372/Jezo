@@ -104,6 +104,8 @@ export interface HistoryEntry {
   undone?: boolean
   /** The run was cut off, by Jezo quitting or crashing, before it finished: what it changed so far can still be undone. */
   interrupted?: boolean
+  /** Found at launch after a shell command was cut off: what differs from before the command, which may include edits made elsewhere meanwhile. */
+  found?: boolean
 }
 
 /** What undoing a change did: files left alone because someone changed them afterward. */

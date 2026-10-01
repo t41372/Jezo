@@ -22,7 +22,7 @@ Jezo used to start an automation only if it was due no more than its `late` minu
 - **An occurrence** is one scheduled opportunity. Its identity is the automation plus its slot: the date and clock in the schedule's zone.
   - A slot runs at most once. Crossing between Arizona and California, or flying west into the same date, doesn't run the same 08:00 twice.
 - **A schedule's zone** is local by default: the device's, following travel. An optional `zone` field fixes it to a named zone ("09:00 New York, wherever I am"), with the same values as in [time.md](time.md).
-- **Jezo checks** on launch, resume, unlock, window focus and the 30-second tick, all through one serialized path. Each check:
+- **Jezo checks** on launch, resume, unlock, window focus and the 30-second tick, all through one serialized path. A check never waits for a run: it notes what's due, and a worker starts it (below), so a time that comes due while another run is going is found on time. Each check:
   - reads the workspace first: on resume, unlock and focus it reads the files again, since file events can be missed while asleep;
   - finds the most recent due occurrence in the current zone;
   - makes it **pending** if its slot isn't claimed and its catch-up window is open;
@@ -49,7 +49,7 @@ Jezo used to start an automation only if it was due no more than its `late` minu
 |---|---|
 | `no` | Only on time. |
 | `for 90 minutes`, `for 2 hours` | Until that long after the due time. |
-| `until 18:00` | Until that clock on the occurrence's date, in the schedule's zone. |
+| `until 18:00` | Until that clock after the due time, in the schedule's zone: on the occurrence's date, or the next day's when the clock isn't after the due time. A 22:00 run `until 02:00` can start until 02:00 the next morning, the way Home Assistant reads a time window across midnight. |
 | `until end of day` | Until the next midnight there. |
 | `until next time` | Until the next occurrence. |
 
@@ -57,7 +57,6 @@ Jezo used to start an automation only if it was due no more than its `late` minu
 - **If `catch_up` is missing,** the window is `for 2 hours`.
 - **Problems are shown, not guessed past:**
   - a value that doesn't parse;
-  - an `until` clock before the due time;
   - a cron expression Croner rejects. The old manifest checked only the five-field shape, so a bad expression silently never ran.
 - **The parsing is deterministic.** No model decides whether a run starts.
 
@@ -79,11 +78,12 @@ An attempt is one run, scheduled or manual, in one conversation.
   - A reply cut off by the model's output limit is failed, not completed.
   - Quit cuts a run off as interrupted, the same as a crash: its changes stay listed as 沒跑完 with undo and 接著做.
   - A run that throws after changing files is failed, and its changes are in 修改紀錄 right away.
-- **One background attempt runs at a time,** oldest due first, then earliest latest start. A Sunday review therefore runs before Monday's morning plan, which can use it. Chats aren't held up by background work, and background work waits while the user is chatting.
+- **One background attempt runs at a time,** oldest due first, then earliest latest start. A Sunday review therefore runs before Monday's morning plan, which can use it. Chats aren't held up by background work, and background work waits while the user is chatting: the worker starts nothing while a conversation the user started is running.
+- **Retried only when nothing could have happened.** A run whose model call fails is `unreachable`, and its time can be tried again on its own, only if it never got as far as a tool that can change something. That's decided before each tool runs, from the tool's own definition (`readOnlyHint`; pi's read, ls and tool_search only read), not from what changed afterwards: a script that ran and then a model error is `failed`, and its time isn't run again.
 - **An interrupted attempt is shown at once and isn't rerun:** it may already have changed files. The user gets the partial conversation, undo for what it changed, and Continue, which asks the agent to pick up from the current files.
 - **Sleeping mid-run.** If the model call survived the sleep, the attempt goes on, and its next model call gets the time-jump note: "Paused from Thu 17:56 to Fri 09:00. This run was for Thursday; Friday's morning plan will run on its own." If the call didn't survive, the attempt ends as failed or interrupted.
 - **A model that can't be reached before anything happened** (none set up, or a local server still waking) makes the occurrence wait. It retries after 1, 5 and 15 minutes, then every 15, while the window is open, looking for local servers again each time. Every retry is recorded, so a relaunch doesn't reset them.
-  - If the user retries that conversation and it runs, the attempt's outcome is updated, so the scheduler doesn't run the time again.
+  - If the user retries that conversation, the scheduler takes the time back first (a `resumed` event), so it can't start the same time beside it; the attempt ends again with the retry.
 - **Run now:**
   - with an occurrence pending, takes it, even while it waits for its next retry;
   - with one running, opens it;
@@ -108,7 +108,8 @@ An attempt is one run, scheduled or manual, in one conversation.
   - Undo never records those writes.
   - The shell's before-and-after snapshot skips this folder, so a write during a shell command isn't blamed on the agent.
   - The workspace reader doesn't read it as items.
-- **A torn last line is ignored.** Damage elsewhere is a problem in the GUI.
+- **Events are appended,** so a write costs what it adds. A last line without its newline is an append a crash cut off: it never happened, and is cut before the next append.
+- **Any other line that can't be read is a problem** in 有問題的檔案 and on the automation's page, with its line number. While there is one, the history doesn't say for sure what ran, so that automation doesn't start on its own ("執行紀錄有讀不懂的地方…所以先不自己跑"). Fixing the file lifts it; nothing is written to the automation. Run now still works.
 - **A missing history never means "run everything".**
 - **Where checking starts:**
   - **An automation with no history that was there when Jezo started** begins watching at its latest time. That time can still run late, and nothing before it is counted. So the morning plan still runs when Jezo is opened for the first time at 08:05.
@@ -194,8 +195,7 @@ Also built:
 - **"Start Jezo at login"** is a switch in 設定. The OS keeps the setting, and a login launch opens no window. It isn't covered by E2E, since turning it on in a test would add the development build to the Mac's login items; try it in the packaged app.
 
 Not yet:
-- an `until` clock before the schedule's time, which the check doesn't flag yet;
-- a Stop and Skip on the page for a run that's waiting or running. The conversation has Stop; Skip waits until it's needed.
+- a Stop on the page for a run that's going; the conversation has Stop. Skip is on the line of a time that's waiting.
 
 ## Rejected
 

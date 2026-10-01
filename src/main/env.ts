@@ -9,6 +9,14 @@ import { app } from 'electron'
 // Tests run the app with data of their own.
 if (process.env.JEZO_USER_DATA) app.setPath('userData', process.env.JEZO_USER_DATA)
 
+/**
+ * Opened in the background: windows show without taking focus, and on macOS
+ * there's no Dock icon, so tests running dozens of copies don't pull the
+ * keyboard away from whatever the person at the computer is typing in.
+ */
+export const inBackground = process.env.JEZO_IN_BACKGROUND === '1'
+if (inBackground && process.platform === 'darwin') app.setActivationPolicy('accessory')
+
 // Jezo's agent keeps its own pi directory, so it never reads the user's own pi settings, keys or skills.
 process.env.PI_CODING_AGENT_DIR = join(app.getPath('userData'), 'pi')
 // No model catalog refresh, no downloads of rg and fd, no telemetry: nothing the user didn't ask for.

@@ -14,6 +14,8 @@ import i18n, { applyLanguage, storedLanguage, type LanguageSetting } from '@/i18
 import { formatTime, now, place, readTime, stamp, type Zone } from '../../../shared/time'
 import { entities, localDate, toExperiment, toGoal, toMemory, toNote, toSlot, toTodo, todoFields, type TimeContext } from './entities'
 import { connectCalendar } from './calendar'
+import { clock as clockText, inZone } from '@/lib/time'
+import { cityOf } from '@/lib/zones'
 import type { CalendarEvent, CalendarViewName, Experiment, Goal, HistoryEntry, ISODate, Memory, Note, NoteKind, NoteOutcome, NoteProposal, Session, SlotInput, Skill, Todo, Trigger } from './types'
 
 export interface Nav {
@@ -273,7 +275,7 @@ export async function connectWorkspace() {
     useStore.setState({ zone, now: clock(zone) })
     void loadWorkspace()
     // One quiet line; fixing the plan, if it needs it, is the user's call or the agent's when asked.
-    if (before !== zone) toast(i18n.t('time.moved', { city: zone.split('/').pop()!.replace(/_/g, ' ') }))
+    if (before !== zone) toast(i18n.t('time.moved', { city: cityOf(zone) }))
   }
   window.jezo.time.onZone(follow)
   const deviceZone = await window.jezo.time.zone()
@@ -315,7 +317,14 @@ function timeContext(at?: Zone): TimeContext {
  */
 function writeTodo(id: string, change: TodoChange, at?: Zone) {
   const before = useStore.getState().todos.find((t) => t.id === id)
-  writeFields(id, change, todoFields(change, timeContext(at), before))
+  const context = timeContext(at)
+  const fields = todoFields(change, context, before)
+  // A clock the clocks skip that day (02:30 when they go forward) is moved by the gap, and said.
+  const placed = change.slot && typeof fields.scheduled === 'string' ? toSlot(fields.scheduled, context.zone) : null
+  if (placed && change.slot && Math.round(inZone(placed.at, context.zone).start * 60) !== Math.round(change.slot.start * 60)) {
+    toast(i18n.t('time.gap', { asked: clockText(change.slot.start), placed: clockText(inZone(placed.at, context.zone).start) }))
+  }
+  writeFields(id, change, fields)
 }
 
 /** Shows a todo's change and writes its fields. */
@@ -448,7 +457,8 @@ export const useStore = create<State>()((set, get) => ({
     if (!slot) set((s) => ({ calendarDetail: s.calendarDetail === id ? null : s.calendarDetail }))
   },
   proposeSlots: () => {
-    window.jezo.agent.start('backlog').then((id) => set({ findingTimes: id }), failed)
+    // Started from the calendar: times are found in the zone it shows.
+    window.jezo.agent.start('backlog', get().calendarZone ?? undefined).then((id) => set({ findingTimes: id }), failed)
   },
   findingTimes: null,
   lastProposal: null,

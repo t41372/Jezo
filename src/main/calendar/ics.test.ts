@@ -9,6 +9,14 @@
 //  - a zone the feed defines with a name Temporal also knows loses the feed's offset;
 //  - seconds are dropped from IANA and floating times;
 //  - an unknown zone is only found when an event using it falls in the dates asked about.
+// The design review of 2026-10-01 found more, also written down before the fix:
+//  - an IANA zone without a VTIMEZONE is applied after ical.js has expanded the repeats, so UNTIL and
+//    EXDATE are compared against clocks with no zone;
+//  - DURATION adds every part to the clock, so PT2H across a clock change lasts one or three hours;
+//    days and weeks should be calendar days, hours and less elapsed time (RFC 5545, 3.3.6);
+//  - a repeat's DTEND length is clock arithmetic on each day, so a day with a clock change gets a different length;
+//  - an occurrence moved into the range from outside it is missed, because repeats are walked by their original dates;
+//  - repeats are bounded by clocks a day either side, so a far zone's occurrence that falls in the range is missed.
 
 import { describe, expect, test } from 'bun:test'
 import { formatTime, parseTime, resolve } from '../../shared/time'
@@ -299,5 +307,42 @@ describe('found in review', () => {
       ...event('UID:x7', 'SUMMARY:Y', 'DTSTART;TZID=Pacific Standard Time:20261001T090000', 'DURATION:PT1H'),
     )
     expect(unknownZonesIn(text)).toEqual(['Customized Time Zone'])
+  })
+})
+
+describe('repeats and lengths across clock changes', () => {
+  const ny = (...lines: string[]) => readIcs(feed(...event(...lines)), '2026-03-01', '2026-03-15', 'America/New_York').events
+  const clocks = (events: { start: string }[]) => events.map((e) => e.start.slice(5, 16))
+
+  test('UNTIL and EXDATE are compared as moments in the event’s zone', () => {
+    // 09:00 New York on Mar 8 is 13:00Z, after this UNTIL.
+    expect(clocks(ny('UID:u', 'SUMMARY:U', 'DTSTART;TZID=America/New_York:20260305T090000', 'DURATION:PT1H', 'RRULE:FREQ=DAILY;UNTIL=20260308T120000Z'))).toEqual(['03-05T09:00', '03-06T09:00', '03-07T09:00'])
+    const kept = clocks(ny('UID:x', 'SUMMARY:X', 'DTSTART;TZID=America/New_York:20260306T090000', 'DURATION:PT1H', 'RRULE:FREQ=DAILY;COUNT=4', 'EXDATE:20260308T130000Z'))
+    expect(kept).toEqual(['03-06T09:00', '03-07T09:00', '03-09T09:00'])
+  })
+
+  test('DURATION: hours are elapsed time, days are calendar days', () => {
+    expect(ny('UID:d1', 'SUMMARY:D', 'DTSTART;TZID=America/New_York:20260308T013000', 'DURATION:PT2H')[0].end).toBe('2026-03-08T04:30:00-04:00')
+    expect(ny('UID:d2', 'SUMMARY:D', 'DTSTART;TZID=America/New_York:20260307T120000', 'DURATION:PT24H')[0].end).toBe('2026-03-08T13:00:00-04:00')
+    expect(ny('UID:d3', 'SUMMARY:D', 'DTSTART;TZID=America/New_York:20260307T120000', 'DURATION:P1D')[0].end).toBe('2026-03-08T12:00:00-04:00')
+  })
+
+  test('a repeat keeps its length in elapsed time on the day the clocks change', () => {
+    const [, , , onChange] = ny('UID:r', 'SUMMARY:R', 'DTSTART;TZID=America/New_York:20260305T013000', 'DTEND;TZID=America/New_York:20260305T033000', 'RRULE:FREQ=DAILY;COUNT=5')
+    expect([onChange.start, onChange.end]).toEqual(['2026-03-08T01:30:00-05:00', '2026-03-08T04:30:00-04:00'])
+  })
+
+  test('an occurrence moved into the range from outside it is there', () => {
+    const text = feed(
+      ...event('UID:m', 'SUMMARY:Series', 'DTSTART:20260920T090000Z', 'DURATION:PT1H', 'RRULE:FREQ=WEEKLY;COUNT=4'),
+      ...event('UID:m', 'SUMMARY:Moved', 'RECURRENCE-ID:20260927T090000Z', 'DTSTART:20261001T120000Z', 'DURATION:PT1H'),
+    )
+    expect(readIcs(text, '2026-10-01', '2026-10-02', 'UTC').events.map((e) => e.title)).toEqual(['Moved'])
+  })
+
+  test('a far zone’s occurrence that falls in the range is found', () => {
+    // 00:30 on Oct 3 in Kiritimati (+14) is 23:30 on Oct 1 in Pago Pago (-11).
+    const text = feed(...event('UID:k', 'SUMMARY:Far', 'DTSTART;TZID=Pacific/Kiritimati:20260925T003000', 'DURATION:PT30M', 'RRULE:FREQ=DAILY'))
+    expect(readIcs(text, '2026-10-01', '2026-10-02', 'Pacific/Pago_Pago').events.map((e) => e.start)).toEqual(['2026-10-03T00:30:00+14:00'])
   })
 })

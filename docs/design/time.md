@@ -61,6 +61,7 @@ A new time is fixed to the zone it was placed in.
 | Action | Written |
 |---|---|
 | A new todo dragged onto the calendar, or given a time in the picker | Fixed to the zone the calendar shows: the device's, unless it's showing another. |
+| 讓 agent 幫我找時間 on a calendar showing another zone | The run plans in that zone: its time note, the tools and the calendar answers all read and show times there, and the note says the device is elsewhere. The conversation keeps that zone. |
 | `todos_propose` | `date` and `time` are read in the device's zone and fixed to it. A `zone` is passed only when the user names a place ("9am New York"); then it's fixed to that zone. A draft kept when a plan is revised is moved, not placed anew, so it keeps its zone. |
 | Moving an existing todo, by drag, picker or `todos_update` | The new clock is read in the action's zone, and the todo keeps its own zone. In Tokyo, "move it to 23:00" on a New York todo stores 10:00 New York. |
 | Fixing a time to another zone | The details' 時區 row. It keeps the clock (09:00 Phoenix becomes 09:00 Tokyo) and shows the result before saving. With the tool, `zone` on an update does the same. |
@@ -77,7 +78,7 @@ A new time is fixed to the zone it was placed in.
 - **New input in a gap is rejected by the tools.** The result offers the time shifted by the gap's length, as Temporal and Croner both do: 02:30 on New York's spring-forward day becomes 03:30, and 02:15 in Lord Howe's 30-minute gap becomes 02:45.
 - **A repeated clock is stored as the first one.** The result says so.
 - **A move that lands on the second of a repeated clock in the todo's own zone keeps that offset.** At 06:30 UTC on Nov 1, a New York todo becomes `01:30-05:00[America/New_York]`, not the first 01:30, an hour early.
-- **A move into a gap from the GUI** is shifted by the gap, and still keeps the todo's zone.
+- **A move into a gap from the GUI** is shifted by the gap, keeps the todo's zone, and says so: "那天沒有 02:30（時鐘往前撥），改成 03:30"。
 - **A floating calendar event that lands in a gap** is shifted the same way.
 
 **A time that didn't move is written as it was.** Accepting a proposed time changes only that it's proposed, so `09:00:45` or a second 01:30 stays exactly as the file had it. Undo writes back the strings the file had, not the time as it was shown then: after a flight, undoing "先不排時間" on a New York 10:00 puts back 10:00 New York, not 23:00 Tokyo. What the app shows before the file comes back is read from the strings being written, so a second change made in that moment starts from the first.
@@ -110,13 +111,13 @@ What travel can make wrong is the plan, not the display: a writing block placed 
 ## What the user sees
 
 - **The calendar header names its zone,** with a switch to show another. Showing another zone moves every block to that zone's hours and changes nothing on disk. Today, the Today button and the week's "nothing planned" prompt follow that zone; so does the time picker in the details opened from the calendar, which says which zone it reads ("以東京時間填寫").
-- **A zone is found by its id, its city, or its name in the app's language** (日本標準時間, 太平洋時間), which the runtime provides. City names in Chinese (東京) aren't in it; adding them would mean shipping a table of names, not worth it yet. An exact id the list spells differently (Asia/Kolkata) is accepted too.
+- **A zone is found by its city or the name of its time, in the app's language and in English** (東京, 日本標準時間, Tokyo), or its id; an exact id the list spells differently (Asia/Kolkata) is accepted too. City names are Unicode CLDR's exemplar cities, the data ICU itself uses: `bun run zone-names` (scripts/zone-names.ts) writes them from the `cldr-dates-modern` package for each language in `src/renderer/src/locales`, so a new language gets them by rerunning it. Names of times come from Intl at runtime. Labels use the same city names ("東京時間 09:00"). Rejected: a table of city names of our own, which would grow with every language.
 - **A time that's a moment rather than a time in a zone** (`2026-10-05T09:00Z`) is labelled as a fixed moment, in no zone.
 - **A todo's details** show:
   - its time here;
   - its own zone and clock, when that's another zone;
   - a 時區 row to fix it to another zone.
-- **A calendar block keeps its real endpoints.** A todo's slot carries its moment, and an event its end, so a block ends at the clock its end has, across a clock change too. The grid itself draws clocks: on the night clocks go back, a block from 01:30 to 01:30 can't show both hours. A resize counts the minutes between the real moments.
+- **A calendar block keeps its real endpoints.** The grid (ReUI's event calendar) takes moments and the zone it shows, and does its own conversions with `@date-fns/tz`. Each block is its real start and end, so it keeps its real length across a clock change, in the device's zone or another. Days, today and the day headers are the shown zone's.
 
 ## What the agent sees
 

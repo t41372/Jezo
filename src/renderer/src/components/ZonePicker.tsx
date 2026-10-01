@@ -2,9 +2,7 @@ import { Check } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Input } from '@/components/ui/input'
-
-/** A zone's city, the way people name it: "America/Los_Angeles" → "Los Angeles". */
-export const cityOf = (zone: string) => zone.split('/').pop()!.replace(/_/g, ' ')
+import { cityOf } from '@/lib/zones'
 
 const ZONES = [...Intl.supportedValuesOf('timeZone'), 'UTC']
 
@@ -12,14 +10,14 @@ const ZONES = [...Intl.supportedValuesOf('timeZone'), 'UTC']
 const nameIn = (zone: string, language: string) =>
   new Intl.DateTimeFormat(language, { timeZone: zone, timeZoneName: 'longGeneric' }).formatToParts(0).find((p) => p.type === 'timeZoneName')?.value ?? ''
 
-/** Each zone with what it's found by: its id, its city, and its name in the app's language and in English. */
+/** Each zone with what it's found by: its id, its city and its name, in the app's language and in English. */
 const indexes = new Map<string, { zone: string; name: string; text: string }[]>()
 function indexFor(language: string) {
   let index = indexes.get(language)
   if (!index) {
     index = ZONES.map((zone) => {
       const name = nameIn(zone, language)
-      return { zone, name, text: [zone, cityOf(zone), name, nameIn(zone, 'en')].join(' ').toLowerCase() }
+      return { zone, name, text: [zone, cityOf(zone, language), cityOf(zone, 'en'), name, nameIn(zone, 'en')].join(' ').toLowerCase() }
     })
     indexes.set(language, index)
   }

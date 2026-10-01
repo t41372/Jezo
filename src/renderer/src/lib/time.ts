@@ -24,18 +24,6 @@ export function toISODate(date: Date): ISODate {
   return date.toLocaleDateString('sv-SE')
 }
 
-/** A day plus hours from its midnight (9.5 is 09:30), as a local Date. */
-export function atTime(date: ISODate, hours: number) {
-  const d = parseDate(date)
-  d.setMinutes(Math.round(hours * 60))
-  return d
-}
-
-/** How far into its day a Date is, in hours. */
-export function hoursOf(date: Date) {
-  return date.getHours() + date.getMinutes() / 60
-}
-
 export function addDays(date: ISODate, days: number): ISODate {
   const d = parseDate(date)
   d.setDate(d.getDate() + days)
@@ -93,12 +81,6 @@ export function ago(instant: string, language: string, now = Date.now()) {
   if (seconds > -3600) return format.format(Math.round(seconds / 60), 'minute')
   if (seconds > -86_400) return format.format(Math.round(seconds / 3600), 'hour')
   return format.format(Math.round(seconds / 86_400), 'day')
-}
-
-/** A grid's Date, whose fields are a clock in `zone`, back to the moment it names there. */
-export function momentOf(date: Date, zone: string) {
-  return Temporal.PlainDateTime.from({ year: date.getFullYear(), month: date.getMonth() + 1, day: date.getDate(), hour: date.getHours(), minute: date.getMinutes() })
-    .toZonedDateTime(zone, { disambiguation: 'compatible' }).epochMilliseconds
 }
 
 /** A moment's day and hours from midnight in a zone. */

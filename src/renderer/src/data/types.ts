@@ -160,8 +160,9 @@ export interface CalendarEvent {
   date: ISODate
   start: number
   hours: number
-  /** Where a timed event ends, seen from the same zone: its own date and hours, which a clock change in between doesn't shift. */
-  ends?: { date: ISODate; hour: number }
+  /** A timed event's start and end, in milliseconds since the epoch: what the grid draws. */
+  at?: number
+  until?: number
   /** An all-day event starts at 0 and lasts whole days, so its hours are 24 per day. */
   allDay?: boolean
   /** The calendar's name, like 工作 or a subscription's name. */

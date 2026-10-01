@@ -181,7 +181,7 @@ export function History() {
                 {dayTime(h.date, h.time, today)} · {t(`history.source.${h.source}`)}
                 {h.interrupted && <span className="text-warn"> · {t('history.interrupted')}</span>}
               </div>
-              <div className={cn('mt-0.5 text-[14.5px]', h.undone && 'text-muted-foreground line-through')}>{h.summary || (h.interrupted ? t('history.interruptedSummary') : '')}</div>
+              <div className={cn('mt-0.5 text-[14.5px]', h.undone && 'text-muted-foreground line-through')}>{h.summary || (h.found ? t('history.foundSummary') : h.interrupted ? t('history.interruptedSummary') : '')}</div>
               {/* Cut off mid-way: the conversation can pick up from the files as they are, not from the start. */}
               {h.interrupted && h.session && !h.undone && (
                 <button

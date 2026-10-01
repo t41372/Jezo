@@ -69,7 +69,8 @@ export const test = base.extend<{ jezo: Jezo; prepare: Prepare }>({
     const launchOptions = {
       executablePath: electronPath,
       args: [join(repo, 'out/main/index.js'), ...(prepare.args ?? [])],
-      env: { ...process.env, JEZO_WORKSPACE: root, JEZO_USER_DATA: join(dir, 'data') },
+      // In the background, so the tests don't take the keyboard from whoever is using the computer.
+      env: { ...process.env, JEZO_WORKSPACE: root, JEZO_USER_DATA: join(dir, 'data'), JEZO_IN_BACKGROUND: '1' },
     }
     let app = await electron.launch(launchOptions)
     // The ⌥X window is created too; the main window is the one showing index.html.

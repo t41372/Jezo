@@ -99,7 +99,8 @@ test.describe('with a model', () => {
         const done = [-13, -10, -7, -6, -5, -3, -2]
         done.forEach((offset, i) => {
           const at = `${day(offset)}T${offset <= -8 ? '22:00' : '07:10'}`
-          write(root, `todos/items/t-med${i}.md`, { id: `t-med${i}`, title: '冥想 10 分鐘', state: 'done', estimate: 10, scheduled: at, created: at, completed: at })
+          // Every time says its zone (docs/design/time.md); the tests run in Taipei.
+          write(root, `todos/items/t-med${i}.md`, { id: `t-med${i}`, title: '冥想 10 分鐘', state: 'done', estimate: 10, scheduled: `${at}[Asia/Taipei]`, created: `${at}:00+08:00`, completed: `${at}:00+08:00` })
         })
       },
     },

@@ -16,6 +16,7 @@
     "yesterday": "Yesterday",
     "tomorrow": "Tomorrow",
     "dayTime": "{{day}} {{time}}",
+    "gap": "There's no {{asked}} that day (the clocks go forward), so it's {{placed}}.",
     "moved": "Now on {{city}} time. Times fixed to other places are shown in local hours."
   },
   "timeField": {

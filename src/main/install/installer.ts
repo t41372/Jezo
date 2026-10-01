@@ -351,7 +351,8 @@ export class Installer {
           await writeAtomic(this.mcpFile, JSON.stringify(config, null, 2) + '\n')
           const keptSecrets = new Set(Object.values(config.mcpServers).flatMap(secretRefs))
           for (const key of secretRefs(server)) if (!keptSecrets.has(key)) storeSecretSync(key, null)
-          if ('url' in server && !Object.values(config.mcpServers).some((other) => 'url' in other && other.url === server.url)) this.credentials?.remove(server.url)
+          // Sign-ins are kept per server, so this one's go with it.
+          if ('url' in server) this.credentials?.remove(id, server.url)
         }
         await this.dropConnection(id)
       }
@@ -373,7 +374,7 @@ export class Installer {
     if (!connection?.oauthUrl) throw new Error('This server does not use OAuth.')
     const { signInMcpServer } = await mcpRuntime()
     try {
-      await signInMcpServer({ serverUrl: connection.oauthUrl, store: this.credentials!.forServer(connection.oauthUrl), settings: connection.oauthSettings(), challenge: connection.challenge,
+      await signInMcpServer({ serverUrl: connection.oauthUrl, store: this.credentials!.forServer(name, connection.oauthUrl), settings: connection.oauthSettings(), challenge: connection.challenge,
         prompt: { showAuthorizationUrl: (url) => { void shell.openExternal(url.href) }, promptForRedirectUrl: (signal) => new Promise((resolve) => {
           const finish = (url?: string) => { signal.removeEventListener('abort', cancel); this.signIns.delete(name); resolve(url) }
           const cancel = () => finish()

@@ -136,7 +136,8 @@ export interface JezoBridge {
     /** Sends the user's message, starting a conversation when `id` is null. Resolves to the conversation's id once it has one. */
     send(id: string | null, text: string, trigger?: Trigger, behavior?: 'followUp' | 'steer'): Promise<string>
     /** Starts a conversation Jezo asks for on the user's behalf, like sorting notes. */
-    start(trigger: Trigger): Promise<string>
+    /** Starts a request of Jezo's own; `zone` is the zone the calendar shows when it's started from one showing another. */
+    start(trigger: Trigger, zone?: string): Promise<string>
     abort(id: string): Promise<void>
     /** Asks the agent, without a visible message, to make the change it described in a run that changed nothing. */
     nudge(id: string): Promise<void>
@@ -205,7 +206,11 @@ export interface JezoBridge {
     /** Runs an automation now; resolves to its conversation. */
     run(id: string): Promise<string>
     /** What happened to its times, newest first (docs/design/automations.md). */
-    history(id: string): Promise<AutomationRow[]>
+    history(id: string): Promise<AutomationHistoryView>
+    /** Skips the time that's due or waiting for a model. */
+    skip(id: string): Promise<void>
+    /** Every automation history with lines that can't be read. */
+    problems(): Promise<AutomationHistoryView['problems']>
     /** Called with an automation's id when its history gets an event. */
     onHistory(listener: (id: string) => void): () => void
     /** Whether Jezo starts, without a window, when the user logs in, so automations run while the computer's awake. */
@@ -287,9 +292,19 @@ export interface JezoBridge {
   }
 }
 
+/**
+ * An automation's history for its page: one row per time or run, newest first,
+ * and the lines of the file that can't be read. While there are any, the
+ * automation doesn't start on its own.
+ */
+export interface AutomationHistoryView {
+  rows: AutomationRow[]
+  problems: { path: string; line: number; message: string }[]
+}
+
 /** One line of an automation's history, as its page shows it. Slots are a date and clock, like "2026-10-01T08:00". */
 export type AutomationRow =
   /** `session` is the run's conversation; `zone` the schedule's zone its slot is in. */
   | { kind: 'run'; at: string; slot?: string; zone?: string; late: boolean; manual: boolean; session?: string; outcome: 'completed' | 'waiting' | 'failed' | 'unreachable' | 'stopped' | 'interrupted' | 'running' }
-  | { kind: 'skipped'; at: string; slots: string[]; reason: 'expired' | 'replaced' | 'zone-changed' }
+  | { kind: 'skipped'; at: string; slots: string[]; reason: 'expired' | 'replaced' | 'zone-changed' | 'skipped' }
   | { kind: 'waiting'; at: string; slot: string }

@@ -34,7 +34,8 @@ export function toEvent(e: SourceEvent, calendars: Map<string, CalendarInfo>, zo
     date: from.toPlainDate().toString(),
     start: from.hour + from.minute / 60,
     hours: (to.epochMilliseconds - from.epochMilliseconds) / 3_600_000,
-    ends: { date: to.toPlainDate().toString(), hour: to.hour + to.minute / 60 },
+    at: from.epochMilliseconds,
+    until: to.epochMilliseconds,
   }
 }
 

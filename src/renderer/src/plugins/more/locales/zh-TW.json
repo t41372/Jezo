@@ -148,6 +148,7 @@
     "kept_other": "撤銷了。有 {{count}} 個檔案你後來改過，那些沒動。",
     "interrupted": "沒跑完",
     "interruptedSummary": "跑到一半，Jezo 就關掉或當掉了。下面是它已經改的。",
+    "foundSummary": "agent 跑的指令做到一半，Jezo 就關掉或當掉了。下面是開回來時跟指令開始前不一樣的地方，也可能包含 Jezo 關著時在別處做的修改。",
     "continue": "接著做",
     "continuePrefill": "上次做到一半被打斷了。看一下現在的檔案，接著把它做完；已經做過的不要重做。"
   },
@@ -300,7 +301,8 @@
       "no": "錯過了就不補跑",
       "for": "若 {{time}} 錯過，{{minutes}} 分鐘內補跑一次",
       "until": "若 {{time}} 錯過，當天 {{until}} 前補跑一次",
-      "untilPick": "當天這個時間前補跑一次",
+      "untilPick": "這個時間前補跑一次",
+      "untilNextDay": "若 {{time}} 錯過，隔天 {{until}} 前補跑一次",
       "endOfDay": "若 {{time}} 錯過，當天結束前補跑一次",
       "next": "若 {{time}} 錯過，下一次之前都會補跑一次",
       "forAny": "錯過排定時間時，{{minutes}} 分鐘內補跑一次，下一次到了就不補",
@@ -318,6 +320,10 @@
       "replaced_other": "{{count}} 次錯過了（{{slot}} 起），由後面那次代替",
       "moved_other": "{{count}} 次在換時區時沒算到（{{slot}} 起）",
       "waiting": "{{slot}} 的那次在等模型，時限內都還能開始",
+      "skipped": "{{slot}} 那次跳過了",
+      "skip": "跳過這次",
+      "damaged": "執行紀錄有讀不懂的地方，看不出哪些時間跑過了，所以先不自己跑，免得重複。修好檔案就會恢復。",
+      "fix": "請 Jezo 修",
       "outcome": {
         "completed": "跑完了",
         "waiting": "在等你回答",
@@ -332,6 +338,8 @@
   "problems": {
     "intro": "這些檔案有地方跟它們的格式不合，或 id 被改掉了。它們還是會出現在該出現的地方，但有些欄位可能讀不到。",
     "count_other": "{{count}} 個問題",
+    "history": "自動化的執行紀錄",
+    "line": "第 {{line}} 行：{{message}}",
     "fix": "請 Jezo 修",
     "fixPrefill": "幫我修好 {{path}} 的問題。",
     "none": "沒有有問題的檔案。"

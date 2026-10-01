@@ -158,6 +158,7 @@
     "kept_other": "Undone. You changed {{count}} files afterward, so they were left alone.",
     "interrupted": "didn’t finish",
     "interruptedSummary": "Jezo quit or crashed partway through. Below is what it had changed.",
+    "foundSummary": "Jezo quit or crashed while a command the agent ran was going. Below is what differed from before the command when Jezo opened again, which may include edits made elsewhere while it was closed.",
     "continue": "Continue",
     "continuePrefill": "Last time this was cut off partway. Look at the files as they are now and finish it; don't redo what's already done."
   },
@@ -312,7 +313,8 @@
       "no": "If missed, it doesn’t run late",
       "for": "If {{time}} is missed, it runs once within {{minutes}} minutes",
       "until": "If {{time}} is missed, it runs once before {{until}} that day",
-      "untilPick": "Runs once before this time that day",
+      "untilPick": "Runs once before this time",
+      "untilNextDay": "If {{time}} is missed, it runs once before {{until}} the next day",
       "endOfDay": "If {{time}} is missed, it runs once before the day ends",
       "next": "If {{time}} is missed, it runs once any time before the next one",
       "forAny": "If a time is missed, it runs once within {{minutes}} minutes, unless the next one comes first",
@@ -332,6 +334,10 @@
       "moved_one": "{{count}} time not worked out while changing zones (from {{slot}})",
       "moved_other": "{{count}} times not worked out while changing zones (from {{slot}})",
       "waiting": "The {{slot}} run is waiting for a model; it can still start within its window",
+      "skipped": "The {{slot}} run was skipped",
+      "skip": "Skip this one",
+      "damaged": "Part of the history can't be read, so it's not clear which times already ran. It won't run on its own until the file is fixed, so nothing runs twice.",
+      "fix": "Ask Jezo to fix it",
       "outcome": {
         "completed": "finished",
         "waiting": "waiting for your answer",
@@ -347,6 +353,8 @@
     "intro": "These files don’t match their format, or their id was changed. They still show where they belong, but some fields may not be read.",
     "count_one": "{{count}} problem",
     "count_other": "{{count}} problems",
+    "history": "An automation's history",
+    "line": "Line {{line}}: {{message}}",
     "fix": "Ask Jezo to fix it",
     "fixPrefill": "Please fix the problems in {{path}}.",
     "none": "No files with problems."

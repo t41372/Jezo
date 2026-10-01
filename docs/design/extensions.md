@@ -40,7 +40,7 @@ Literal values in pasted `env`, `headers` and `oauth.clientSecret` go into Jezo'
 
 `createMcpExtension({ credentials })` uses a `McpOAuthCredentialStore` backed by the same keychain store, with pi's refresh locks in the agent directory. OAuth state, registration details, tokens and PKCE verifiers are stored under `mcp:oauth`; no `mcp-auth.json` is written. Sign-in opens the browser with Electron's `shell.openExternal`. The GUI also accepts the final redirect URL and cancellation when the browser cannot reach the loopback callback. Sign-in reconnects the management connection; existing sessions use the shared credentials on subsequent authentication.
 
-pi 0.99.1 does not publicly export the credential store, config operations, validator, theme object or connection manager. `src/main/install/pi-internals.ts` is the only internal-import boundary. The dependency is pinned to 0.99.1 and the adapter checks the installed version. Review these contracts when upgrading; prefer public exports if pi adds them.
+pi 1.0.0 does not publicly export the credential store, config operations, validator, theme object or connection manager. `src/main/install/pi-internals.ts` is the only internal-import boundary. The dependency is pinned to 1.0.0 and the adapter checks the installed version. Since 1.0.0 the credential store keeps sign-ins per server name and URL, so removing a server removes only its own. Review these contracts when upgrading; prefer public exports if pi adds them.
 
 ## Extension UI
 

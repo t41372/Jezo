@@ -29,11 +29,12 @@ import { isDraft } from '@/components/todo/format'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { cityOf, ZonePicker } from '@/components/ZonePicker'
+import { ZonePicker } from '@/components/ZonePicker'
+import { cityOf } from '@/lib/zones'
 import { goalById, useStore } from '@/data/store'
 import type { CalendarEvent, CalendarViewName, Goal, ISODate, Todo } from '@/data/types'
 import { goalColor } from '@/lib/goal-color'
-import { addDays, ago, atTime, clock, dayLabel, hoursOf, inZone, longDate, momentOf, monthDay, mondayOf, parseDate, toISODate } from '@/lib/time'
+import { addDays, ago, clock, dayLabel, inZone, longDate, monthDay, mondayOf, parseDate } from '@/lib/time'
 import { now, todayIn, type Zone } from '../../../../shared/time'
 
 /** What each block on the grid stands for. */
@@ -64,10 +65,11 @@ export function Calendar() {
   const onEventUpdate = (update: EventCalendarProposedUpdate<Block>) => {
     const block = update.event.data
     if (block?.kind !== 'todo') return false
-    const start = update.allDay ? (block.todo.slot ? inZone(block.todo.slot.at, viewZone).start : DEFAULT_HOUR) : hoursOf(update.start)
-    // The grid's times are clocks in the zone it shows; the length is between the real moments.
-    const minutes = update.source.startsWith('resize') ? Math.round((momentOf(update.end, viewZone) - momentOf(update.start, viewZone)) / 60_000) : undefined
-    moveTodo(block.todo.id, { date: toISODate(update.start), start }, { minutes, zone: viewZone })
+    // The grid works in moments and the zone it shows; its Dates are read there.
+    const at = inZone(+update.start, viewZone)
+    const start = update.allDay ? (block.todo.slot ? inZone(block.todo.slot.at, viewZone).start : DEFAULT_HOUR) : at.start
+    const minutes = update.source.startsWith('resize') ? Math.round((+update.end - +update.start) / 60_000) : undefined
+    moveTodo(block.todo.id, { date: at.date, start }, { minutes, zone: viewZone })
     // Todos have a time, so one put on the all-day row keeps its time instead; the store already has it.
     return !update.allDay
   }
@@ -84,8 +86,9 @@ export function Calendar() {
         views={['day', 'week', 'month']}
         view={view}
         onViewChange={(v) => setCalendarView(v as CalendarViewName)}
-        date={parseDate(date)}
-        onDateChange={(d) => setCalendarDate(toISODate(d))}
+        timeZone={viewZone}
+        date={dayStart(date, viewZone)}
+        onDateChange={(d) => setCalendarDate(inZone(+d, viewZone).date)}
         locale={i18n.language === 'zh-TW' ? zhTW : enUS}
         weekStartsOn={1}
         dayStartHour={0}
@@ -101,7 +104,7 @@ export function Calendar() {
           e.preventDefault()
           setCalendarDetail(occurrence.eventId)
         }}
-        onSelectSlot={(slot) => setCreating(newTodoSlot(slot, pointer.current))}
+        onSelectSlot={(slot) => setCreating(newTodoSlot(slot, pointer.current, viewZone))}
         onEventDropOutside={(occurrence, { x, y }) => {
           const block = occurrence.event.data
           if (block?.kind === 'todo') dropAtPoint({ kind: 'todo', id: block.todo.id }, x, y)
@@ -136,16 +139,14 @@ function toBlocks(
   zone: Zone,
 ): GridEvent<Block>[] {
   const ring = (id: string) => id === selected && 'inset-ring-2 inset-ring-ring/60'
-  // The grid draws clocks. Each end is the end's own clock, not the start plus a length,
-  // so a block across a clock change ends where the event does.
-  const ending = (start: Date, end: Date) => (+end - +start < 15 * 60_000 ? new Date(+start + 15 * 60_000) : end)
+  // The grid takes moments and draws them in `zone`, so a block keeps its real length across a clock change.
+  // A deadline has no length (a school feed's "due 23:59"); it still needs a block to show.
+  const block = (start: number, end: number) => ({ start: new Date(start), end: new Date(Math.max(end, start + 15 * 60_000)) })
   return [
     ...events.map((e) => ({
       id: e.id,
       title: e.title,
-      start: atTime(e.date, e.start),
-      // A deadline has no length (a school feed's "due 23:59"); it still needs a block to show.
-      end: ending(atTime(e.date, e.start), e.ends ? atTime(e.ends.date, e.ends.hour) : atTime(e.date, e.start + e.hours)),
+      ...(e.allDay ? { start: dayStart(e.date, zone), end: dayStart(addDays(e.date, Math.round(e.hours / 24)), zone) } : block(e.at!, e.until!)),
       allDay: e.allDay,
       readOnly: true,
       color: 'var(--muted-foreground)',
@@ -157,13 +158,10 @@ function toBlocks(
       .map((todo) => {
         const draft = isDraft(todo)
         const done = todo.state === 'done'
-        const { date, start } = inZone(todo.slot!.at, zone)
-        const end = inZone(todo.slot!.at + todo.estimateMinutes * 60_000, zone)
         return {
           id: todo.id,
           title: draft ? draftTitle(todo.title) : todo.title,
-          start: atTime(date, start),
-          end: ending(atTime(date, start), atTime(end.date, end.start)),
+          ...block(todo.slot!.at, todo.slot!.at + todo.estimateMinutes * 60_000),
           color: goalColor(goalById(goals, todo.goalId)?.hue),
           className: cn(
             'text-[color-mix(in_oklch,var(--ec-event-color)_66%,var(--foreground))]',
@@ -182,8 +180,10 @@ function toBlocks(
 function BlockContent({ occurrence, segment, view }: EventCalendarRenderEventProps<Block>) {
   const block = occurrence.event.data
   const ref = useArrival(block?.kind === 'todo' ? block.todo.id : null)
+  const zone = useStore((s) => s.calendarZone ?? s.zone)
   const minutes = (segment.endMin ?? 0) - (segment.startMin ?? 0)
-  const time = `${clock(hoursOf(occurrence.start))}–${clock(hoursOf(occurrence.end))}`
+  const hours = (d: Date) => inZone(+d, zone).start
+  const time = `${clock(hours(occurrence.start))}–${clock(hours(occurrence.end))}`
   const showTime = view !== 'month' && minutes >= 45
   // Blocks an hour or longer have room for a two-line title.
   const tall = view !== 'month' && minutes >= 60
@@ -203,7 +203,7 @@ function BlockContent({ occurrence, segment, view }: EventCalendarRenderEventPro
           </span>
         )}
         <span className={tall ? 'line-clamp-2' : 'truncate'}>{occurrence.event.title}</span>
-        {view === 'month' && !occurrence.allDay && <span className="shrink-0 font-normal opacity-70">{clock(hoursOf(occurrence.start))}</span>}
+        {view === 'month' && !occurrence.allDay && <span className="shrink-0 font-normal opacity-70">{clock(hours(occurrence.start))}</span>}
       </span>
       {showTime && <span className="mt-px text-[10px] opacity-80">{time}</span>}
     </span>
@@ -241,7 +241,9 @@ function useArrival(todoId: string | null) {
 
 function DayHeader({ day, month, isToday }: { day: Date; month: boolean; isToday: boolean }) {
   const { i18n } = useTranslation()
-  const name = new Intl.DateTimeFormat(i18n.language, { weekday: 'short' }).format(day)
+  // The grid's days are in the zone it shows.
+  const zone = useStore((s) => s.calendarZone ?? s.zone)
+  const name = new Intl.DateTimeFormat(i18n.language, { weekday: 'short', timeZone: zone }).format(day)
   // Month columns are weekdays, not dates.
   if (month) return <span className="block text-center text-xs font-normal text-muted-foreground">{name}</span>
   return (
@@ -253,7 +255,7 @@ function DayHeader({ day, month, isToday }: { day: Date; month: boolean; isToday
           isToday && 'bg-primary text-primary-foreground',
         )}
       >
-        {day.getDate()}
+        {Number(inZone(+day, zone).date.slice(8))}
       </span>
     </span>
   )
@@ -450,7 +452,7 @@ function DropArea() {
       if (!slot) return
       const todo = useStore.getState().todos.find((x) => x.id === item.id)
       const start = slot.minutes === undefined ? (todo?.slot ? inZone(todo.slot.at, viewZone).start : DEFAULT_HOUR) : snap(slot.minutes, lengthOf(item.id)) / 60
-      moveTodo(item.id, { date: toISODate(slot.day), start }, { zone: viewZone })
+      moveTodo(item.id, { date: inZone(+slot.day, viewZone).date, start }, { zone: viewZone })
     },
   })
 
@@ -521,10 +523,14 @@ interface NewTodoSlot {
   y: number
 }
 
-function newTodoSlot(slot: EventCalendarSlotDraft, at: { x: number; y: number }): NewTodoSlot {
+function newTodoSlot(slot: EventCalendarSlotDraft, at: { x: number; y: number }, zone: Zone): NewTodoSlot {
   const minutes = slot.allDay ? 30 : Math.max(15, Math.round((+slot.end - +slot.start) / 60_000))
-  return { date: toISODate(slot.start), start: slot.allDay ? DEFAULT_HOUR : hoursOf(slot.start), minutes, ...at }
+  const start = inZone(+slot.start, zone)
+  return { date: start.date, start: slot.allDay ? DEFAULT_HOUR : start.start, minutes, ...at }
 }
+
+/** Midnight of a day in a zone, as the grid takes it. */
+const dayStart = (date: ISODate, zone: Zone) => new Date(Temporal.PlainDate.from(date).toZonedDateTime(zone).epochMilliseconds)
 
 /** Drawing on an empty part of the grid makes a todo there; this asks what it is. */
 function NewTodo({ slot, onClose }: { slot: NewTodoSlot; onClose: () => void }) {

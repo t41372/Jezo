@@ -154,7 +154,9 @@ Each session is a pi session saved as JSONL in `<workspace>/sessions/`. Conversa
 - **Undo restores a file only if it still holds what the agent wrote.** Files changed since, by the user or by anything else, are left alone, and the toast says how many.
 
 
-**Sending a run back doesn't start it again.** A `continue: true` from `agent_before_settle` goes to pi's `agent.continue()`, which doesn't fire `before_agent_start` (read in pi 0.99.1's `agent-session.js`, 2026-09-30). So what extensions set up at the start of a run, like memory's held-back saves, lasts through the checks.
+**Sending a run back doesn't start it again.** A `continue: true` from `agent_before_settle` goes to pi's `agent.continue()`, which doesn't fire `before_agent_start` (read in pi 0.99.1's `agent-session.js`, 2026-09-30, and again in 1.0.0). So what extensions set up at the start of a run, like memory's held-back saves, lasts through the checks.
+
+**A run Jezo starts itself still gets the memory and calendar sections.** pi fires `before_agent_start` only for `prompt()`, not for a run started by a custom message with `triggerTurn`, which is how automations, finding times and sorting notes are sent (read in pi 1.0.0, 2026-10-01). Those runs had no memory or calendar section. The memory and calendar extensions now tell runs apart by `agent_start` (which also fires when a run continues) and `agent_settled`, and give a run that skipped `before_agent_start` its section at the start of the context instead. The requests stay custom messages: as `prompt()`s they would be recorded as the user's words, and the user's words decide what the shell may write and who a change is attributed to.
 
 **A failed call that was never fixed goes back to the agent.** If a run changed nothing and some tool's last call failed, the agent is told before the run ends that nothing happened and why. It then fixes the call or tells the user plainly. This doesn't depend on the reply's wording: a small model said "已為您提出計畫" after two failed calls.
 

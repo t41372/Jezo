@@ -21,9 +21,10 @@ import { FrontmatterError, parse } from '../workspace/frontmatter'
 import { currentActing } from './acting'
 import { installer } from '../install/installer'
 import { shellOperations } from './shell'
+import type { CommandCheckpoints } from './undo'
 import { listSkills } from '../workspace/skills'
 import { insideWorkspace, type Workspace } from '../workspace/workspace'
-import { dateOf, epochOf, formatTime, moveTo, place, readTime, stamp, todayIn } from '../../shared/time'
+import { dateOf, epochOf, formatTime, moveTo, place, readTime, stamp, todayIn, type Zone } from '../../shared/time'
 import { deviceZone } from '../clock'
 import { whenText } from './prompt'
 
@@ -35,6 +36,13 @@ export interface RunContext {
   said: string
   /** A tool completed an action outside workspace file history. */
   acted: boolean
+  /** The zone the user is planning in, when it isn't the device's: times are read and shown there. */
+  zone?: Zone
+  /**
+   * A tool that may change something started in this run. Set before the tool runs,
+   * so a run that fails afterwards is never taken for one that did nothing.
+   */
+  effects: boolean
   /** The agent asked the user with ask_user, which ends the turn waiting for them. */
   asked: boolean
   /** Everything the user said in this conversation, for the folders they named (shell.ts). */
@@ -74,8 +82,7 @@ const timeParams = (backlog: string) => ({
  * can act on, with real dates to copy: a small model wrote "Tomorrow 19:00", and
  * after a fixed example it gave up and asked the user.
  */
-function scheduleText(input: { date?: string; time?: string; zone?: string }, previous?: unknown, moving = false): { text: string; note: string } {
-  const here = deviceZone()
+function scheduleText(input: { date?: string; time?: string; zone?: string }, here: Zone, previous?: unknown, moving = false): { text: string; note: string } {
   const today = todayIn(here)
   const example = `For example date ${today}, time 19:00 is today at 19:00, and date ${today.add({ days: 1 })}, time 09:30 tomorrow morning.`
   const before = readTime(previous)
@@ -100,8 +107,7 @@ function scheduleText(input: { date?: string; time?: string; zone?: string }, pr
 }
 
 /** A todo as a tool result reports it, so the model sees what its call actually did, in the device's zone. */
-function describe(data: Record<string, unknown>) {
-  const zone = deviceZone()
+function describe(data: Record<string, unknown>, zone: Zone) {
   const value = readTime(data.scheduled)
   const when = value ? `scheduled ${value.kind === 'day' ? value.date : `${dateOf(value, zone)} ${whenText(data.scheduled, zone)}`}${data.proposed ? ' (proposed)' : ''}` : 'in the backlog'
   return `${data.id} "${data.title}": ${data.state}, ${when}, ${data.estimate ?? '?'} min`
@@ -119,9 +125,12 @@ export function createTools(
   blocked: (path: string) => boolean,
   clashes: Clashes = async () => ({ found: [], unchecked: [] }),
   plans: Plans = () => undefined,
+  checkpoints?: CommandCheckpoints,
 ): ToolDefinition[] {
   const root = workspace.root
   const actor = () => ({ by: 'agent' as const, run: context().run })
+  /** Where times are read: the device's zone, or the one the user is planning in. */
+  const here = () => context().zone ?? deviceZone()
 
   /** Where the agent may write, relative to the workspace. Throws with a message the agent can act on. */
   const writable = (absolute: string) => {
@@ -245,7 +254,7 @@ export function createTools(
       const draftFor = (todo: (typeof params.todos)[number]) => drafts.find((d) => d.id === todo.id) ?? drafts.find((d) => same(d.data.title) === same(todo.title))
       // Every time is checked before anything is written, so a bad one changes nothing.
       // A kept draft is moved, not placed anew, so it keeps its zone: a New York call given back as 22:00 in Tokyo stays 09:00 New York.
-      const times = params.todos.map((todo) => (todo.date || todo.time ? scheduleText(todo, draftFor(todo)?.data.scheduled) : null))
+      const times = params.todos.map((todo) => (todo.date || todo.time ? scheduleText(todo, here(), draftFor(todo)?.data.scheduled) : null))
       // Asked to schedule a todo from the backlog, a small model proposed a new one with the same name.
       const open = workspace.list().filter((i) => i.kind === 'todo' && i.data.state !== 'done' && !drafts.some((d) => d.id === i.id))
       const existing = params.todos.flatMap((t) => open.filter((i) => same(i.data.title) === same(t.title)))
@@ -278,7 +287,7 @@ export function createTools(
           changes.added.push(item.id)
         }
         ids.push(item.id)
-        lines.push(`- ${describe(item.data)}${time?.note ?? ''}${await overlaps(item.data)}${unknownFields(todo, Object.keys(todoInput.properties))}`)
+        lines.push(`- ${describe(item.data, here())}${time?.note ?? ''}${await overlaps(item.data)}${unknownFields(todo, Object.keys(todoInput.properties))}`)
       }
       // Drafts are the agent's own proposals, so leaving one out removes it; undo brings it back.
       for (const draft of drafts.filter((d) => !ids.includes(d.id))) {
@@ -326,7 +335,7 @@ export function createTools(
       ) as typeof params
       const item = workspace.get(id)
       if (item?.kind !== 'todo') throw new Error(`There is no todo ${id}.`)
-      const scheduled = backlog ? null : date || time || zone ? scheduleText({ date, time, zone }, item.data.scheduled, true) : undefined
+      const scheduled = backlog ? null : date || time || zone ? scheduleText({ date, time, zone }, here(), item.data.scheduled, true) : undefined
       // An empty string clears the field.
       const fields: Fields = Object.fromEntries(Object.entries(change).map(([k, v]) => [k, v === '' ? null : v]))
       if (scheduled !== undefined) {
@@ -334,7 +343,7 @@ export function createTools(
         fields.proposed = scheduled && !userAskedForThisTime ? true : null
       }
       const updated = await workspace.update(id, fields, actor())
-      return { content: text(`Now: ${describe(updated.data)}${scheduled?.note ?? ''}${scheduled || change.estimate ? await overlaps(updated.data) : ''}${ignored}`), details: undefined }
+      return { content: text(`Now: ${describe(updated.data, here())}${scheduled?.note ?? ''}${scheduled || change.estimate ? await overlaps(updated.data) : ''}${ignored}`), details: undefined }
     },
   })
 
@@ -380,6 +389,7 @@ export function createTools(
 
   const todosList = defineTool({
     name: 'todos_list',
+    annotations: { readOnlyHint: true },
     label: 'List todos',
     description:
       'Lists todos in one compact table, instead of reading their files one by one: everything not done, plus what was done in the given days. Read a todo file only when you need its steps or notes.',
@@ -390,13 +400,13 @@ export function createTools(
       const rows = workspace
         .list()
         .filter((i) => i.kind === 'todo')
-        .filter((i) => i.data.state !== 'done' || (params.doneSince && doneOn(i) >= params.doneSince))
+        .filter((i) => i.data.state !== 'done' || (params.doneSince && doneOn(i, here()) >= params.doneSince))
         // By when they happen, not by how their time is spelled; the backlog last.
         .sort((a, b) => (epochOf(readTime(a.data.scheduled), deviceZone()) ?? Infinity) - (epochOf(readTime(b.data.scheduled), deviceZone()) ?? Infinity))
         .map((i) => {
           const d = i.data
           const extra = [d.goal && `goal ${d.goal}`, d.cue && `cue ${d.cue}`, d.amount !== undefined && `amount ${d.amount}`].filter(Boolean).join(', ')
-          return `- ${describe(d)}${extra ? ` (${extra})` : ''}`
+          return `- ${describe(d, here())}${extra ? ` (${extra})` : ''}`
         })
       return { content: text(rows.length ? rows.join('\n') : 'No todos.'), details: undefined }
     },
@@ -404,6 +414,7 @@ export function createTools(
 
   const itemLinks = defineTool({
     name: 'item_links',
+    annotations: { readOnlyHint: true },
     label: 'Links',
     description: 'Shows what an item links to and what links to it: todos, goals, notes and the rest, with their titles.',
     parameters: Type.Object({ id: Type.String() }),
@@ -455,6 +466,7 @@ export function createTools(
 
   const askUser = defineTool({
     name: 'ask_user',
+    annotations: { readOnlyHint: true },
     label: 'Ask the user',
     description:
       'Asks the user to pick one of a few short answers, shown as buttons under your message. Say the question in your reply first. Your turn ends here; their pick comes back as their next message.',
@@ -480,7 +492,7 @@ export function createTools(
     createReadToolDefinition(root, { operations: readOps }),
     createLsToolDefinition(root),
     createBashToolDefinition(root, {
-      operations: shellOperations(workspace, () => ({ actor: actor(), heard: context().heard, closed: context().closed })),
+      operations: shellOperations(workspace, () => ({ actor: actor(), heard: context().heard, closed: context().closed }), checkpoints),
       exposeSessionEnvironment: false,
     }),
     createWriteToolDefinition(root, { operations: writeOps }),
@@ -498,7 +510,7 @@ export function createTools(
 export const TOOL_NAMES = ['read', 'ls', 'bash', 'write', 'edit', 'todos_list', 'todos_propose', 'todos_update', 'notes_propose', 'item_links', 'ask_user', 'memory_remember', 'memory_recall', 'memory_forget', 'calendar_events', 'install_from_address']
 
 /** The date a done todo was done, from where the device is; its scheduled day when it has no record. */
-function doneOn(item: { data: Record<string, unknown> }) {
+function doneOn(item: { data: Record<string, unknown> }, zone: Zone) {
   const value = readTime(item.data.completed, 'record') ?? readTime(item.data.scheduled)
-  return value ? dateOf(value, deviceZone()).toString() : ''
+  return value ? dateOf(value, zone).toString() : ''
 }

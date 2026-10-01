@@ -7,15 +7,38 @@ import { useStore } from '@/data/store'
 import type { Item } from '../../../../shared/workspace'
 import { SectionHeader } from './parts'
 
-/** Item files that don't match their manifest, or whose id was changed; kept current as files change. */
+/** A file with problems: its name, path, and what's wrong. */
+interface Problem {
+  path: string
+  name: string
+  problems: string[]
+}
+
+/**
+ * Files Jezo can't fully read, kept current as they change: item files that don't
+ * match their manifest or whose id was changed, and automation histories with
+ * lines that can't be read, which keep that automation from starting on its own.
+ */
 export function useProblems() {
-  const [items, setItems] = useState<Item[]>([])
+  const { t } = useTranslation('more')
+  const [files, setFiles] = useState<Problem[]>([])
   useEffect(() => {
-    const load = () => window.jezo.workspace.list().then((all) => setItems(all.filter((i) => i.problems?.length)))
-    load()
-    return window.jezo.workspace.onChange(load)
-  }, [])
-  return items
+    const name = (i: Item) => String(i.data.title ?? i.data.name ?? i.path)
+    const load = async () => {
+      const [items, histories] = await Promise.all([window.jezo.workspace.list(), window.jezo.schedule.problems()])
+      const byPath = new Map<string, Problem>()
+      for (const h of histories) {
+        const file = byPath.get(h.path) ?? { path: h.path, name: t('problems.history'), problems: [] }
+        file.problems.push(t('problems.line', { line: h.line, message: h.message }))
+        byPath.set(h.path, file)
+      }
+      setFiles([...items.filter((i) => i.problems?.length).map((i) => ({ path: i.path, name: name(i), problems: i.problems! })), ...byPath.values()])
+    }
+    void load()
+    const stops = [window.jezo.workspace.onChange(() => void load()), window.jezo.schedule.onHistory(() => void load())]
+    return () => stops.forEach((stop) => stop())
+  }, [t])
+  return files
 }
 
 /**
@@ -27,7 +50,6 @@ export function Problems() {
   const { t } = useTranslation('more')
   const items = useProblems()
   const { openSession } = useStore.getState()
-  const name = (i: Item) => String(i.data.title ?? i.data.name ?? i.path)
   return (
     <>
       <SectionHeader title={t('sections.problems.title')}>{t('problems.intro')}</SectionHeader>
@@ -35,11 +57,11 @@ export function Problems() {
         {items.map((i) => (
           <div key={i.path} className="flex items-start gap-3 px-4 py-3.5" data-problem={i.path}>
             <div className="min-w-0 flex-1">
-              <div className="text-[14.5px] font-medium">{name(i)}</div>
+              <div className="text-[14.5px] font-medium">{i.name}</div>
               <div className="mt-0.5 font-mono text-[12px] break-all text-muted-foreground">{i.path}</div>
-              <Disclosure label={t('problems.count', { count: i.problems!.length })} className="mt-1" triggerClassName="text-[12.5px]">
+              <Disclosure label={t('problems.count', { count: i.problems.length })} className="mt-1" triggerClassName="text-[12.5px]">
                 <ul className="mt-1 list-disc pl-5 text-[12.5px] text-muted-foreground" data-selectable>
-                  {i.problems!.map((p) => <li key={p}>{p}</li>)}
+                  {i.problems.map((p) => <li key={p}>{p}</li>)}
                 </ul>
               </Disclosure>
             </div>

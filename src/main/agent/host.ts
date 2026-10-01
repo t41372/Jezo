@@ -33,7 +33,7 @@ import { ExtensionUI } from './extension-ui'
 import { installer } from '../install/installer'
 import type { Providers } from './providers'
 import { deviceZone } from '../clock'
-import { now } from '../../shared/time'
+import { now, type Zone } from '../../shared/time'
 import { eventWhen } from '../calendar/agent'
 import { digest, JUMP_MS, jumpNote, NOTHING_CHANGED, REQUESTS, SYSTEM_PROMPT, timeNote } from './prompt'
 import { type CardDetails, createTools, type RunContext, TOOL_NAMES } from './tools'
@@ -44,6 +44,8 @@ interface Conversation {
   trigger: Trigger
   /** The automation that started it, and its name, for sessions Jezo starts on its own. */
   automation?: { id: string; name: string }
+  /** The zone the user is planning in, when they started it from a calendar showing another zone. */
+  zone?: Zone
   /** When it started, as a Date. */
   started: Date
   manager: SessionManager
@@ -88,6 +90,17 @@ export class AgentHost {
   private conversations = new Map<string, Conversation>()
   /** Jezo is quitting: runs it cuts off are interrupted, not finished. */
   private closing = false
+  /** Called before a run in an automation's conversation (the scheduler takes its time back, if it had given it up). */
+  private retryHook: ((session: string) => Promise<void>) | null = null
+
+  beforeRetry(hook: (session: string) => Promise<void>) {
+    this.retryHook = hook
+  }
+
+  /** The user is chatting: a conversation they started is running. Background work waits for it. */
+  userBusy() {
+    return [...this.conversations.values()].some((c) => c.running && (c.trigger === 'user' || c.trigger === 'hotkey'))
+  }
   private listeners = new Set<(view: SessionView, catalogChanged: boolean) => void>()
   private eventListeners = new Set<(event: PiClientEvent) => void>()
   private entryIds = new WeakMap<object, string>()
@@ -124,17 +137,20 @@ export class AgentHost {
         const manager = SessionManager.open(join(this.dir, name), this.dir, this.workspace.root)
         const header = manager.getHeader()
         const trigger = manager.getEntries().find((e) => e.type === 'custom' && e.customType === TRIGGER_ENTRY) as
-          | { data?: { trigger?: Trigger; automation?: { id: string; name: string } } }
+          | { data?: { trigger?: Trigger; automation?: { id: string; name: string }; zone?: Zone } }
           | undefined
         const id = manager.getSessionId()
+        const context = this.contextFor(id)
+        context.zone = trigger?.data?.zone
         this.conversations.set(id, {
           id,
           trigger: trigger?.data?.trigger ?? 'user',
           automation: trigger?.data?.automation,
+          zone: trigger?.data?.zone,
           started: new Date(header?.timestamp ?? (await stat(join(this.dir, name))).mtime),
           manager,
           session: null,
-          context: this.contextFor(id),
+          context,
           partial: null,
           running: false,
           extra: [],
@@ -292,7 +308,7 @@ export class AgentHost {
         const result = await session.navigateTree(request.id, { summarize: false })
         if (result.cancelled || c.aborted) return
         this.publish(c, { type: 'snapshot', snapshot: this.getThread(id) })
-        await session.sendCustomMessage({ customType: REQUEST_MESSAGE, content: timed(withoutRunNote(String(request.content))), display: false }, { triggerTurn: true })
+        await session.sendCustomMessage({ customType: REQUEST_MESSAGE, content: timed(withoutRunNote(String(request.content)), c.zone), display: false }, { triggerTurn: true })
       })
       return
     }
@@ -343,7 +359,7 @@ export class AgentHost {
     await automation.claim?.(conversation.id)
     const request = automation.note ? `${automation.note}\n\nRequest:\n${automation.request}` : automation.request
     this.launch(conversation, (session) =>
-      session.sendCustomMessage({ customType: REQUEST_MESSAGE, content: timed(request), display: false }, { triggerTurn: true }),
+      session.sendCustomMessage({ customType: REQUEST_MESSAGE, content: timed(request, conversation.zone), display: false }, { triggerTurn: true }),
     )
     const done = conversation.completion!.then(() => conversation.outcome ?? 'failed')
     return { id: conversation.id, done }
@@ -354,12 +370,13 @@ export class AgentHost {
     return this.abort(id)
   }
 
-  async start(trigger: Trigger) {
+  /** Starts a request of Jezo's own. `zone` is the zone the calendar shows, when the user started it from one showing another. */
+  async start(trigger: Trigger, zone?: Zone) {
     const request = REQUESTS[trigger]?.(this.workspace.list())
     if (!request) throw new Error(`Nothing starts a session for ${trigger}.`)
-    const conversation = await this.create(trigger)
+    const conversation = await this.create(trigger, undefined, zone && zone !== deviceZone() ? zone : undefined)
     this.launch(conversation, (session) =>
-      session.sendCustomMessage({ customType: REQUEST_MESSAGE, content: timed(request), display: false }, { triggerTurn: true }),
+      session.sendCustomMessage({ customType: REQUEST_MESSAGE, content: timed(request, conversation.zone), display: false }, { triggerTurn: true }),
     )
     return conversation.id
   }
@@ -399,13 +416,14 @@ export class AgentHost {
     }))
   }
 
-  private async create(trigger: Trigger, automation?: { id: string; name: string }): Promise<Conversation> {
+  private async create(trigger: Trigger, automation?: { id: string; name: string }, zone?: Zone): Promise<Conversation> {
     const manager = SessionManager.create(this.workspace.root, this.dir)
-    manager.appendCustomEntry(TRIGGER_ENTRY, { trigger, ...(automation && { automation }) })
+    manager.appendCustomEntry(TRIGGER_ENTRY, { trigger, ...(automation && { automation }), ...(zone && { zone }) })
     const id = manager.getSessionId()
     const conversation: Conversation = {
       id,
       trigger,
+      ...(zone && { zone }),
       automation,
       started: new Date(),
       manager,
@@ -419,12 +437,13 @@ export class AgentHost {
       publishedEntries: 0,
       turn: 0,
     }
+    conversation.context.zone = zone
     this.conversations.set(id, conversation)
     return conversation
   }
 
   private contextFor(session: string): RunContext {
-    const context: RunContext = { run: '', session, said: '', acted: false, asked: false, heard: [], closed: [], refused: () => this.undo.refused(context.run) }
+    const context: RunContext = { run: '', session, said: '', acted: false, effects: false, asked: false, heard: [], closed: [], refused: () => this.undo.refused(context.run) }
     return context
   }
 
@@ -440,6 +459,8 @@ export class AgentHost {
     this.emit(c)
     let recording = false
     try {
+      // A run in an automation's conversation may be the user retrying a time it gave up.
+      if (c.automation) await this.retryHook?.(c.id)
       const session = await this.sessionFor(c)
       if (c.aborted) return
       // An extension's command needs no model: pi runs its code, not the agent.
@@ -454,6 +475,7 @@ export class AgentHost {
       c.context.run = newId('r')
       c.context.said = userText ?? ''
       c.context.acted = false
+      c.context.effects = false
       c.context.asked = false
       c.context.heard = [...heard(c.manager.getEntries()), ...(userText ? [userText] : [])]
       c.context.closed = this.memory.deleted().flatMap((f) => f.evidence ?? [])
@@ -477,7 +499,8 @@ export class AgentHost {
       await this.undo.finish(c.context.run, firstSentence(session.getLastAssistantText() ?? ''))
       recording = false
       const last = [...session.messages].reverse().find((m) => m.role === 'assistant') as { stopReason?: string } | undefined
-      const nothingDone = !this.undo.changed(c.context.run) && !c.context.acted
+      // Only a run that never got as far as a tool that can change something is safe to start again on its own.
+      const nothingDone = !this.undo.changed(c.context.run) && !c.context.effects
       // A reply cut off by its output limit ('length') or aborted by something other than Stop didn't finish.
       c.outcome = c.aborted ? 'stopped'
         : last?.stopReason === 'error' ? (nothingDone ? 'unreachable' : 'failed')
@@ -536,7 +559,7 @@ export class AgentHost {
     const settings = installs.settings
 
     // The prompt's picture of the day is from now; each message says the time again (timeNote).
-    const promptTime = nowHere()
+    const promptTime = nowHere(c.zone)
     const loader = new DefaultResourceLoader({
       ...await this.resourcePaths(),
       // The workspace's AGENTS.md is its map, as a project's is for a coding agent. Only that one:
@@ -546,15 +569,15 @@ export class AgentHost {
         return { agentsFiles: existsSync(path) ? [{ path, content: readFileSync(path, 'utf8') }] : [] }
       },
       systemPromptOverride: () => SYSTEM_PROMPT,
-      appendSystemPromptOverride: () => [digest(this.workspace.list(), promptTime)],
+      appendSystemPromptOverride: () => [digest(this.workspace.list(), promptTime, deviceZone())],
       extensionFactories: [
         { name: 'codemode', factory: createCodemodeExtension({ mode: 'on' }), replaceable: true },
         { name: 'tool-search', factory: createToolSearchExtension(), replaceable: true },
         { name: 'mcp', factory: await installs.mcpExtension(), replaceable: true },
         { name: 'jezo-checks', factory: (pi) => this.checks(pi, c) },
-        { name: 'jezo-time', factory: (pi) => this.time(pi, promptTime) },
+        { name: 'jezo-time', factory: (pi) => this.time(pi, promptTime, c) },
         { name: 'jezo-memory', factory: memoryExtension(this.memory) },
-        { name: 'jezo-calendar', factory: calendarExtension(this.calendars, this.outside) },
+        { name: 'jezo-calendar', factory: calendarExtension(this.calendars, this.outside, () => c.zone ?? deviceZone()) },
         // Tools the user installed that bring in other people's text: MCP servers.
         { name: 'jezo-outside', factory: outsideToolResults(this.outside, (tool) => tool.startsWith('mcp__')) },
       ],
@@ -585,6 +608,7 @@ export class AgentHost {
           return { found, unchecked }
         },
         (todoId) => this.planOf(c, todoId),
+        { begin: (run, files) => this.undo.beginCommand(run, files), end: (run, id) => this.undo.endCommand(run, id) },
       ),
       sessionManager: c.manager,
     })
@@ -600,19 +624,23 @@ export class AgentHost {
    * would be the clock rather than what the user asked; it's moved in front of
    * it for the model, and kept after it in the session file.
    */
-  private time(pi: ExtensionAPI, promptTime: Temporal.ZonedDateTime) {
+  private time(pi: ExtensionAPI, promptTime: Temporal.ZonedDateTime, c: Conversation) {
+    const zone = c.zone
+    pi.on('before_agent_start', () => ({ message: { customType: TIME_MESSAGE, content: timeNote(nowHere(zone), promptTime, deviceZone()), display: false } }))
     // Notes said when time jumped between two model calls of one run, kept where they were said.
     // A run starts with its own time note, so each run starts them afresh: a jump from an
-    // earlier run, or from another branch after a retry, never shows up in this one.
+    // earlier run, or from another branch after a retry, never shows up in this one. A run is
+    // told apart by its id, since a request Jezo sends doesn't go through before_agent_start.
     let jumps: { at: number; note: AgentMessage }[] = []
     let last: Temporal.ZonedDateTime | null = null
-    pi.on('before_agent_start', () => {
-      jumps = []
-      last = null
-      return { message: { customType: TIME_MESSAGE, content: timeNote(nowHere(), promptTime), display: false } }
-    })
+    let run = ''
     pi.on('context', (event) => {
-      const now = nowHere()
+      if (c.context.run !== run) {
+        run = c.context.run
+        jumps = []
+        last = null
+      }
+      const now = nowHere(zone)
       // A short sleep across midnight counts too: the model would still be on yesterday's date.
       if (last && (now.timeZoneId !== last.timeZoneId || now.epochMilliseconds - last.epochMilliseconds > JUMP_MS || !now.toPlainDate().equals(last.toPlainDate()))) {
         jumps.push({ at: event.messages.length, note: { role: 'custom', customType: TIME_MESSAGE, content: jumpNote(last, now), display: false, timestamp: now.epochMilliseconds } as AgentMessage })
@@ -745,6 +773,7 @@ export class AgentHost {
       const scope = acting.getStore()
       if (scope) scope.source = 'user'
     }
+    if (event.type === 'tool_execution_start' && !readOnly(c.session?.getAllTools().find((t) => t.name === event.toolName))) c.context.effects = true
     if (event.type === 'tool_execution_end') {
       if (!event.isError) {
         c.failed.delete(event.toolName)
@@ -890,9 +919,9 @@ export class AgentHost {
  * with the date only in the system prompt, a local model planned "the next seven
  * days" in January. A retried request gets the time it's sent again.
  */
-function timed(request: string) {
-  const now = nowHere()
-  return `${timeNote(now, now)}\n\n${request.replace(/^Now: .*\n(Times you give .*\n)?(The days after today: .*\n)?\n/, '')}`
+function timed(request: string, zone?: Zone) {
+  const now = nowHere(zone)
+  return `${timeNote(now, now, deviceZone())}\n\n${request.replace(/^Now: .*\n(Times you give .*\n)?(The days after today: .*\n)?\n/, '')}`
 }
 
 /**
@@ -1008,4 +1037,14 @@ function localTime(at: Date) {
 }
 
 /** Now, in the device's zone. */
-const nowHere = () => now().toZonedDateTimeISO(deviceZone())
+/** Now where the user is: the device's zone, or the zone they're planning in. */
+const nowHere = (zone?: Zone) => now().toZonedDateTimeISO(zone ?? deviceZone())
+
+/**
+ * Whether a tool only reads, by its own definition. pi's built-in read and ls,
+ * and its tool_search, don't say; they only read. A tool that doesn't say is
+ * taken to change things.
+ */
+function readOnly(tool: { name: string; annotations?: { readOnlyHint?: boolean } } | undefined) {
+  return !!tool && (tool.annotations?.readOnlyHint === true || ['read', 'ls', 'tool_search'].includes(tool.name))
+}

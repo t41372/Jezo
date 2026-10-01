@@ -9,10 +9,12 @@ import { createMemory, serveMemory } from './agent/memory'
 import { Providers } from './agent/providers'
 import { Schedule, setLanguage } from './agent/schedule'
 import { modelJudge, OutsideContent } from './agent/outside'
+import { snapshot } from './agent/shell'
 import { historyFile, UndoLog } from './agent/undo'
 import { Calendars } from './calendar/calendars'
 import { serveCalendars } from './calendar/ipc'
 import { getConfig } from './config'
+import { inBackground } from './env'
 import { registerQuickKey, unregisterQuickKey } from './hotkey'
 import { createQuickWindow, endVoice, hideQuick, resizeQuick, startVoice, toggleTyping } from './quick'
 import { serveSpeech } from './speech/ipc'
@@ -73,7 +75,7 @@ function createMainWindow() {
     ...glass(),
     webPreferences,
   })
-  mainWindow.once('ready-to-show', () => mainWindow?.show())
+  mainWindow.once('ready-to-show', () => (inBackground ? mainWindow?.showInactive() : mainWindow?.show()))
   // Links, like where to get an API key, open in the browser, not in a Jezo window.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//.test(url)) void shell.openExternal(url)
@@ -130,6 +132,8 @@ async function openWorkspace() {
   await workspace.open()
   await installer(workspace).open()
   const undo = new UndoLog(workspace, historyFile(app.getPath('userData')))
+  // Shell commands Jezo was running when it last stopped: what they changed goes into 修改紀錄.
+  await undo.recover(() => snapshot(workspace!.root))
   serveWorkspace(workspace, undo)
   serveFiles(workspace)
   const providers = new Providers()

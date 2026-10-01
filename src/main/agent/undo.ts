@@ -20,8 +20,14 @@ interface FileChange {
   path: string
   /** Null when the agent created the file. */
   before: Kept | null
-  /** Null when the agent deleted it. */
+  /** What the run's last finished write left. Null when the agent deleted it. */
   after: Kept | null
+  /**
+   * A write saved here before it happens, until it's done. One that never finished
+   * (it failed, or Jezo stopped first) stays, so undo knows the file can hold
+   * either this or `after`.
+   */
+  pending?: { content: Kept | null }
 }
 
 interface Run {
@@ -38,6 +44,23 @@ interface Run {
   undone?: boolean
   /** It never finished: Jezo quit or crashed while it ran. */
   interrupted?: boolean
+  /**
+   * Shell commands going right now, each with the workspace's text files as they
+   * were before it started, as blobs. One still here at launch was cut off.
+   */
+  commands?: { id: string; baseline: Record<string, string> }[]
+  /** Changes found at launch, after a command was cut off: they may include edits made elsewhere while Jezo was closed. */
+  found?: boolean
+}
+
+/**
+ * A shell command's changes are found by comparing the workspace before and after
+ * it. The before is saved first, so a command cut off by a quit or a crash still
+ * leaves what it changed in 修改紀錄 (docs/design/undo.md).
+ */
+export interface CommandCheckpoints {
+  begin(run: string, files: Map<string, string>): Promise<string | null>
+  end(run: string, id: string): Promise<void>
 }
 
 /** How many runs are kept. Older ones are dropped; losing them is fine. */
@@ -58,7 +81,7 @@ export class UndoLog {
     }
     // A run still open from before was cut off; what it changed was saved as it went, and can be undone.
     for (const run of this.runs) if (!run.finished) run.interrupted = true
-    workspace.onWrite((write) => this.record(write))
+    workspace.onWrite({ before: (write) => this.record(write), after: (write) => this.done(write) })
   }
 
   private get blobs() {
@@ -110,6 +133,62 @@ export class UndoLog {
     await this.save()
   }
 
+  /** Saves the workspace as it is before a shell command, and returns the command's id. */
+  async beginCommand(runId: string, files: Map<string, string>): Promise<string | null> {
+    const run = this.runs.find((r) => r.id === runId)
+    if (!run) return null
+    const baseline: Record<string, string> = {}
+    for (const [path, text] of files) baseline[path] = this.blob(text)
+    const id = newId('c')
+    ;(run.commands ??= []).push({ id, baseline })
+    await this.save()
+    return id
+  }
+
+  /** The command finished, and its changes were recorded as the run's. */
+  async endCommand(runId: string, id: string) {
+    const run = this.runs.find((r) => r.id === runId)
+    if (!run?.commands) return
+    run.commands = run.commands.filter((c) => c.id !== id)
+    if (!run.commands.length) delete run.commands
+    await this.save()
+  }
+
+  /**
+   * At launch: commands that were cut off. What differs from before each one is
+   * listed as an interrupted change, never put back on its own. It can include
+   * edits made elsewhere while Jezo was closed, so the history says it was found.
+   */
+  async recover(read: () => Promise<Map<string, string>>) {
+    const cut = this.runs.filter((r) => r.commands?.length)
+    if (!cut.length) return
+    const current = await read()
+    for (const run of cut) {
+      for (const command of run.commands!) {
+        const files: FileChange[] = []
+        for (const path of new Set([...Object.keys(command.baseline), ...current.keys()])) {
+          const was = command.baseline[path] ? textOfBlob(this.content({ blob: command.baseline[path] })) : null
+          const now = current.get(path) ?? null
+          if (was !== now) files.push({ path, before: was, after: now })
+        }
+        if (files.length) this.runs.unshift({ id: newId('r'), session: run.session, trigger: run.trigger, at: run.at, summary: '', files, retries: 0, finished: false, interrupted: true, found: true })
+      }
+      delete run.commands
+    }
+    await this.save()
+  }
+
+  /** Text into a blob named by its hash; the same text is kept once. */
+  private blob(text: string) {
+    const blob = hashOf(text)
+    const path = join(this.blobs, blob)
+    if (!existsSync(path)) {
+      mkdirSync(this.blobs, { recursive: true })
+      writeFileSync(path, text)
+    }
+    return blob
+  }
+
   /** Skill removal is an explicit GUI action the user can undo in history. */
   async userChange(summary: string, work: () => Promise<void>) {
     const id = newId('r')
@@ -124,17 +203,36 @@ export class UndoLog {
     }
   }
 
+  private change(write: Write) {
+    const runId = write.actor.run
+    return runId ? this.runs.find((r) => r.id === runId)?.files.find((f) => f.path === write.path) : undefined
+  }
+
+  /**
+   * Before a write: saved as pending, before the file itself changes (the workspace
+   * waits, and a failed save stops the write), so a run cut off by a quit or a
+   * crash can still be undone (docs/design/undo.md).
+   */
   private record(write: Write) {
     const runId = write.actor.run
     if (!runId) return
     const run = this.runs.find((r) => r.id === runId)
     if (!run) return
-    const existing = run.files.find((f) => f.path === write.path)
+    const pending = { content: this.keep(write.after) }
+    const existing = this.change(write)
     // Written twice in one run: what was there before the run is still the first `before`.
-    if (existing) existing.after = this.keep(write.after)
-    else run.files.push({ path: write.path, before: this.keep(write.before), after: this.keep(write.after) })
-    // Saved before the file itself is written (the workspace waits for this), so a run cut off by a quit or a crash can still be undone (docs/design/undo.md).
+    if (existing) existing.pending = pending
+    else run.files.push({ path: write.path, before: this.keep(write.before), after: this.keep(write.before), pending })
     return this.save()
+  }
+
+  /** After a write: what it wrote is what the file holds now. */
+  private done(write: Write) {
+    const change = this.change(write)
+    if (!change?.pending) return
+    change.after = change.pending.content
+    delete change.pending
+    this.save().catch(console.error)
   }
 
   /** Restores what the run changed, file by file, skipping files changed since. */
@@ -144,7 +242,9 @@ export class UndoLog {
     const kept: string[] = []
     for (const change of [...run.files].reverse()) {
       const current = await readContent(this.workspace.abs(change.path))
-      const untouched = current === null ? change.after === null : change.after !== null && hashOf(current) === (typeof change.after === 'string' ? hashOf(change.after) : change.after.blob)
+      // Still what the run left: its last finished write, or one that may have happened before Jezo stopped.
+      const holds = (kept: Kept | null) => (current === null ? kept === null : kept !== null && hashOf(current) === (typeof kept === 'string' ? hashOf(kept) : kept.blob))
+      const untouched = holds(change.after) || (!!change.pending && holds(change.pending.content))
       if (!untouched) {
         kept.push(change.path)
         continue
@@ -170,9 +270,11 @@ export class UndoLog {
         session: r.session,
         summary: r.summary,
         ...(r.retries > 0 && { check: { retries: r.retries } }),
-        files: r.files.map((f) => ({ path: f.path, lines: diff(f.before, f.after) })),
+        // A write that may or may not have happened is shown as if it did: undo handles either.
+        files: r.files.map((f) => ({ path: f.path, lines: diff(f.before, f.pending ? f.pending.content : f.after) })),
         ...(r.undone && { undone: true }),
         ...(r.interrupted && { interrupted: true }),
+        ...(r.found && { found: true }),
       }))
   }
 
@@ -186,11 +288,16 @@ export class UndoLog {
   private async write() {
     await writeAtomic(this.file, JSON.stringify(this.runs))
     // Blobs no run refers to any more, once old runs are dropped.
-    const used = new Set(this.runs.flatMap((r) => r.files.flatMap((f) => [f.before, f.after])).flatMap((k) => (k && typeof k !== 'string' ? [k.blob] : [])))
+    const used = new Set([
+      ...this.runs.flatMap((r) => r.files.flatMap((f) => [f.before, f.after, f.pending?.content ?? null])).flatMap((k) => (k && typeof k !== 'string' ? [k.blob] : [])),
+      ...this.runs.flatMap((r) => r.commands ?? []).flatMap((c) => Object.values(c.baseline)),
+    ])
     if (existsSync(this.blobs)) for (const blob of readdirSync(this.blobs)) if (!used.has(blob)) rmSync(join(this.blobs, blob), { force: true })
     for (const listener of this.listeners) listener()
   }
 }
+
+const textOfBlob = (content: Content) => (typeof content === 'string' ? content : new TextDecoder().decode(content))
 
 /** The changed lines of a file, with a line of context around each change. A file that isn't text is one line. */
 export function diff(before: Kept | null, after: Kept | null): DiffLine[] {

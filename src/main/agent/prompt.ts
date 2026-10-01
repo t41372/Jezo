@@ -53,9 +53,10 @@ const weekday = (date: Temporal.PlainDate, style: 'long' | 'short') => date.toLo
  * named, and so is how a time the agent gives a todo is read, so it never has
  * to work out a zone itself (docs/design/time.md).
  */
-const nowLine = (now: Temporal.ZonedDateTime) =>
+const nowLine = (now: Temporal.ZonedDateTime, device: Zone) =>
   [
     `Now: ${weekday(now.toPlainDate(), 'long')} ${now.toPlainDate()} ${clock(now)}, ${now.timeZoneId} (UTC${now.offset}).`,
+    ...(now.timeZoneId !== device ? [`The user is planning on a calendar showing ${now.timeZoneId}; this device is in ${device}.`] : []),
     `Times you give todos are ${now.timeZoneId} times, and stay fixed to ${now.timeZoneId}. Add a zone only when the user names a place.`,
   ].join('\n')
 
@@ -76,9 +77,9 @@ const daysLine = (now: Temporal.ZonedDateTime) => {
  * after the user's, not a change to the prompt, so a local server can keep what
  * it already read.
  */
-export function timeNote(now: Temporal.ZonedDateTime, started: Temporal.ZonedDateTime) {
+export function timeNote(now: Temporal.ZonedDateTime, started: Temporal.ZonedDateTime, device: Zone = now.timeZoneId) {
   const sameDay = now.toPlainDate().equals(started.toPlainDate()) && now.timeZoneId === started.timeZoneId
-  return sameDay ? nowLine(now) : `${nowLine(now)}\n${daysLine(now)}`
+  return sameDay ? nowLine(now, device) : `${nowLine(now, device)}\n${daysLine(now)}`
 }
 
 /** A gap between two of the model's steps longer than this is a sleep, not thinking. */
@@ -108,7 +109,7 @@ export function whenText(scheduled: unknown, zone: Zone) {
  * A short picture of where things stand, given at the start of every session so
  * the agent doesn't have to guess where to look (docs/design/concept.md, "Session 模型").
  */
-export function digest(items: Item[], now: Temporal.ZonedDateTime) {
+export function digest(items: Item[], now: Temporal.ZonedDateTime, device: Zone = now.timeZoneId) {
   const zone = now.timeZoneId
   const today = now.toPlainDate().toString()
   const todos = items.filter((i) => i.kind === 'todo')
@@ -146,7 +147,7 @@ export function digest(items: Item[], now: Temporal.ZonedDateTime) {
   }
 
   return [
-    nowLine(now),
+    nowLine(now, device),
     daysLine(now),
     '',
     todayTodos.length ? `Today's todos:\n${todayTodos.map(line).join('\n')}` : 'Nothing is scheduled today.',

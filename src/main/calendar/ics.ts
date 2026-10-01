@@ -23,6 +23,8 @@ export interface IcsCalendar {
 const pad = (n: number) => String(n).padStart(2, '0')
 const dateOf = (t: ICAL.Time) => `${t.year}-${pad(t.month)}-${pad(t.day)}`
 const wallOf = (t: ICAL.Time) => `${dateOf(t)}T${pad(t.hour)}:${pad(t.minute)}${t.second ? `:${pad(t.second)}` : ''}`
+const plainOf = (t: ICAL.Time) => Temporal.PlainDateTime.from({ year: t.year, month: t.month, day: t.day, hour: t.hour, minute: t.minute, second: t.second })
+const wallText = (w: Temporal.PlainDateTime) => w.toString({ smallestUnit: w.second ? 'second' : 'minute' })
 
 const knownZone = (name: string) => {
   try {
@@ -35,6 +37,39 @@ const knownZone = (name: string) => {
 
 /** A UTC offset in seconds as "-05:00". */
 const offsetName = (seconds: number) => `${seconds < 0 ? '-' : '+'}${pad(Math.floor(Math.abs(seconds) / 3600))}:${pad(Math.floor((Math.abs(seconds) % 3600) / 60))}`
+
+const DAY_MS = 86_400_000
+
+/**
+ * A VTIMEZONE for a zone the runtime knows, built from the runtime's own rules
+ * (the tz database Temporal uses everywhere else in Jezo): one observance per
+ * change. With it in the feed, ical.js expands repeats in the event's real zone,
+ * so UNTIL and EXDATE are compared as moments. A zone without changes is one
+ * observance.
+ */
+function vtimezone(tzid: string, until: Temporal.Instant): ICAL.Component {
+  const vtz = new ICAL.Component('vtimezone')
+  vtz.addPropertyWithValue('tzid', tzid)
+  const observance = (wall: Temporal.PlainDateTime, from: number, to: number) => {
+    const c = new ICAL.Component(to > from ? 'daylight' : 'standard')
+    c.addPropertyWithValue('dtstart', ICAL.Time.fromData({ year: wall.year, month: wall.month, day: wall.day, hour: wall.hour, minute: wall.minute, second: wall.second }))
+    c.addPropertyWithValue('tzoffsetfrom', ICAL.UtcOffset.fromSeconds(from))
+    c.addPropertyWithValue('tzoffsetto', ICAL.UtcOffset.fromSeconds(to))
+    vtz.addSubcomponent(c)
+  }
+  const seconds = (z: Temporal.ZonedDateTime) => Math.round(z.offsetNanoseconds / 1e9)
+  let at = Temporal.Instant.from('1900-01-01T00:00:00Z').toZonedDateTimeISO(tzid)
+  observance(Temporal.PlainDateTime.from('1900-01-01T00:00:00'), seconds(at), seconds(at))
+  for (;;) {
+    const next = at.getTimeZoneTransition('next')
+    if (!next || Temporal.Instant.compare(next.toInstant(), until) > 0) break
+    const before = seconds(next.subtract({ nanoseconds: 1 }))
+    // DTSTART is the clock just before the change, in the offset it changes from.
+    observance(next.toInstant().add({ seconds: before }).toZonedDateTimeISO('UTC').toPlainDateTime(), before, seconds(next))
+    at = next
+  }
+  return vtz
+}
 
 function parse(text: string) {
   let root: ICAL.Component
@@ -54,12 +89,8 @@ function parse(text: string) {
   return { root, zones, defaultZone }
 }
 
-/**
- * Zones the feed names that neither it nor Temporal defines, in any of its
- * events, whatever dates are asked about: the warning belongs to the feed.
- */
-export function unknownZonesIn(text: string): string[] {
-  const { root, zones, defaultZone } = parse(text)
+/** Every zone the feed's events name, and X-WR-TIMEZONE. */
+function namedZones(root: ICAL.Component, defaultZone: string | undefined) {
   const names = new Set<string>(defaultZone ? [defaultZone] : [])
   for (const vevent of root.getAllSubcomponents('vevent')) {
     for (const property of vevent.getAllProperties()) {
@@ -67,7 +98,16 @@ export function unknownZonesIn(text: string): string[] {
       if (typeof tzid === 'string') names.add(tzid)
     }
   }
-  return [...names].filter((name) => !zones.has(name) && !knownZone(name))
+  return names
+}
+
+/**
+ * Zones the feed names that neither it nor Temporal defines, in any of its
+ * events, whatever dates are asked about: the warning belongs to the feed.
+ */
+export function unknownZonesIn(text: string): string[] {
+  const { root, zones, defaultZone } = parse(text)
+  return [...namedZones(root, defaultZone)].filter((name) => !zones.has(name) && !knownZone(name))
 }
 
 /** A time as Jezo keeps it, with when it happens from where the user is, for the range and the order. */
@@ -75,46 +115,79 @@ interface Point {
   value: string
   at: number
   zone?: string
+  /** A UTC time: a moment, with no zone to name. */
+  utc?: boolean
 }
 
 /** The events between two days (`to` exclusive), as days in `zone`, the device's. */
 export function readIcs(text: string, from: string, to: string, zone: Zone): IcsCalendar {
   const { root, zones, defaultZone } = parse(text)
   const unknownZones = new Set<string>()
+  const rangeStart = Temporal.PlainDate.from(from).toZonedDateTime(zone).epochMilliseconds
+  const rangeEnd = Temporal.PlainDate.from(to).toZonedDateTime(zone).epochMilliseconds
 
-  /**
-   * A time from the feed, keeping its meaning: a moment in the zone it was given
-   * in, or a local time when it floats. Around a daylight-saving change, RFC 5545
-   * and Temporal agree: a time that happens twice is the first, and one in the
-   * skipped hour is moved by the gap.
-   */
-  const point = (t: ICAL.Time, tzid: string | undefined): Point => {
-    if (t.zone === ICAL.Timezone.utcTimezone) {
-      const at = t.toJSDate().getTime()
-      return { value: stamp('UTC', at), at }
-    }
-    const name = tzid ?? defaultZone
-    if (name && zones.has(name)) {
-      // The feed defines this zone, so the moment and its offset are the feed's, even when Temporal knows
-      // the name: the feed's rules are what its author meant. A floating time takes X-WR-TIMEZONE's.
-      const local = tzid ? t : Object.assign(t.clone(), { zone: zones.get(name)! })
-      const at = local.toUnixTime() * 1000
-      return { value: stamp(offsetName(local.utcOffset()), at), at, zone: name }
+  // Zones the feed names without defining them, but the runtime knows, get a definition before
+  // anything is read, scoped to this feed. Only the feed's own definitions are its author's rules.
+  const own = new Set(zones.keys())
+  const horizon = Temporal.Instant.fromEpochMilliseconds(rangeEnd).add({ hours: 24 * 366 * 10 })
+  for (const name of namedZones(root, defaultZone)) {
+    if (zones.has(name) || !knownZone(name)) continue
+    const vtz = vtimezone(name, horizon)
+    root.addSubcomponent(vtz)
+    zones.set(name, new ICAL.Timezone({ component: vtz, tzid: name }))
+  }
+
+  /** A clock in a zone the feed named, as a moment: the feed's own rules, or the runtime's for an IANA name. */
+  const resolve = (wall: Temporal.PlainDateTime, name: string | undefined): Point => {
+    if (name && own.has(name)) {
+      const t = ICAL.Time.fromData({ year: wall.year, month: wall.month, day: wall.day, hour: wall.hour, minute: wall.minute, second: wall.second }, zones.get(name)!)
+      const at = t.toUnixTime() * 1000
+      return { value: stamp(offsetName(t.utcOffset()), at), at, zone: name }
     }
     if (name && knownZone(name)) {
-      const at = Temporal.PlainDateTime.from(wallOf(t)).toZonedDateTime(name, { disambiguation: 'compatible' }).epochMilliseconds
+      // Around a daylight-saving change, RFC 5545 and Temporal agree: a time that happens twice is the first,
+      // and one in the skipped hour is moved by the gap.
+      const at = wall.toZonedDateTime(name, { disambiguation: 'compatible' }).epochMilliseconds
       return { value: stamp(name, at), at, zone: name }
     }
     if (name) unknownZones.add(name)
     // Floating: the clock as written, wherever the user is.
-    const value = wallOf(t)
-    return { value, at: Temporal.PlainDateTime.from(value).toZonedDateTime(zone, { disambiguation: 'compatible' }).epochMilliseconds }
+    return { value: wallText(wall), at: wall.toZonedDateTime(zone, { disambiguation: 'compatible' }).epochMilliseconds }
   }
 
-  const rangeStart = Temporal.PlainDate.from(from).toZonedDateTime(zone).epochMilliseconds
-  const rangeEnd = Temporal.PlainDate.from(to).toZonedDateTime(zone).epochMilliseconds
-  const start = ICAL.Time.fromDateString(from)
-  const end = ICAL.Time.fromDateString(to)
+  /** A moment, written in the zone a time was given in. */
+  const at = (ms: number, like: Point): Point => {
+    if (like.zone && own.has(like.zone)) {
+      const t = ICAL.Time.fromJSDate(new Date(ms), true).convertToZone(zones.get(like.zone)!)
+      return { value: stamp(offsetName(t.utcOffset()), ms), at: ms, zone: like.zone }
+    }
+    if (like.zone) return { value: stamp(like.zone, ms), at: ms, zone: like.zone }
+    if (like.utc) return { value: stamp('UTC', ms), at: ms, utc: true }
+    // Floating: the clock moves by the same amount.
+    const wall = Temporal.PlainDateTime.from(like.value).add({ milliseconds: ms - like.at })
+    return { value: wallText(wall), at: ms }
+  }
+
+  /** A time from the feed, keeping its meaning: a moment in the zone it was given in, or a local time when it floats. */
+  const point = (t: ICAL.Time, tzid: string | undefined): Point => {
+    if (t.zone === ICAL.Timezone.utcTimezone) {
+      const ms = t.toJSDate().getTime()
+      return { value: stamp('UTC', ms), at: ms, utc: true }
+    }
+    return resolve(plainOf(t), tzid ?? defaultZone)
+  }
+
+  /**
+   * An event's end from its start and DURATION (RFC 5545, 3.3.6): weeks and days
+   * are calendar days in its zone, hours and less are elapsed time after them.
+   */
+  const lasting = (start: Point, startTime: ICAL.Time, duration: ICAL.Duration, tzid: string | undefined): Point => {
+    const sign = duration.isNegative ? -1 : 1
+    const days = sign * (duration.weeks * 7 + duration.days)
+    const elapsed = sign * (duration.hours * 3600 + duration.minutes * 60 + duration.seconds) * 1000
+    const startOfLength = days ? (startTime.zone === ICAL.Timezone.utcTimezone ? at(start.at + days * DAY_MS, start) : resolve(plainOf(startTime).add({ days }), tzid ?? defaultZone)) : start
+    return at(startOfLength.at + elapsed, startOfLength)
+  }
 
   /** A UID for events that have none, from what they say: the same on every read. */
   const uidOf = (e: ICAL.Event) => e.uid || `no-uid:${e.summary ?? ''}:${e.startDate?.toString() ?? ''}`
@@ -147,10 +220,15 @@ export function readIcs(text: string, from: string, to: string, zone: Zone): Ics
   }
 
   const events: (IcsEvent & { at: number })[] = []
-  const add = (e: ICAL.Event, startTime: ICAL.Time, endTime: ICAL.Time, id: string, repeats: boolean) => {
+  /**
+   * One occurrence. `length` is a repeat's own length in elapsed time, from its
+   * first DTSTART and DTEND: every occurrence lasts that long, on a day the
+   * clocks change too.
+   */
+  const add = (e: ICAL.Event, startTime: ICAL.Time, endTime: ICAL.Time | null, id: string, repeats: boolean, length?: number) => {
     if (String(e.component.getFirstPropertyValue('status') ?? '').toUpperCase() === 'CANCELLED') return
     const allDay = startTime.isDate
-    let s: string, en: string, at: number, eventZone: string | undefined
+    let s: string, en: string, first: number, eventZone: string | undefined
     if (allDay) {
       s = dateOf(startTime)
       // DTEND is exclusive; with none, or none after the start, the event is that one day.
@@ -158,15 +236,20 @@ export function readIcs(text: string, from: string, to: string, zone: Zone): Ics
       if (last.compare(startTime) <= 0) last.adjust(1, 0, 0, 0)
       en = dateOf(last)
       if (en <= from || s >= to) return
-      at = Temporal.PlainDate.from(s).toZonedDateTime(zone).epochMilliseconds
+      first = Temporal.PlainDate.from(s).toZonedDateTime(zone).epochMilliseconds
     } else {
-      const zoneOf = (p: string) => (e.component.getFirstProperty(p)?.getParameter('tzid') as string | undefined) ?? undefined
-      const a = point(startTime, zoneOf('dtstart'))
-      const b = endTime ? point(endTime, zoneOf('dtend') ?? zoneOf('dtstart')) : a
+      const tzOf = (p: string) => (e.component.getFirstProperty(p)?.getParameter('tzid') as string | undefined) ?? undefined
+      const a = point(startTime, tzOf('dtstart'))
+      const duration = e.component.getFirstPropertyValue('duration') as ICAL.Duration | null
+      const b = duration && !e.component.hasProperty('dtend')
+        ? lasting(a, startTime, duration, tzOf('dtstart'))
+        : length !== undefined
+          ? at(a.at + length, a)
+          : endTime ? point(endTime, tzOf('dtend') ?? tzOf('dtstart')) : a
       if (a.at >= rangeEnd || (b.at <= rangeStart && a.at < rangeStart)) return
       s = a.value
       en = b.value
-      at = a.at
+      first = a.at
       eventZone = a.zone
     }
     const text = (p: string) => {
@@ -175,7 +258,7 @@ export function readIcs(text: string, from: string, to: string, zone: Zone): Ics
     }
     events.push({
       id,
-      at,
+      at: first,
       title: e.summary ?? '',
       start: s,
       end: en,
@@ -191,7 +274,7 @@ export function readIcs(text: string, from: string, to: string, zone: Zone): Ics
   for (const e of singles) {
     try {
       const recurrenceId = e.component.getFirstPropertyValue('recurrence-id') as ICAL.Time | null
-      add(e, e.startDate, e.endDate, `${uidOf(e)}@${(recurrenceId ?? e.startDate).toString()}`, false)
+      add(e, e.startDate, e.component.hasProperty('dtend') ? e.endDate : null, `${uidOf(e)}@${(recurrenceId ?? e.startDate).toString()}`, false)
     } catch {
       // As above.
     }
@@ -199,19 +282,33 @@ export function readIcs(text: string, from: string, to: string, zone: Zone): Ics
 
   for (const e of series.values()) {
     try {
-      // Start a day early and stop a day late: the range is in local dates, the rule in the feed's zone.
-      const stop = end.clone()
-      stop.adjust(1, 0, 0, 0)
+      const tzid = e.component.getFirstProperty('dtstart')?.getParameter('tzid') as string | undefined
+      // The series' own length in elapsed time, when it has a DTEND.
+      const length = e.component.hasProperty('dtend') && !e.startDate.isDate
+        ? point(e.endDate, (e.component.getFirstProperty('dtend')?.getParameter('tzid') as string | undefined) ?? tzid).at - point(e.startDate, tzid).at
+        : undefined
+      // The rule walks clocks; the range is moments. Two days either side cover any two zones, plus the event's length.
+      const stop = ICAL.Time.fromDateString(to)
+      stop.adjust(2, 0, 0, 0)
+      const earliest = ICAL.Time.fromDateString(from)
+      earliest.adjust(-2 - Math.ceil(e.duration.toSeconds() / 86_400), 0, 0, 0)
+      const done = new Set<string>()
       const it = e.iterator()
       let next: ICAL.Time | null
-      // Skip ahead cheaply for series that began long ago.
-      const earliest = start.clone()
-      earliest.adjust(-1 - Math.ceil(e.duration.toSeconds() / 86_400), 0, 0, 0)
       while ((next = it.next())) {
         if (next.compare(stop) >= 0) break
         if (next.compare(earliest) < 0) continue
         const d = e.getOccurrenceDetails(next)
-        add(d.item, d.startDate, d.endDate, `${uidOf(e)}@${d.recurrenceId.toString()}`, true)
+        const key = d.recurrenceId.toString()
+        done.add(key)
+        // A moved occurrence keeps its own times; the rest are the series' length long.
+        const moved = d.item !== e
+        add(d.item, d.startDate, moved ? (d.item.component.hasProperty('dtend') ? d.item.endDate : null) : d.endDate, `${uidOf(e)}@${key}`, true, moved ? undefined : length)
+      }
+      // An occurrence moved here from a date outside the walk is found by its new times.
+      for (const [key, moved] of Object.entries(e.exceptions as unknown as Record<string, ICAL.Event>)) {
+        if (done.has(key)) continue
+        add(moved, moved.startDate, moved.component.hasProperty('dtend') ? moved.endDate : null, `${uidOf(e)}@${key}`, true)
       }
     } catch {
       // As above.

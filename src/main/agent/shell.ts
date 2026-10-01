@@ -11,7 +11,8 @@
 //   the conversations closed to the agent after the user deleted a memory.
 // - The network is open. Outside content is checked where it comes in instead.
 // - What a command changes in the workspace goes into 修改紀錄 like the agent's
-//   other writes, so it can be undone.
+//   other writes, so it can be undone. The workspace as it was before is saved
+//   first, so a command cut off by a quit or a crash is still found at launch.
 //
 // If the sandbox can't be set up, the command fails: it never runs without it.
 
@@ -22,6 +23,7 @@ import { SandboxManager } from '@anthropic-ai/sandbox-runtime'
 import { type BashOperations, createLocalBashOperations } from '@earendil-works/pi-coding-agent'
 import { textOf } from '../workspace/skill-source'
 import type { Actor, Workspace } from '../workspace/workspace'
+import type { CommandCheckpoints } from './undo'
 
 const home = homedir()
 
@@ -54,7 +56,7 @@ export function namedFolders(said: string[]): string[] {
  * folders and the automations' history aren't the user's items: the scheduler
  * writes the history while commands run, and it isn't undone.
  */
-async function snapshot(root: string): Promise<Map<string, string>> {
+export async function snapshot(root: string): Promise<Map<string, string>> {
   const files = new Map<string, string>()
   const visit = async (dir: string) => {
     for (const entry of await readdir(dir, { withFileTypes: true })) {
@@ -81,7 +83,7 @@ const NOT_PERMITTED = 'Operation not permitted'
 const TEMP = join(tmpdir(), 'jezo-shell')
 process.env.CLAUDE_CODE_TMPDIR = TEMP
 
-export function shellOperations(workspace: Workspace, context: () => { actor: Actor; heard: string[]; closed: string[] }): BashOperations {
+export function shellOperations(workspace: Workspace, context: () => { actor: Actor; heard: string[]; closed: string[] }, checkpoints?: CommandCheckpoints): BashOperations {
   const local = createLocalBashOperations()
   return {
     async exec(command, cwd, options) {
@@ -92,25 +94,32 @@ export function shellOperations(workspace: Workspace, context: () => { actor: Ac
         filesystem: { allowWrite: [workspace.root, TEMP, tmpdir(), ...TOOL_PLACES, ...named], denyRead: [...CREDENTIALS, ...closed.map((path) => join(workspace.root, path))], allowRead: [], denyWrite: [] },
       })
       const before = await snapshot(workspace.root)
+      // Saved before the command starts: if Jezo stops while it runs, launch finds what it changed.
+      const checkpoint = actor.run && checkpoints ? await checkpoints.begin(actor.run, before) : null
       // Files written through the workspace meanwhile, by the user in the GUI, say, aren't the command's.
       const others = new Set<string>()
       const stop = workspace.onWrite((write) => others.add(write.path))
       let refused = false
-      const result = await local.exec(wrapped, cwd, {
-        ...options,
-        onData: (data) => {
-          if (data.includes(NOT_PERMITTED)) refused = true
-          options.onData(data)
-        },
-      })
-      stop()
-      // What else changed in the workspace is the command's, recorded for undo as the agent's.
-      const after = await snapshot(workspace.root)
-      for (const path of new Set([...before.keys(), ...after.keys()])) {
-        if (others.has(path)) continue
-        const was = before.get(path) ?? null
-        const now = after.get(path) ?? null
-        if (was !== now) await workspace.changedOutside(path, was, now, actor)
+      let result
+      try {
+        result = await local.exec(wrapped, cwd, {
+          ...options,
+          onData: (data) => {
+            if (data.includes(NOT_PERMITTED)) refused = true
+            options.onData(data)
+          },
+        })
+      } finally {
+        stop()
+        // What else changed in the workspace is the command's, recorded for undo as the agent's, however it ended.
+        const after = await snapshot(workspace.root)
+        for (const path of new Set([...before.keys(), ...after.keys()])) {
+          if (others.has(path)) continue
+          const was = before.get(path) ?? null
+          const now = after.get(path) ?? null
+          if (was !== now) await workspace.changedOutside(path, was, now, actor)
+        }
+        if (checkpoint) await checkpoints!.end(actor.run!, checkpoint)
       }
       if (refused && result.exitCode !== 0) {
         options.onData(

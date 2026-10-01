@@ -1,5 +1,5 @@
 import cronstrue from 'cronstrue/i18n'
-import { cityOf } from '@/components/ZonePicker'
+import { cityOf } from '@/lib/zones'
 import i18n from '@/i18n'
 
 /** A time of day from a schedule whose minute and hour are plain numbers, as "08:00". */

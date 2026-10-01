@@ -15,6 +15,7 @@
     "yesterday": "昨天",
     "tomorrow": "明天",
     "dayTime": "{{day}} {{time}}",
+    "gap": "那天沒有 {{asked}}（時鐘往前撥），改成 {{placed}}。",
     "moved": "現在用{{city}}時間了。固定在其他地方的時間已經換成這裡的鐘點。"
   },
   "timeField": {

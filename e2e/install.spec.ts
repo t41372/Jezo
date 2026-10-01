@@ -77,7 +77,7 @@ test('stdio and HTTP MCP servers keep secrets in the keychain and appear in real
   await expect(httpRow).toContainText('已連線')
   await expect(httpRow).toContainText('1 個工具')
   const session = await page.evaluate(() => window.jezo.agent.send(null, '列出現在可用的工具。'))
-  await expect.poll(() => page.evaluate(async (id) => (await window.jezo.agent.list()).find((s) => s.id === id)?.tools ?? [], session)).toEqual(expect.arrayContaining(['mcp__local_test__echo', 'mcp__127-0-0-1__http_echo']))
+  await expect.poll(() => page.evaluate(async (id) => (await window.jezo.agent.list()).find((s) => s.id === id)?.tools ?? [], session)).toEqual(expect.arrayContaining(['mcp__local_test__echo', 'mcp__127_0_0_1__http_echo']))
   await page.evaluate((id) => window.jezo.agent.abort(id), session)
 
   expect(readFileSync(script + '.proof', 'utf8')).toBe('secret-loaded')

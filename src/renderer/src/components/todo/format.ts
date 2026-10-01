@@ -1,6 +1,6 @@
 import type { Todo } from '@/data/types'
 import i18n from '@/i18n'
-import { cityOf } from '@/components/ZonePicker'
+import { cityOf } from '@/lib/zones'
 import { clock, inZone, weekday } from '@/lib/time'
 
 /** "到公司倒完咖啡之後", or the time when there's no cue. */

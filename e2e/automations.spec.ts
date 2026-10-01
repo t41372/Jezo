@@ -256,3 +256,118 @@ test.describe('picked up on time, then waiting', () => {
     expect(jezo.errors).toEqual([])
   })
 })
+
+test.describe('due while another runs', () => {
+  const at8 = today.toZonedDateTime({ timeZone: ZONE, plainTime: { hour: 8 } })
+  test.use({
+    prepare: {
+      workspace: (root) => {
+        automation(root, 'a-first', { name: '先跑的', schedule: '59 7 * * *', catch_up: 'for 2 hours' }, '用 bash 執行 sleep 150，等它結束再回一句「好了」。不用做別的事。')
+        automation(root, 'a-next', { name: '跑到一半才到的', schedule: '1 8 * * *', catch_up: 'no' })
+        for (const id of ['a-first', 'a-next']) watching(root, id, at8.subtract({ hours: 1 }))
+      },
+    },
+  })
+
+  test('a time that comes due while another run is going is found on time and runs after it', async ({ jezo }) => {
+    test.setTimeout(480_000)
+    const { root } = jezo
+    // 07:59:30: the 07:59 one starts; the 08:01 one comes due while it sleeps.
+    await wakeAt(jezo.app, at8.subtract({ seconds: 30 }))
+    await expect.poll(() => history(root, 'a-next').filter((e) => e.type === 'ended').length, { timeout: 420_000 }).toBe(1)
+    expect(history(root, 'a-next').find((e) => e.type === 'claimed')).toMatchObject({ slot: `${today}T08:01`, late: false })
+    expect(history(root, 'a-next').some((e) => e.type === 'skipped')).toBe(false)
+    // It started after the first one ended, not beside it.
+    const ended = (history(root, 'a-first').find((e) => e.type === 'ended') as Event & { at: string }).at
+    const claimed = (history(root, 'a-next').find((e) => e.type === 'claimed') as Event & { at: string }).at
+    expect(Temporal.Instant.compare(Temporal.Instant.from(claimed), Temporal.Instant.from(ended))).toBeGreaterThanOrEqual(0)
+    expect(jezo.errors).toEqual([])
+  })
+})
+
+test.describe('a damaged history', () => {
+  const at8 = today.toZonedDateTime({ timeZone: ZONE, plainTime: { hour: 8 } })
+  test.use({
+    prepare: {
+      workspace: (root) => {
+        automation(root, 'a-broken', { name: '紀錄壞了', schedule: '0 8 * * *', catch_up: 'until 18:00' })
+        watching(root, 'a-broken', at8.subtract({ hours: 1 }))
+        // A claim someone's editor cut in half, with lines after it: which times ran isn't known.
+        writeFileSync(join(root, 'automations/history/a-broken.jsonl'), `${readFileSync(join(root, 'automations/history/a-broken.jsonl'), 'utf8')}{"type":"claimed","attem\n{"type":"retry","slot":"x","at":"y"}\n`)
+      },
+    },
+  })
+
+  test('pauses that automation, says why on its page, and lists the file in 有問題的檔案', async ({ jezo }) => {
+    const { app, page, root } = jezo
+    await wakeAt(app, at8.add({ minutes: 30 }))
+    await new Promise((r) => setTimeout(r, 5000))
+    expect(history(root, 'a-broken').filter((e) => e.type === 'claimed')).toHaveLength(0)
+
+    await page.locator('nav button', { hasText: '更多' }).first().click()
+    await page.getByText('自動化', { exact: true }).click()
+    await page.locator('[data-automation="a-broken"]').click()
+    await expect(page.locator('[data-history-damaged]')).toContainText('先不自己跑')
+    await page.locator('nav button', { hasText: '更多' }).first().click()
+    await page.getByText('有問題的檔案').click()
+    await expect(page.locator('[data-problem="automations/history/a-broken.jsonl"]')).toBeVisible()
+    expect(jezo.errors).toEqual([])
+  })
+})
+
+test.describe('a command cut off', () => {
+  const at8 = today.toZonedDateTime({ timeZone: ZONE, plainTime: { hour: 8 } })
+  test.use({
+    prepare: {
+      workspace: (root) => {
+        automation(root, 'a-shell', { name: '跑指令', schedule: '0 8 * * *', catch_up: 'until 18:00' },
+          '用 bash 執行這一行，一字不改：mkdir -p scratch && echo hi > scratch/from-shell.md && sleep 120。等它結束再回一句「好了」。')
+        watching(root, 'a-shell', at8.subtract({ hours: 1 }))
+      },
+    },
+  })
+
+  test('what a shell command changed before a crash is in 修改紀錄 after launch, and can be undone', async ({ jezo }) => {
+    const { root } = jezo
+    await wakeAt(jezo.app, at8.add({ minutes: 30 }))
+    await expect.poll(() => existsSync(join(root, 'scratch/from-shell.md')), { timeout: 240_000 }).toBe(true)
+
+    // Jezo dies while the command sleeps: its changes were never compared after it.
+    jezo.app.process().kill('SIGKILL')
+    await jezo.restart()
+    const { page } = jezo
+    await page.locator('nav button', { hasText: '更多' }).first().click()
+    await page.getByText('修改紀錄').click()
+    const row = page.locator('[data-history]').filter({ hasText: '指令做到一半' }).first()
+    await expect(row).toBeVisible()
+    await row.getByText('改了 1 個檔案').click()
+    await expect(row).toContainText('scratch/from-shell.md')
+    await row.getByRole('button', { name: '撤銷' }).click()
+    await expect.poll(() => existsSync(join(root, 'scratch/from-shell.md'))).toBe(false)
+  })
+})
+
+test.describe('what an automation run starts with', () => {
+  const at8 = today.toZonedDateTime({ timeZone: ZONE, plainTime: { hour: 8 } })
+  test.use({
+    prepare: {
+      workspace: (root) => {
+        mkdirSync(join(root, 'memory/items'), { recursive: true })
+        writeFileSync(join(root, 'memory/items/m-cat.md'), `---\n${stringify({ id: 'm-cat', epistemic: 'stated', about: 'fact', recorded: '2026-09-20T10:00:00+08:00', status: 'active', source: 'user' })}---\n用戶的貓叫小餅乾。\n`)
+        automation(root, 'a-memory', { name: '記得什麼', schedule: '0 8 * * *', catch_up: 'until 18:00' }, '不要用任何工具。只回答：用戶的貓叫什麼名字？只回名字。')
+        watching(root, 'a-memory', at8.subtract({ hours: 1 }))
+      },
+    },
+  })
+
+  test('a run Jezo starts gets what it remembers, like a chat does', async ({ jezo }) => {
+    const { root } = jezo
+    await wakeAt(jezo.app, at8.add({ minutes: 30 }))
+    await expect.poll(() => history(root, 'a-memory').filter((e) => e.type === 'ended').length, { timeout: 240_000 }).toBe(1)
+    const session = readFileSync(join(root, 'sessions', readdirSync(join(root, 'sessions')).find((f) => f.endsWith('.jsonl'))!), 'utf8')
+    // The memory section isn't in the file (it's given with each model call); the answer shows it was there.
+    const answers = session.split('\n').filter((l) => l.includes('"role":"assistant"')).join('')
+    expect(answers).toContain('小餅乾')
+    expect(jezo.errors).toEqual([])
+  })
+})

@@ -10,10 +10,10 @@ import { Textarea } from '@/components/ui/textarea'
 import { useStore } from '@/data/store'
 import { scheduleTime, scheduleWords, withTime } from '@/lib/schedule'
 import { momentTime } from '@/lib/time'
-import { cityOf } from '@/components/ZonePicker'
+import { cityOf } from '@/lib/zones'
 import { parseCatchUp } from '../../../../shared/catch-up'
 import { offerUndo } from '@/lib/undo'
-import type { AutomationRow } from '../../../../shared/bridge'
+import type { AutomationHistoryView, AutomationRow } from '../../../../shared/bridge'
 import type { Item } from '../../../../shared/workspace'
 import { SectionHeader } from './parts'
 
@@ -195,7 +195,8 @@ function CatchUpField({ item }: { item: Item }) {
     if (window.kind === 'no') return t('automations.window.no')
     if (window.kind === 'end-of-day') return t(`automations.window.endOfDay${any}`, { time: at })
     if (window.kind === 'next') return t(`automations.window.next${any}`, { time: at })
-    if (window.kind === 'until') return t(`automations.window.until${any}`, { time: at, until: clockOf(v) })
+    // An "until" clock at or before the run's own is the next day's.
+    if (window.kind === 'until') return t(time && clockOf(v) <= time ? 'automations.window.untilNextDay' : `automations.window.until${any}`, { time: at, until: clockOf(v) })
     return t(`automations.window.for${any}`, { time: at, minutes: window.minutes })
   }
   const save = (v: string) => {
@@ -232,7 +233,7 @@ function CatchUpField({ item }: { item: Item }) {
 /** What happened to its times, newest first: run, late, skipped, waiting, cut off. Each run opens its conversation. */
 function AutomationHistory({ item }: { item: Item }) {
   const { t } = useTranslation('more')
-  const [rows, setRows] = useState<AutomationRow[]>([])
+  const [{ rows, problems }, setView] = useState<AutomationHistoryView>({ rows: [], problems: [] })
   const device = useStore((s) => s.zone)
   const today = useStore((s) => s.now.date)
   const { openSession } = useStore.getState()
@@ -240,22 +241,22 @@ function AutomationHistory({ item }: { item: Item }) {
     let latest = 0
     const load = () => {
       const ask = ++latest
-      void window.jezo.schedule.history(item.id).then((r) => ask === latest && setRows(r))
+      void window.jezo.schedule.history(item.id).then((view) => ask === latest && setView(view))
     }
     load()
     // The scheduler writes the history; the page follows it, retries and skipped times included.
     return window.jezo.schedule.onHistory((id) => id === item.id && load())
   }, [item.id])
-  if (!rows.length) return null
+  if (!rows.length && !problems.length) return null
   // A slot is a clock in the schedule's zone, named when it isn't this device's.
   const slot = (s: string, zone?: string) => `${Number(s.slice(5, 7))}/${Number(s.slice(8, 10))} ${s.slice(11, 16)}${zone && zone !== device ? ` ${cityOf(zone)}` : ''}`
   const line = (r: AutomationRow) => {
     if (r.kind === 'waiting') return t('automations.history.waiting', { slot: slot(r.slot) })
     if (r.kind === 'skipped') {
       const first = slot(r.slots[0])
-      return r.reason === 'expired'
-        ? t('automations.history.expired', { slot: first })
-        : t(r.reason === 'replaced' ? 'automations.history.replaced' : 'automations.history.moved', { count: r.slots.length, slot: first })
+      if (r.reason === 'expired') return t('automations.history.expired', { slot: first })
+      if (r.reason === 'skipped') return t('automations.history.skipped', { slot: first })
+      return t(r.reason === 'replaced' ? 'automations.history.replaced' : 'automations.history.moved', { count: r.slots.length, slot: first })
     }
     const what = r.manual ? t('automations.history.manual', { at: momentTime(Date.parse(r.at), device, today) }) : r.slot ? t(r.late ? 'automations.history.late' : 'automations.history.onTime', { slot: slot(r.slot, r.zone) }) : ''
     return `${what} · ${t(`automations.history.outcome.${r.outcome}`)}`
@@ -263,10 +264,23 @@ function AutomationHistory({ item }: { item: Item }) {
   return (
     <section className="flex flex-col gap-1.5">
       <h2 className="mt-1.5 text-xs text-muted-foreground">{t('automations.history.title')}</h2>
+      {problems.length > 0 && (
+        <div className="flex items-start gap-3 rounded-lg bg-warn/10 px-3 py-2.5 text-[13px] text-warn" data-history-damaged>
+          <span className="flex-1">{t('automations.history.damaged')}</span>
+          <Button variant="outline" size="sm" onClick={() => openSession(null, t('problems.fixPrefill', { path: problems[0].path }))}>
+            {t('automations.history.fix')}
+          </Button>
+        </div>
+      )}
       <ul className="flex flex-col gap-1 text-[13px]" data-automation-history>
         {rows.map((r, i) => (
           <li key={i} className={r.kind === 'run' && (r.outcome === 'interrupted' || r.outcome === 'failed') ? 'text-warn' : r.kind === 'run' ? '' : 'text-muted-foreground'}>
             {line(r)}
+            {r.kind === 'waiting' && i === 0 && (
+              <button onClick={() => void window.jezo.schedule.skip(item.id).catch(failed)} className="ml-2 text-muted-foreground underline-offset-2 hover:text-foreground hover:underline">
+                {t('automations.history.skip')}
+              </button>
+            )}
             {r.kind === 'run' && r.session && (
               <button onClick={() => openSession(r.session!)} className="ml-2 text-muted-foreground underline-offset-2 hover:text-foreground hover:underline">
                 {t('automations.history.open')}

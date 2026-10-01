@@ -48,20 +48,46 @@ export function memoryExtension(memory: Memory | ((cwd: string) => Memory)): Ext
       return { entries: [{ type: 'custom_message', customType: 'jezo-memory-check', content, display: false }], continue: true }
     })
 
-    pi.on('before_agent_start', async (event, ctx) => {
-      pending.clear()
-      sentBack.clear()
-      const m = await ready(ctx.cwd)
+    /** The memory section for a run, with memories relevant to what it was asked. */
+    const section = async (cwd: string, asked: string) => {
+      const m = await ready(cwd)
       const { text: remembered, ids } = m.context()
-      // What the user just asked may bring up memories that didn't make the cut.
+      // What was just asked may bring up memories that didn't make the cut.
       const relevant = m
-        .recall(event.prompt, 5)
+        .recall(asked, 5)
         .filter((r) => !ids.includes(r.id))
         .map(line)
-      event.systemPromptOptions.sections = {
-        ...event.systemPromptOptions.sections,
-        memory: [POLICY, '', remembered, ...(relevant.length ? ['', 'Also relevant to this request:', ...relevant] : [])].join('\n'),
+      return [POLICY, '', remembered, ...(relevant.length ? ['', 'Also relevant to this request:', ...relevant] : [])].join('\n')
+    }
+
+    // A run started by a prompt goes through before_agent_start, which sets the section. One a host
+    // starts with a custom message (triggerTurn) doesn't, so its section goes into the context instead.
+    // Runs are told apart by agent_start, which also fires when a run continues, and agent_settled.
+    let running = false
+    let prompted = false
+    let inContext: string | null = null
+    pi.on('before_agent_start', async (event, ctx) => {
+      prompted = true
+      event.systemPromptOptions.sections = { ...event.systemPromptOptions.sections, memory: await section(ctx.cwd, event.prompt) }
+    })
+    pi.on('agent_start', async (_event, ctx) => {
+      if (running) return
+      running = true
+      pending.clear()
+      sentBack.clear()
+      if (!prompted) {
+        const asked = [...ctx.sessionManager.getBranch()].reverse().find((e) => e.type === 'custom_message')
+        inContext = await section(ctx.cwd, asked?.type === 'custom_message' ? String(asked.content) : '')
       }
+    })
+    pi.on('agent_settled', () => {
+      running = false
+      prompted = false
+      inContext = null
+    })
+    pi.on('context', (event) => {
+      if (inContext === null) return
+      return { messages: [{ role: 'custom', customType: 'jezo-memory-section', content: inContext, display: false, timestamp: Date.now() }, ...event.messages] }
     })
 
     const rememberParams = Type.Object({
@@ -108,6 +134,7 @@ export function memoryExtension(memory: Memory | ((cwd: string) => Memory)): Ext
 
     pi.registerTool({
       name: 'memory_recall',
+      annotations: { readOnlyHint: true },
       label: 'Recall',
       description: "Searches long-term memory. Returns current memories only; replaced and expired ones aren't used.",
       parameters: Type.Object({ query: Type.String(), limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 20 })) }),

@@ -20,6 +20,8 @@ export function serveAgent(host: AgentHost, undo: UndoLog, providers: Providers,
   ipcMain.handle('schedule:set', (_, change: Partial<ScheduleTimes>) => schedule.setTimes(change))
   ipcMain.handle('schedule:run', (_, id: string) => schedule.run(id))
   ipcMain.handle('schedule:history', (_, id: string) => schedule.rows(id))
+  ipcMain.handle('schedule:skip', (_, id: string) => schedule.skip(id))
+  ipcMain.handle('schedule:problems', () => schedule.problems())
   schedule.onHistory((id) => broadcast('schedule:history-changed', id))
   // The OS keeps this setting, so it's read from there (docs/design/automations.md, "Staying available").
   ipcMain.handle('schedule:at-login', () => app.getLoginItemSettings().openAtLogin)
@@ -30,7 +32,7 @@ export function serveAgent(host: AgentHost, undo: UndoLog, providers: Providers,
 
   ipcMain.handle('agent:list', () => host.list())
   ipcMain.handle('agent:send', (_, id: string | null, text: string, trigger?: Trigger, behavior?: 'followUp' | 'steer') => host.send(id, text, trigger, behavior))
-  ipcMain.handle('agent:start', (_, trigger: Trigger) => host.start(trigger))
+  ipcMain.handle('agent:start', (_, trigger: Trigger, zone?: string) => host.start(trigger, zone))
   ipcMain.handle('agent:abort', (_, id: string) => host.abort(id))
   ipcMain.handle('agent:nudge', (_, id: string) => host.nudge(id))
   ipcMain.handle('agent:commands', () => host.commands())

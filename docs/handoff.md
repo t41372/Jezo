@@ -45,15 +45,9 @@ Google through EventKit won't be tested separately (Tim, 2026-09-30: every accou
 ## Work in progress, in order
 
 1. **Time zones and missed automations: left over.**
-   - A request the calendar starts while showing another zone (finding times) still reads times in the device's zone.
-   - The GUI time picker shifts a clock in a spring-forward gap without saying so (it keeps the todo's zone); the tools refuse it.
-   - An `until` clock before an automation's time isn't flagged.
    - Try in the packaged app: start at login (`wasOpenedAtLogin` may be false on macOS 13+, which only means the window opens), EventKit against real calendars.
    - The morning plan's late-run wording hasn't been tried at 15:00 with the real model on its real request.
-   - From the code review of 2026-10-01 (`.claude/research/2026-10-01/review/`, each part with its verification), waiting for Tim:
-     - ICS repeats and lengths across a clock change: an IANA zone without VTIMEZONE is applied after ical.js has already compared UNTIL and EXDATE; repeats are bounded by the clock, not the interval, so a moved occurrence or one across the date line can be missed; DURATION across a change adds wall hours. All three were there before; fixing them means giving ical.js Temporal's zone rules.
-     - A damaged line in the middle of an automation's history is dropped with a console message. It should show in 有問題的檔案, and the automation shouldn't run on its own until it's fixed, since a lost claim could run a time twice.
-     - Previewing another zone on a device whose own clocks change that night: the grid's Dates are in the device's zone, so a Tokyo 02:30 on New York's spring-forward day draws at 03:30. The grid's own today and now line also follow the device.
+   - The code reviews of 2026-10-01 and what was done about them are in `.claude/research/2026-10-01/review/` (each part with its verification; `decisions-astra*.md` is the review of design decisions, `long-term-designs-sol.md` the research behind the fixes). Left: a repeat whose rule lands in a skipped hour is shifted and counted by ical.js, where RFC 5545 says to leave it out (calendar.md).
    - The voice E2E fails while another Jezo runs in development with its own speech server.
 2. **Left over from merged work:**
    - The install entry isn't verified in the packaged app, with a native addon, or with a live OAuth sign-in (extensions.md). The pi directory (packages, MCP config) isn't in the workspace backup.
@@ -90,6 +84,7 @@ Google through EventKit won't be tested separately (Tim, 2026-09-30: every accou
   - a revised plan proposed without `revise`, so the old card doesn't say 拿掉了;
   - times described in the reply without calling the tool;
   - an experiment's conclusion or decision written by the agent;
+  - "一小時後我要打給媽" answered with ask_user when that hour has a todo, instead of a time to move;
   - a tool call with keys and values run together (`"date2026-10-07": 2026`), repeated until it runs out of tokens;
   - "每週一早上九點" written as a Sunday cron. The automations' instructions now give a Monday example and say 0 is Sunday; that test passed 2 of 3 runs after.
 

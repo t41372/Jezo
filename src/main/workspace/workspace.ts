@@ -2,8 +2,8 @@
 // change, and is the one place writes go through (docs/design/backend.md).
 
 import { watch, type FSWatcher } from 'node:fs'
-import { readdir, rm } from 'node:fs/promises'
-import { join, relative, sep } from 'node:path'
+import { appendFile, mkdir, readdir, rm } from 'node:fs/promises'
+import { dirname, join, relative, sep } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import type { Fields, Item, ItemChanges } from '../../shared/workspace'
 import { type Content, hashOf, newId, readContent, readIfExists, TEMP_SUFFIX, writeAtomic } from './files'
@@ -23,6 +23,11 @@ export interface Write {
   before: Content | null
   after: Content | null
   actor: Actor
+}
+
+export interface WriteListener {
+  before(write: Write): unknown
+  after?(write: Write): void
 }
 
 export interface Kind {
@@ -47,7 +52,7 @@ export class Workspace {
   private byPath = new Map<string, string>()
   private listeners = new Set<(changes: ItemChanges) => void>()
   private fileListeners = new Set<(path: string) => void>()
-  private writeListeners = new Set<(write: Write) => unknown>()
+  private writeListeners = new Set<WriteListener>()
   private watcher: FSWatcher | null = null
   private pending = new Set<string>()
   private flushTimer: NodeJS.Timeout | null = null
@@ -127,13 +132,14 @@ export class Workspace {
   }
 
   /**
-   * Called before any file is written through the workspace. A listener that
-   * returns a promise is waited for, so undo has saved the change before the file
-   * itself changes.
+   * Told about every file written through the workspace: `before` it's written,
+   * waited for, so undo has saved the change before the file itself changes; and
+   * `after` it was. A listener given as a function is told before.
    */
-  onWrite(listener: (write: Write) => unknown) {
-    this.writeListeners.add(listener)
-    return () => this.writeListeners.delete(listener)
+  onWrite(listener: ((write: Write) => unknown) | WriteListener) {
+    const entry = typeof listener === 'function' ? { before: listener } : listener
+    this.writeListeners.add(entry)
+    return () => this.writeListeners.delete(entry)
   }
 
   /** File changes, including skills, which aren't indexed as items. */
@@ -189,8 +195,10 @@ export class Workspace {
     if (!item) return
     await this.serial(item.path, async () => {
       const text = await readIfExists(this.abs(item.path))
-      await this.beforeWrite({ path: item.path, before: text, after: null, actor })
+      const write = { path: item.path, before: text, after: null, actor }
+      await this.beforeWrite(write)
       await rm(this.abs(item.path), { force: true })
+      this.afterWrite(write)
       this.drop(item.path)
     })
     this.emit({ changed: [], removed: [id] })
@@ -201,8 +209,10 @@ export class Workspace {
     await this.serial(path, async () => {
       const text = await readContent(this.abs(path))
       if (text === null) return
-      await this.beforeWrite({ path, before: text, after: null, actor })
+      const write = { path, before: text, after: null, actor }
+      await this.beforeWrite(write)
       await rm(this.abs(path), { force: true })
+      this.afterWrite(write)
       for (const listener of this.fileListeners) listener(path)
       const id = this.drop(path)
       if (id) this.emit({ changed: [], removed: [id] })
@@ -222,13 +232,33 @@ export class Workspace {
   }
 
   /**
+   * Adds text to the end of a file, for a ledger like an automation's history,
+   * so a write costs what it adds rather than the whole file. Writes to one file
+   * go one after another, with any other write to it.
+   */
+  async appendFile(path: string, text: string, actor: Actor) {
+    await this.serial(path, async () => {
+      // Told like any write, so a shell command's snapshot doesn't take it for the command's.
+      const write = { path, before: null, after: null, actor }
+      await this.beforeWrite(write)
+      await mkdir(dirname(this.abs(path)), { recursive: true })
+      await appendFile(this.abs(path), text)
+      this.afterWrite(write)
+      for (const listener of this.fileListeners) listener(path)
+    })
+  }
+
+  /**
    * A file that changed without coming through here, because a shell command the
    * agent ran changed it. It's recorded and indexed like a write; the file on
    * disk already says `after`.
    */
   async changedOutside(path: string, before: string | null, after: string | null, actor: Actor) {
     await this.serial(path, async () => {
-      await this.beforeWrite({ path, before, after, actor })
+      const write = { path, before, after, actor }
+      // The file already changed, so it's done as soon as it's recorded.
+      await this.beforeWrite(write)
+      this.afterWrite(write)
       for (const listener of this.fileListeners) listener(path)
       const changes = await this.reread(path, after ?? undefined)
       if (changes) this.emit(changes)
@@ -236,15 +266,23 @@ export class Workspace {
   }
 
   private async writeNow(path: string, text: Content, actor: Actor, before: Content | null) {
-    await this.beforeWrite({ path, before, after: text, actor })
+    const write = { path, before, after: text, actor }
+    await this.beforeWrite(write)
     await writeAtomic(this.abs(path), text)
+    this.afterWrite(write)
     for (const listener of this.fileListeners) listener(path)
     const changes = await this.reread(path, typeof text === 'string' ? text : undefined)
     if (changes) this.emit(changes)
   }
 
+  /** A listener that fails stops the write: undo couldn't keep what it needs to take it back. */
   private async beforeWrite(write: Write) {
-    await Promise.all([...this.writeListeners].map((listener) => Promise.resolve(listener(write)).catch(console.error)))
+    await Promise.all([...this.writeListeners].map((listener) => listener.before(write)))
+  }
+
+  /** The write happened. */
+  private afterWrite(write: Write) {
+    for (const listener of this.writeListeners) listener.after?.(write)
   }
 
   private serial<T>(path: string, work: () => Promise<T>): Promise<T> {
