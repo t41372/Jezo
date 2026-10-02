@@ -1,6 +1,6 @@
 {
   "name": "jezo",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "description": "A local-first personal agent for todos, goals, calendar, and habits",

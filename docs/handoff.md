@@ -1,4 +1,4 @@
-# Handoff: where the work stands (2026-10-01)
+# Handoff: where the work stands (2026-10-02)
 
 This is a working note, not a design doc. It holds what the agent building
 Jezo was in the middle of, and the decisions waiting on Tim. Delete it once
@@ -49,6 +49,15 @@ Research, reviews and measurements are in `.claude/research/2026-10-01/issues/`.
 Left over:
 - std-mlx-audio's own tests: four in `test_batch.py` fail on macOS before and after `474277b`, comparing `/var/...` with `/private/var/...`.
 
+### Release (2026-10-02)
+
+Tim asked for a code review loop with Codex until nothing worth fixing was left, a squashed history, CI, a README with pictures in English and Simplified Chinese, and Simplified Chinese in the app, ahead of merging and the first release.
+- Four review rounds ran (round 1 in six parts by area, then each round on the previous round's fixes); round 4 found nothing. Each finding was checked against the code and the docs before anything changed; the ones judged deliberate are written into the design docs.
+- CI is `.github/workflows/ci.yml` (typecheck, unit tests, build, E2E without `@speech`; the model tests skip without a local model). `release.yml` builds an unsigned dmg and zip on a `v*` tag into a draft release.
+- The README's pictures come from `node scripts/screenshots.ts` after a build.
+- Waiting on Tim: pushing the squashed branch, merging to main, and tagging v0.1.0.
+- Not done: speech on Windows (backend.md, "Speech"); signing and notarizing the app.
+
 ## Work in progress, in order
 
 1. **Time zones and missed automations: left over.**
@@ -83,14 +92,17 @@ Left over:
 - **The clipboard is Tim's.** A test that copies must put back what was there (chat.spec.ts); one failed when Tim copied something mid-run, and every run overwrote his clipboard.
 - **Don't `git stash` in this tree.** Another session may have uncommitted work in it (on 2026-10-01 one was doing the app icon); commit only your own files, and stage your hunks of a shared file with `git apply --cached`.
 - **Test requests that name a plugin's folder** ("在 notes 資料夾") get that plugin's conventions from a model (items/, frontmatter). The bash test writes to scratch/ now.
-- **Model tests that flake on qwen3.6** as of 2026-10-01:
+- **Model tests that flake on qwen3.6** as of 2026-10-02:
   - "一小時後" read as "within an hour";
   - a revised plan proposed without `revise`, so the old card doesn't say 拿掉了;
   - times described in the reply without calling the tool;
   - an experiment's conclusion or decision written by the agent;
   - "一小時後我要打給媽" answered with ask_user when that hour has a todo, instead of a time to move;
   - a tool call with keys and values run together (`"date2026-10-07": 2026`), repeated until it runs out of tokens;
-  - a deadline the user said left out of the todo (4 of 6 set it; frontend.md, "Deadlines").
+  - a deadline the user said left out of the todo (4 of 6 set it; frontend.md, "Deadlines"), or a question asked first ("拆成 3 段還是一次寫完") instead of a plan;
+  - "我今天有哪些待辦？先查再回答" answered from the digest without calling a tool;
+  - three backlog errands merged into one new todo in the morning plan instead of scheduling the three;
+  - field names with " /" appended (`"date /"`), sent again and again.
   - "每週一早上九點" written as a Sunday cron. The automations' instructions give a Monday example and say 0 is Sunday, and since 2026-10-02 the write's result reads the schedule back as dates with weekdays. It still happened in 2 of 6 runs on 2026-10-02: the model's first thought turned 週一 into 周日 before it read anything, once explaining that "it's Sunday evening now" with Friday in its time note, and it went on past the read-back that said Sun. Not caused by what it's given; a check would have to read the user's words.
 
   Each passes on a rerun. Read the trace before changing anything for them.
