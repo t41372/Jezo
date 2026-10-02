@@ -56,5 +56,12 @@
   "unchanged": {
     "text": "這輪沒有改動",
     "nudge": "請它動手"
+  },
+  "work": {
+    "thought": "想了一下",
+    "thoughtAnd": "想了一下 · {{steps}}",
+    "thinking": "正在想",
+    "doing": "正在{{step}}",
+    "run": "這輪{{steps}}"
   }
 }

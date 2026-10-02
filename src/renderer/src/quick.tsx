@@ -204,7 +204,7 @@ function Answer({ question, view, onPick }: { question: string; view: SessionVie
   useEffect(() => {
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight })
   }, [messages])
-  const waiting = !view || (view.running && !messages.some((m) => m.kind === 'agent' && m.streaming))
+  const waiting = !view || (view.running && (view.thinking !== undefined || !messages.some((m) => m.kind === 'agent' && m.streaming)))
   return (
     <div ref={scroller} className="flex max-h-[360px] flex-col gap-2.5 overflow-auto px-1 pt-1">
       {(shown.length ? shown : [{ kind: 'user' as const, text: question }]).map((m, i) =>
@@ -230,7 +230,12 @@ function Answer({ question, view, onPick }: { question: string; view: SessionVie
           </div>
         ) : m.kind === 'extension-question' ? <ExtensionQuestionCard key={i} session={view!.id} question={m.question} /> : null,
       )}
-      {waiting && <div className="text-[13px] text-muted-foreground motion-safe:animate-pulse">{t('quick.thinking')}</div>}
+      {waiting && (
+        <div className="flex min-w-0 items-baseline gap-2 text-[13px] text-muted-foreground">
+          <span className="shrink-0 motion-safe:animate-pulse">{t('quick.thinking')}</span>
+          {view?.thinking && <span className="truncate text-muted-foreground/70" data-thinking-line>{view.thinking}</span>}
+        </div>
+      )}
     </div>
   )
 }

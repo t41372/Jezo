@@ -9,7 +9,7 @@ import { writeSortSession } from './sessions'
 const SESSION_ID = '01a0f000-0000-7000-8000-000000000002'
 const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } }
 
-function seed(root: string, cards = false, cutOff = false) {
+function seed(root: string, cards = false, cutOff = false, thinking = false) {
   const now = Date.now()
   const at = new Date(now).toISOString()
   let parentId: string | null = null
@@ -23,9 +23,21 @@ function seed(root: string, cards = false, cutOff = false) {
   const message = (value: object) => append({ type: 'message', message: { ...value, timestamp: now + count } })
   const assistant = (content: object[], stopReason = 'stop') => message({ role: 'assistant', content, stopReason, api: 'openai-completions', provider: 'lmstudio', model: 'seed', usage })
   append({ type: 'custom', customType: 'jezo.session', data: { trigger: 'user' } })
-  message({ role: 'user', content: cutOff ? '想太久' : cards ? '卡片測試' : '排版測試' })
+  message({ role: 'user', content: thinking ? '想給我看' : cutOff ? '想太久' : cards ? '卡片測試' : '排版測試' })
   for (const customType of ['jezo.time', 'jezo.request', 'jezo.check']) append({ type: 'custom_message', customType, content: `HIDDEN-${customType}`, display: false })
-  if (cutOff) {
+  if (thinking) {
+    // Two stretches of work, with something said between them, the way a real run alternates.
+    assistant([
+      { type: 'thinking', thinking: '用戶想知道今天的安排。\n先讀今天的待辦。', thinkingSignature: 'reasoning_content' },
+      { type: 'text', text: '我先看看你今天的待辦。' },
+      { type: 'toolCall', id: 'read-call', name: 'read', arguments: { path: `${root}/todos/items/t-1.md` } },
+    ], 'toolUse')
+    message({ role: 'toolResult', toolCallId: 'read-call', toolName: 'read', content: [{ type: 'text', text: 'TOOL-OUTPUT-晨跑' }], isError: false })
+    assistant([
+      { type: 'thinking', thinking: '只有一件：晨跑。\n可以直接回答。', thinkingSignature: 'reasoning_content' },
+      { type: 'text', text: '今天只有晨跑。' },
+    ])
+  } else if (cutOff) {
     assistant([{ type: 'thinking', thinking: 'I\'ll write the JSON.\n'.repeat(50) }], 'length')
   } else if (cards) {
     assistant([
@@ -123,6 +135,38 @@ test.describe('saved versions', () => {
   })
 })
 
+test.describe("the agent's thinking, saved", () => {
+  test.use({ prepare: { model: null, workspace: (root) => seed(root, false, false, true) } })
+  test('folds each stretch of thinking and steps where it happened, and opens to them in order', async ({ jezo }, info) => {
+    const { page } = jezo
+    await page.getByRole('button', { name: /想給我看/ }).click()
+    const message = page.locator('main [data-chat-message="assistant"]')
+    const folds = message.getByRole('button', { name: /^想了一下/ })
+    await expect(folds).toHaveCount(2)
+    // A message is thought, then said, then a tool call: the call folds with the thinking after it.
+    await expect(folds.nth(0)).toHaveText('想了一下')
+    await expect(folds.nth(1)).toHaveText('想了一下 · 看了 1 個檔案')
+    // What the agent said between the two stretches sits between their folds.
+    const order = await message.evaluate((root) => [...root.querySelectorAll('button, [data-selectable]')].map((el) => el.textContent?.trim()).filter((text) => /想了一下|我先看看|今天只有晨跑/.test(text ?? '')))
+    expect(order).toEqual(['想了一下', '我先看看你今天的待辦。', '想了一下 · 看了 1 個檔案', '今天只有晨跑。'])
+    // With the steps spread over folds, the run's total is under it.
+    await expect(message.locator('[data-run-summary]')).toHaveText('這輪看了 1 個檔案')
+    // Nothing of the thinking shows until a fold is opened; then it's there, in the order it happened.
+    await expect(page.locator('main [data-thought]')).toHaveCount(0)
+    await folds.nth(1).click()
+    const work = message.locator('[data-work]')
+    await expect(work).toHaveCount(1)
+    await expect(work.locator('[data-step="read"]')).toHaveText('讀 todos/items/t-1.md')
+    await expect(work.locator('[data-tool-output]')).toHaveText('TOOL-OUTPUT-晨跑')
+    await expect(work.locator('[data-thought]')).toHaveText('只有一件：晨跑。\n可以直接回答。')
+    expect(await work.evaluate((el) => [...el.children].map((child) => child.querySelector('[data-step]') ? 'step' : child.hasAttribute('data-thought') ? 'thought' : '?'))).toEqual(['step', 'thought'])
+    await folds.nth(0).click()
+    await expect(message.locator('[data-work]').first().locator('[data-thought]')).toHaveText('用戶想知道今天的安排。\n先讀今天的待辦。')
+    await artifact(page, info, 'thinking-folds')
+    expect(jezo.errors).toEqual([])
+  })
+})
+
 test.describe('a reply cut off by its length', () => {
   test.use({ prepare: { model: null, workspace: (root) => seed(root, false, true) } })
   test('says so, and offers to answer again', async ({ jezo }) => {
@@ -164,6 +208,27 @@ test.describe('Jezo cards', () => {
 test.describe('live pi chat', () => {
   test.setTimeout(600_000)
   test.beforeEach(async () => { test.skip(!(await localModel()), 'No local model server (LM Studio or Ollama) is running.') })
+
+  test('shows what the model is thinking while it thinks, then folds it where it happened', async ({ jezo }, info) => {
+    const { page } = jezo
+    const box = page.locator('main textarea').first()
+    await box.fill('我今天有哪些待辦？先查再回答。')
+    await box.press('Enter')
+    // While it works, a fold says so: thinking with its latest line, or the step running.
+    await expect(page.locator('main [data-chat-message="assistant"]').getByRole('button', { name: /^(正在想|正在)/ }).first()).toBeVisible({ timeout: 120_000 })
+    await idle(page)
+    const message = page.locator('main [data-chat-message="assistant"]').first()
+    const folds = message.getByRole('button', { name: /^想了一下/ })
+    await expect(folds.first()).toBeVisible()
+    await expect(message.getByRole('button', { name: /^正在/ })).toHaveCount(0)
+    // It looked the todos up, and that step sits in a fold with the thinking around it.
+    await expect(message.getByRole('button', { name: /看了 \d+ 個檔案|做了 \d+ 件事/ }).first()).toBeVisible()
+    for (const fold of await folds.all()) await fold.click()
+    expect((await message.locator('[data-thought]').allInnerTexts()).join('').length).toBeGreaterThan(20)
+    await expect(message.locator('[data-step="todos_list"]').first()).toBeVisible()
+    await artifact(page, info, 'thinking-live-run')
+    expect(jezo.errors).toEqual([])
+  })
 
   test('queues, retries, switches the continuation, edits and stops', async ({ jezo }, info) => {
     const { page, root } = jezo

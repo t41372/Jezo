@@ -78,6 +78,8 @@ export interface SessionView {
   tools?: string[]
   /** The agent is working. */
   running?: boolean
+  /** While the model is thinking, the last line of what it's thinking ('' before the first line). */
+  thinking?: string
   pending?: { steering: string[]; followUp: string[] }
 }
 

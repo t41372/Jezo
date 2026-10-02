@@ -60,5 +60,12 @@
   "unchanged": {
     "text": "Nothing changed this turn",
     "nudge": "Ask it to do it"
+  },
+  "work": {
+    "thought": "Thought",
+    "thoughtAnd": "Thought · {{steps}}",
+    "thinking": "Thinking",
+    "doing": "Working: {{step}}",
+    "run": "In all: {{steps}}"
   }
 }

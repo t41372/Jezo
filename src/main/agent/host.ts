@@ -948,6 +948,7 @@ export class AgentHost {
       messages,
       tools: c.session?.getAllTools().filter((tool) => tool.exposure !== 'hidden').map((tool) => tool.name),
       ...(c.running && { running: true }),
+      ...(c.partial ? { thinking: thinkingNow(c.partial) } : {}),
       pending: { steering: [...(c.session?.getSteeringMessages() ?? [])], followUp: [...(c.session?.getFollowUpMessages() ?? [])] },
     }
   }
@@ -989,10 +990,19 @@ interface Block {
   arguments?: Record<string, unknown>
 }
 
+/** The last line of thinking in a message being written, while thinking is the newest thing in it. */
+function thinkingNow(message: { content?: unknown }) {
+  const last = (message.content as Block[] | undefined)?.at(-1) as (Block & { thinking?: string }) | undefined
+  if (last?.type !== 'thinking') return undefined
+  return last.thinking?.trimEnd().split('\n').at(-1)?.trim() ?? ''
+}
+
 /**
- * What the user sees of a conversation: their messages, what the agent said,
- * what it did (folded into steps), and the cards its tools asked for. Requests
- * Jezo sent on the user's behalf and the agent's thinking aren't shown.
+ * What the ⌥X window and the session list see of a conversation: the user's
+ * messages, what the agent said, what it did (folded into steps), and the
+ * cards its tools asked for. Requests Jezo sent on the user's behalf aren't
+ * shown. The agent's thinking is only in the main chat, which reads the
+ * records itself, and in `SessionView.thinking` while it's happening.
  */
 export function toMessages(entries: unknown[], root: string): SessionMessage[] {
   const out: SessionMessage[] = []
