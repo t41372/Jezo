@@ -75,6 +75,8 @@
     "estimate": "大約",
     "estimateInline": "大約 {{duration}}",
     "accept": "好",
+    "draftChip": "草稿",
+    "proposedChip": "提議的時間",
     "acceptTime": "就這個時間",
     "reject": "不要",
     "why": "為什麼這樣排？",
@@ -162,6 +164,7 @@
   },
   "quick": {
     "placeholder": "跟 Jezo 說…",
+    "noteFailed": "沒記到隨手記，字還在框裡。",
     "noted": "記到隨手記了",
     "planTomorrow": "幫我安排明天",
     "badDay": "今天不太順",

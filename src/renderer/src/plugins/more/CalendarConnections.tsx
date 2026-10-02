@@ -285,8 +285,9 @@ function GoogleRows({ status }: { status: CalendarStatus }) {
           <div className="text-[14.5px] font-medium">{accounts.length ? t('calendars.googleAnother') : t('calendars.google')}</div>
           <div className="mt-0.5 text-[12.5px] text-pretty text-muted-foreground">{status.googleClient ? t('calendars.googleReady') : t('calendars.googleDetail')}</div>
         </div>
-        {status.googleClient && <GoogleSetupDialog again />}
-        {status.googleClient ? <ConnectGoogle label={t('calendars.googleConnect')} /> : <GoogleSetupDialog />}
+        {/* One dialog either way, so saving the client doesn't swap it out while it waits for the sign-in. */}
+        <GoogleSetupDialog again={status.googleClient} />
+        {status.googleClient && <ConnectGoogle label={t('calendars.googleConnect')} />}
       </div>
     </>
   )

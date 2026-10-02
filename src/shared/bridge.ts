@@ -204,6 +204,8 @@ export interface JezoBridge {
     /** The audio is over; resolves to everything that was said. */
     end(): Promise<string>
     onText(listener: (text: string) => void): () => void
+    /** Another window started listening, which ends this one's utterance. */
+    onReplaced(listener: () => void): () => void
   }
   /** The user's calendars: the Mac's own and ICS subscriptions (docs/design/calendar.md). Events are read-only. */
   calendar: {
@@ -265,7 +267,8 @@ export interface JezoBridge {
    * from being saved again; restore and discard are for undo.
    */
   memory: {
-    remember(input: { text: string; epistemic: 'stated' | 'inferred'; evidence?: string[] }): Promise<{ id: string }>
+    /** `separate` saves it beside related memories; `again` brings back words the user deleted. Both are the user's call when they save one. */
+    remember(input: { text: string; epistemic: 'stated' | 'inferred'; evidence?: string[]; separate?: boolean; again?: boolean }): Promise<{ id: string }>
     forget(id: string): Promise<void>
     restore(record: Record<string, unknown>): Promise<void>
     discard(id: string): Promise<void>

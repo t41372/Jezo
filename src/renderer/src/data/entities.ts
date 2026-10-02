@@ -156,10 +156,11 @@ function recordText(at: number, zone: Zone, previousAt?: number, previous?: stri
 
 /**
  * A goal from its file and the todos that serve it. Done todos add their
- * amount to the progress; a rule was tried when a todo with its cue was
- * scheduled before today, and it worked when that todo got done.
+ * amount to the progress, to this week's when they were done this week; a rule
+ * was tried when a todo with its cue was done or scheduled before today, and it
+ * worked when that todo got done.
  */
-export function toGoal(item: Item, todos: Todo[], today: ISODate): Goal {
+export function toGoal(item: Item, todos: Todo[], today: ISODate, zone: Zone): Goal {
   const d = item.data
   const measure = (d.measure ?? {}) as { unit?: string; total?: number; start?: number }
   // A todo the user dropped is neither progress nor a try of a rule.
@@ -167,7 +168,10 @@ export function toGoal(item: Item, todos: Todo[], today: ISODate): Goal {
   const amount = (t: Todo) => t.amount ?? 1
   const done = mine.filter((t) => t.state === 'done')
   const [monday, sunday] = weekOf(today)
-  const thisWeek = (t: Todo) => t.slot && t.slot.date >= monday && t.slot.date <= sunday
+  const inWeek = (date: ISODate) => date >= monday && date <= sunday
+  const thisWeek = (t: Todo) => !!t.slot && inWeek(t.slot.date)
+  // Done this week, scheduled or not; one marked done by hand, with no time, by its slot.
+  const doneThisWeek = (t: Todo) => (t.completedAt !== undefined ? inWeek(Temporal.Instant.fromEpochMilliseconds(t.completedAt).toZonedDateTimeISO(zone).toPlainDate().toString()) : thisWeek(t))
   const rules = Array.isArray(d.rules) ? (d.rules as { cue: string; action: string }[]) : []
   const proposal = d.rule_proposal as { rule: number; cue: string; action: string; why: string } | undefined
   return {
@@ -180,12 +184,12 @@ export function toGoal(item: Item, todos: Todo[], today: ISODate): Goal {
     dueNote: str(d.due_note),
     progress: { done: (measure.start ?? 0) + done.reduce((sum, t) => sum + amount(t), 0), total: measure.total ?? 1, unit: measure.unit ?? '' },
     week: {
-      done: done.filter(thisWeek).reduce((sum, t) => sum + amount(t), 0),
+      done: done.filter(doneThisWeek).reduce((sum, t) => sum + amount(t), 0),
       planned: mine.filter((t) => t.state === 'open' && thisWeek(t)).reduce((sum, t) => sum + amount(t), 0),
     },
     agentNote: str(d.note),
     rules: rules.map((r) => {
-      const tried = mine.filter((t) => t.cue === r.cue && t.slot && (t.slot.date < today || t.state === 'done'))
+      const tried = mine.filter((t) => t.cue === r.cue && (t.state === 'done' || (t.slot && t.slot.date < today)))
       return { cue: r.cue, action: r.action, tries: tried.length, hits: tried.filter((t) => t.state === 'done').length }
     }),
     samples: done

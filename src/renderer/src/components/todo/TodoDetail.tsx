@@ -12,7 +12,7 @@ import { useTranslation } from 'react-i18next'
 import { easeDrawer, easeOut } from '@/lib/motion'
 import { addDays, clock, longDate, monthDay, weekday } from '@/lib/time'
 import { offerUndo } from '@/lib/undo'
-import { attachmentsIn, fileUrl, isImage, linkedPath } from '@/lib/files'
+import { attachmentsIn, fileUrl, isImage, linkedPath, linkTo } from '@/lib/files'
 import { endsPastDue, whenLabel } from './format'
 import { Related } from './Related'
 import { CueField, DueField, EstimateField, GoalField, RepeatField, SlotField, TitleField, ZoneField } from './TodoFields'
@@ -216,7 +216,7 @@ function Notes({ todo, onSave }: { todo: Todo; onSave: (notes: string) => void }
   const { t } = useTranslation()
   const picker = useRef<HTMLInputElement>(null)
   const from = todo.path ?? `todos/items/${todo.id}.md`
-  const upload = async (file: File) => window.jezo.workspace.attach(todo.id, file.name, new Uint8Array(await file.arrayBuffer()))
+  const upload = async (file: File) => linkTo(await window.jezo.workspace.attach(todo.id, file.name, new Uint8Array(await file.arrayBuffer())))
   const display = (url: string) => {
     const path = linkedPath(from, url)
     return path ? fileUrl(path) : url
@@ -224,7 +224,7 @@ function Notes({ todo, onSave }: { todo: Todo; onSave: (notes: string) => void }
   const files = attachmentsIn(todo.notes, from).filter((f) => !isImage(f.path))
   const add = async (list: FileList | null) => {
     const lines: string[] = []
-    for (const file of list ?? []) lines.push(`${isImage(file.name) ? '!' : ''}[${file.name.replace(/[[\]]/g, '')}](${encodeURI(await upload(file))})`)
+    for (const file of list ?? []) lines.push(`${isImage(file.name) ? '!' : ''}[${file.name.replace(/[[\]]/g, '')}](${await upload(file)})`)
     if (lines.length) onSave(`${todo.notes.trimEnd()}${todo.notes.trim() ? '\n\n' : ''}${lines.join('\n\n')}\n`)
   }
   return (

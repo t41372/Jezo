@@ -9,7 +9,7 @@ import { goalById, useStore, withMeaning } from '@/data/store'
 import { ZonePicker } from '@/components/ZonePicker'
 import { goalStyle } from '@/lib/goal-color'
 import { cityOf } from '@/lib/zones'
-import { epochOf, now, readTime, todayIn } from '../../../../shared/time'
+import { epochOf, now, readTime, seriesFrom, todayIn } from '../../../../shared/time'
 import { dayCode, dueLabel, meaningLabel, repeatLabel } from './format'
 import type { Todo } from '@/data/types'
 import { clock, duration, inZone, monthDay, parseDate, toISODate, weekday } from '@/lib/time'
@@ -360,12 +360,13 @@ export function DueField({ todo }: { todo: Todo }) {
 export function RepeatField({ todo }: { todo: Todo }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
-  const today = useStore((s) => s.now.date)
+  const zone = useStore((s) => s.zone)
   const series = useStore((s) => s.repeats.find((r) => r.id === todo.series))
   const [days, setDays] = useState('7')
   const live = series && series.state !== 'ended' ? series : undefined
-  const date = todo.slot?.date ?? todo.due?.date ?? today
-  const day = Temporal.PlainDate.from(date)
+  // The series' own date, where its clock is, which can differ from the day shown here.
+  const day = seriesFrom(todo.times?.scheduled, todo.times?.due, zone).date
+  const date = day.toString()
   const choices: { rule: string; from: 'schedule' | 'done' }[] = [
     { rule: 'FREQ=DAILY', from: 'schedule' },
     { rule: `FREQ=WEEKLY;BYDAY=${dayCode(date)}`, from: 'schedule' },

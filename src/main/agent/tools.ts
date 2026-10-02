@@ -24,7 +24,8 @@ import { shellOperations } from './shell'
 import type { CommandCheckpoints } from './undo'
 import { listSkills } from '../workspace/skills'
 import { insideWorkspace, type Workspace } from '../workspace/workspace'
-import { dateOf, deadlineEnd, epochOf, formatTime, moveTo, place, readTime, stamp, todayIn, type Zone } from '../../shared/time'
+import { hashOf, readContent } from '../workspace/files'
+import { dateOf, deadlineEnd, epochOf, formatTime, moveTo, place, readTime, seriesFrom, stamp, todayIn, type Zone } from '../../shared/time'
 import { deviceZone } from '../clock'
 import { dueWords, whenText } from './prompt'
 import { ruleProblem, upcoming } from '../workspace/rrule'
@@ -91,15 +92,6 @@ function dueText(input: string, here: Zone): string {
   }
   if (placed.gap) throw new Error(`${date} ${clock} doesn't exist${zone ? ` in ${zone}` : ''}: the clocks skip it that day. ${formatTime(placed.value).slice(11, 16)} is the time after the gap.`)
   return formatTime(placed.value)
-}
-
-/** A series' `due_after`: how long after the planned time its deadline is, in whole days when the deadline is a day. */
-function dueAfter(scheduled: string, due: string) {
-  const plan = readTime(scheduled)
-  const deadline = readTime(due, 'deadline')
-  if (!plan || plan.kind !== 'zoned' || !deadline) return 'P0D'
-  if (deadline.kind === 'day') return `P${Math.max(0, plan.wall.toPlainDate().until(deadline.date).days)}D`
-  return plan.wall.toZonedDateTime(plan.zone).until(deadline.kind === 'zoned' ? deadline.wall.toZonedDateTime(deadline.zone) : deadline.kind === 'moment' ? deadline.at : plan.wall.toZonedDateTime(plan.zone)).toString()
 }
 
 /** Said when a todo's planned time ends after its deadline: a fact to act on, not a refusal (sometimes late is the plan). */
@@ -209,18 +201,51 @@ export function createTools(
       context().refused()
       throw new Error(`Not written, because ${path} would not match ${manifest.dir}/manifest.yaml:\n- ${problems.join('\n- ')}\nFix it and write again.`)
     }
-    const id = workspace.at(path)?.id
+    const current = workspace.at(path)
+    const id = current?.id
     if (id && !id.startsWith('?') && data.id !== id) {
       context().refused()
       throw new Error(`Not written, because it changes the id of ${path}. Its id is ${id}, and an id never changes.`)
     }
+    // A field the manifest doesn't name is one the app never shows or counts: a model wrote an
+    // experiment's results as `results` rather than `value`. Fields already in the file are left be.
+    const had = new Set(current ? manifest.unknown(current.data).map((u) => u.field) : [])
+    const added = manifest.unknown(data).filter((u, i, all) => !had.has(u.field) && all.findIndex((v) => v.field === u.field) === i)
+    if (added.length) {
+      context().refused()
+      throw new Error(
+        `Not written, because ${manifest.dir}/manifest.yaml has no such field, so the app would never show it:\n${added.map((u) => `- ${u.field}: the fields there are ${u.known.join(', ')}`).join('\n')}\nUse one of those (${manifest.dir}/AGENTS.md says what each holds), put it in the body, or add the field to the manifest first.`,
+      )
+    }
+  }
+
+  /**
+   * Each workspace file as the agent last read or wrote it, by hash. A whole-file
+   * write made from an older read would undo whatever changed since, like the
+   * user's edit in the GUI (docs/design/backend.md, "Writing"); edit reads first.
+   */
+  const seen = new Map<string, string>()
+  const sawRead = async (absolute: string) => {
+    const content = await readFile(absolute)
+    const path = insideWorkspace(root, absolute)
+    if (path) seen.set(path, hashOf(content))
+    return content
   }
 
   const writeOps = {
     writeFile: async (absolute: string, content: string) => {
       const path = writable(absolute)
       check(path, content)
+      const last = seen.get(path)
+      if (last) {
+        const current = await readContent(absolute)
+        if (current !== null && hashOf(current) !== last) {
+          seen.delete(path)
+          throw new Error(`Not written: ${path} changed since you last read it, by the user or the app. Read it again and make your change on what it holds now.`)
+        }
+      }
       await workspace.writeFile(path, content, actor())
+      seen.set(path, hashOf(content))
     },
     mkdir: async () => {
       // The workspace creates directories as it writes.
@@ -228,7 +253,7 @@ export function createTools(
   }
   const editOps = {
     ...writeOps,
-    readFile: (absolute: string) => readFile(absolute),
+    readFile: sawRead,
     access: (absolute: string) => access(absolute),
   }
 
@@ -346,16 +371,17 @@ export function createTools(
         // A repeating one: its series, which writes each next time once this first one is accepted.
         let repeats = ''
         if (todo.repeat && !draft) {
+          const { start, date, dueAfter } = seriesFrom(time?.text, dues[index] ?? undefined, here())
           const series = await workspace.create('repeat', {
             title: todo.title,
             state: 'draft',
             rule: todo.repeat.trim(),
-            start: time?.text ?? dues[index] ?? todayIn(here()).toString(),
+            start,
             estimate: todo.estimate,
             ...(todo.goal && { goal: todo.goal }),
             ...(todo.cue && { cue: todo.cue }),
-            ...(dues[index] && time && { due_after: dueAfter(time.text, dues[index]!) }),
-            last: (readTime(time?.text) ? dateOf(readTime(time!.text)!, here()) : todayIn(here())).toString(),
+            ...(dueAfter && { due_after: dueAfter }),
+            last: date.toString(),
             created: stamp(deviceZone()),
           }, '', actor())
           item = await workspace.update(item.id, { series: series.id, occurrence: String(series.data.last) }, actor())
@@ -561,7 +587,7 @@ export function createTools(
     readFile: async (absolute: string) => {
       const path = insideWorkspace(root, absolute)
       if (path && blocked(path)) throw new Error('This conversation is closed to you: the user deleted a memory that came from it.')
-      return readFile(absolute)
+      return sawRead(absolute)
     },
     access: (absolute: string) => access(absolute),
   }

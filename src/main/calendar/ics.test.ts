@@ -21,6 +21,9 @@
 //  - a clock the clocks skip (02:30 on the spring-forward day) is read an hour early, at 01:30;
 //    RFC 5545 erratum 4271 says to keep it, counted, at the offset from before the change: 03:30;
 //  - a clock that happens twice (01:30 on the fall-back day) is read as the second; it's the first.
+// The code review of 2026-10-02 found, written down before the fix:
+//  - a THISANDFUTURE change with a DTEND gives every later occurrence the changed one's own end date, so it ends before it starts;
+//  - an all-day event with a DURATION of days is one day long.
 
 import { describe, expect, test } from 'bun:test'
 import { formatTime, parseTime, resolve } from '../../shared/time'
@@ -85,6 +88,11 @@ describe('all-day events', () => {
   test('with no DTEND it lasts one day', () => {
     const [e] = read(feed(...event('UID:g', 'SUMMARY:G', 'DTSTART;VALUE=DATE:20261001'))).events
     expect(e).toMatchObject({ allDay: true, start: '2026-10-01', end: '2026-10-02' })
+  })
+
+  test('a DURATION of days lasts that many days', () => {
+    const [e] = read(feed(...event('UID:trip', 'SUMMARY:Trip', 'DTSTART;VALUE=DATE:20261001', 'DURATION:P3D'))).events
+    expect(e).toMatchObject({ allDay: true, start: '2026-10-01', end: '2026-10-04' })
   })
 
   test('an all-day date is not shifted by the time zone', () => {
@@ -223,6 +231,19 @@ describe('what school and hand-made feeds do', () => {
       ...event('UID:tf', 'RECURRENCE-ID;RANGE=THISANDFUTURE:20260930T010000Z', 'SUMMARY:Class', 'DTSTART:20260930T020000Z', 'DURATION:PT1H'),
     )
     expect(titled(text, 'Class').map((e) => e.start)).toEqual(['2026-09-28T09:00', '2026-09-29T09:00', '2026-09-30T10:00', '2026-10-01T10:00', '2026-10-02T10:00'])
+  })
+
+  test('THISANDFUTURE with a DTEND ends each later occurrence on its own day', () => {
+    const text = feed(
+      ...event('UID:tfe', 'SUMMARY:Lab', 'DTSTART:20260928T010000Z', 'DTEND:20260928T020000Z', 'RRULE:FREQ=DAILY;COUNT=4'),
+      ...event('UID:tfe', 'RECURRENCE-ID;RANGE=THISANDFUTURE:20260930T010000Z', 'SUMMARY:Lab', 'DTSTART:20260930T020000Z', 'DTEND:20260930T033000Z'),
+    )
+    expect(titled(text, 'Lab').map((e) => [e.start, e.end])).toEqual([
+      ['2026-09-28T09:00', '2026-09-28T10:00'],
+      ['2026-09-29T09:00', '2026-09-29T10:00'],
+      ['2026-09-30T10:00', '2026-09-30T11:30'],
+      ['2026-10-01T10:00', '2026-10-01T11:30'],
+    ])
   })
 
   test('a time that doesn’t exist, in the hour skipped for daylight saving, uses the offset from before the gap', () => {

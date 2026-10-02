@@ -293,9 +293,17 @@ export function readIcs(text: string, from: string, to: string, zone: Zone): Ics
     let s: string, en: string, first: number, eventZone: string | undefined
     if (allDay) {
       s = dateOf(startTime)
-      // DTEND is exclusive; with none, or none after the start, the event is that one day.
-      const last = endTime && endTime.compare(startTime) > 0 ? endTime : startTime.clone()
-      if (last.compare(startTime) <= 0) last.adjust(1, 0, 0, 0)
+      // DTEND is exclusive; a DURATION counts from the start; with neither, or none after the start, the event is that one day.
+      const duration = e.component.getFirstPropertyValue('duration') as ICAL.Duration | null
+      let last = endTime
+      if (!last && duration && !e.component.hasProperty('dtend')) {
+        last = startTime.clone()
+        last.addDuration(duration)
+      }
+      if (!last || last.compare(startTime) <= 0) {
+        last = startTime.clone()
+        last.adjust(1, 0, 0, 0)
+      }
       en = dateOf(last)
       if (en <= from || s >= to) return
       first = Temporal.PlainDate.from(s).toZonedDateTime(zone).epochMilliseconds
@@ -345,10 +353,13 @@ export function readIcs(text: string, from: string, to: string, zone: Zone): Ics
   for (const e of series.values()) {
     try {
       const tzid = e.component.getFirstProperty('dtstart')?.getParameter('tzid') as string | undefined
-      // The series' own length in elapsed time, when it has a DTEND.
-      const length = e.component.hasProperty('dtend') && !e.startDate.isDate
-        ? point(e.endDate, (e.component.getFirstProperty('dtend')?.getParameter('tzid') as string | undefined) ?? tzid).at - point(e.startDate, tzid).at
-        : undefined
+      // An event's own length in elapsed time, when it has a DTEND: the series', or a moved occurrence's.
+      const lengthOf = (item: ICAL.Event) => {
+        if (!item.component.hasProperty('dtend') || item.startDate.isDate) return undefined
+        const zoneOf = (p: string) => item.component.getFirstProperty(p)?.getParameter('tzid') as string | undefined
+        return point(item.endDate, zoneOf('dtend') ?? zoneOf('dtstart')).at - point(item.startDate, zoneOf('dtstart')).at
+      }
+      const length = lengthOf(e)
       // The rule walks clocks; the range is moments. Two days either side cover any two zones, plus the event's length.
       const stop = ICAL.Time.fromDateString(to)
       stop.adjust(2, 0, 0, 0)
@@ -363,9 +374,10 @@ export function readIcs(text: string, from: string, to: string, zone: Zone): Ics
         const d = e.getOccurrenceDetails(next)
         const key = d.recurrenceId.toString()
         done.add(key)
-        // A moved occurrence keeps its own times; the rest are the series' length long.
+        // A moved occurrence keeps its own length; the rest are the series' length long. One moved
+        // with "this and future" (RANGE=THISANDFUTURE) moves later dates too, so its end is from each start.
         const moved = d.item !== e
-        add(d.item, d.startDate, moved ? (d.item.component.hasProperty('dtend') ? d.item.endDate : null) : d.endDate, `${uidOf(e)}@${key}`, true, moved ? undefined : length)
+        add(d.item, d.startDate, moved ? (d.item.component.hasProperty('dtend') ? d.endDate : null) : d.endDate, `${uidOf(e)}@${key}`, true, moved ? lengthOf(d.item) : length)
       }
       // An occurrence moved here from a date outside the walk is found by its new times.
       for (const [key, moved] of Object.entries(e.exceptions as unknown as Record<string, ICAL.Event>)) {

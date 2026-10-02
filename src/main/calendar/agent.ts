@@ -25,8 +25,13 @@ function clock(at: Temporal.ZonedDateTime) {
 /** Two moments as "2026-10-01 23:30–00:30", with the second date when it differs. */
 const range = (a: Temporal.ZonedDateTime, b: Temporal.ZonedDateTime) => `${a.toPlainDate()} ${clock(a)}–${a.toPlainDate().equals(b.toPlainDate()) ? '' : `${b.toPlainDate()} `}${clock(b)}`
 
-/** Calendars that couldn't be read, said so the agent never takes "nothing there" from them. */
-const unread = (names: string[]) => (names.length ? `\nCouldn't read ${names.join(', ')} just now, so nothing is known from ${names.length > 1 ? 'them' : 'it'}.` : '')
+/** Calendars that couldn't be read, said so the agent never takes "nothing there" from them. Their names may be a feed's own, so they're screened. */
+async function unread(names: string[], outside: OutsideContent, held: Held[]) {
+  if (!names.length) return ''
+  const screened = await outside.screen(names.join(', '), "the names of the user's calendars")
+  if (screened.held) held.push(screened.held)
+  return `\nCouldn't read ${names.length > 1 ? `${names.length} calendars` : 'a calendar'} just now (${screened.text}), so nothing is known from ${names.length > 1 ? 'them' : 'it'}.`
+}
 
 /**
  * When an event is, as the agent reads it: in the device's zone, with both dates
@@ -55,12 +60,12 @@ async function lines(events: CalendarEvent[], names: Map<string, string>, withNo
   return Promise.all(
     events.map(async (e) => {
       const when = eventWhen(e, zone)
+      // A calendar's name can come from whoever made it too (a feed's own name, a shared calendar), so it's screened with the rest.
       const calendar = names.get(e.calendar)
-      const written = [`title: ${e.title}`, e.location && `location: ${e.location}`, withNotes && e.notes && `notes: ${e.notes.replace(/\s+/g, ' ').slice(0, 300)}`].filter(Boolean).join('\n')
-      const screened = await outside.screen(written, `the calendar${calendar ? ` "${calendar}"` : ''}, ${when}`)
+      const written = [`title: ${e.title}`, e.location && `location: ${e.location}`, withNotes && e.notes && `notes: ${e.notes.replace(/\s+/g, ' ').slice(0, 300)}`, calendar && `calendar: ${calendar}`].filter(Boolean).join('\n')
+      const screened = await outside.screen(written, `the calendar, ${when}`)
       if (screened.held) held.push(screened.held)
-      const extra = [e.repeats && 'repeats', calendar && `calendar: ${calendar}`].filter(Boolean).join(', ')
-      return `- ${when}${extra ? ` (${extra})` : ''}: ${screened.text}`
+      return `- ${when}${e.repeats ? ' (repeats)' : ''}: ${screened.text}`
     }),
   )
 }
@@ -98,7 +103,7 @@ export function calendarExtension(calendars: Calendars, outside: OutsideContent,
               ...(await lines(events, await names(), false, outside, held, here())),
               'Use calendar_events for other days, or for notes.',
             ].join('\n')
-          : `Nothing ${unchecked.length ? 'that Jezo could read ' : ''}is on the user's calendar today or tomorrow. Use calendar_events for other days.`) + unread(unchecked)
+          : `Nothing ${unchecked.length ? 'that Jezo could read ' : ''}is on the user's calendar today or tomorrow. Use calendar_events for other days.`) + (await unread(unchecked, outside, held))
       } catch {
         return "The user's calendar couldn't be read just now. Try calendar_events if you need it."
       }
@@ -161,7 +166,7 @@ export function calendarExtension(calendars: Calendars, outside: OutsideContent,
         const events = around.filter(inRange)
         const held: Held[] = []
         const text = events.length ? (await lines(events, await names(), !!params.notes, outside, held, zone)).join('\n') : `Nothing ${unchecked.length ? 'that Jezo could read ' : ''}on the calendar from ${params.from} to ${params.to}.`
-        return { content: [{ type: 'text' as const, text: text + unread(unchecked) + hints(around.filter((e) => !inRange(e)), zone) }], details: held.length ? { held } : undefined }
+        return { content: [{ type: 'text' as const, text: text + (await unread(unchecked, outside, held)) + hints(around.filter((e) => !inRange(e)), zone) }], details: held.length ? { held } : undefined }
       },
     })
   }

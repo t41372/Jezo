@@ -85,6 +85,7 @@ const bridge: JezoBridge = {
     audio: (chunk) => ipcRenderer.send('speech:audio', chunk),
     end: () => ipcRenderer.invoke('speech:end'),
     onText: (listener) => listen<string>('speech:text', listener),
+    onReplaced: (listener) => listen<void>('speech:replaced', listener),
   },
   calendar: {
     status: () => ipcRenderer.invoke('calendar:status'),

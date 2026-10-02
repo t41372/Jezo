@@ -93,6 +93,15 @@ export function Composer({
     if (said) onChange(value ? `${value.trimEnd()} ${said}` : said)
     input.current?.focus()
   }
+  // A window put away, like ⌥X dismissed, stops listening and keeps what was heard: the microphone isn't left on out of sight.
+  const stopRef = useRef(stopListening)
+  stopRef.current = stopListening
+  useEffect(() => {
+    if (!listening) return
+    const onHidden = () => document.hidden && void stopRef.current()
+    document.addEventListener('visibilitychange', onHidden)
+    return () => document.removeEventListener('visibilitychange', onHidden)
+  }, [listening])
 
   return (
     <div className="relative">
@@ -180,6 +189,8 @@ function Listening({ session, onHeard, onStop, onUnavailable }: { session?: stri
   const { t } = useTranslation()
   const mic = useDictation(3, session)
   useEffect(() => window.jezo.speech.onText((text) => onHeard(traditional(text))), [onHeard])
+  // Another window took the microphone (⌥X held while dictating here): stop, keeping what was heard.
+  useEffect(() => window.jezo.speech.onReplaced(onStop), [onStop])
   useEffect(() => {
     if (mic.ready && !mic.error) return
     void window.jezo.speech.end()

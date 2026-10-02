@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { Disclosure } from '@/components/Disclosure'
 import { PlanCard } from '@/components/todo/PlanCard'
 import { TodoCheck } from '@/components/todo/TodoCheck'
+import { DraftChip } from '@/components/todo/DraftChip'
 import { dueLabel, whenLabel } from '@/components/todo/format'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -159,7 +160,10 @@ function NowCard({ todo, onOpen }: { todo: Todo; onOpen: () => void }) {
       <div className="flex items-start gap-3.5">
         <TodoCheck todo={todo} size={22} className="mt-1" />
         <div className="flex-1">
-          <div className="text-lg leading-snug font-semibold">{todo.title}</div>
+          <div className="text-lg leading-snug font-semibold">
+            <DraftChip todo={todo} />
+            {todo.title}
+          </div>
           <div className="mt-1 text-[13px] text-muted-foreground">
             {running ? (
               <span className="flex items-center gap-1.5 text-goal-deep tabular-nums">
@@ -168,7 +172,7 @@ function NowCard({ todo, onOpen }: { todo: Todo; onOpen: () => void }) {
               </span>
             ) : (
               <>
-                {whenLabel(todo)} · {t('todo.estimateInline', { duration: duration(todo.estimateMinutes) })}
+                {[whenLabel(todo), dueLabel(todo, useStore.getState().now.date), t('todo.estimateInline', { duration: duration(todo.estimateMinutes) })].filter(Boolean).join(' · ')}
               </>
             )}
           </div>
@@ -220,7 +224,10 @@ function Row({ todo, selected, onOpen }: { todo: Todo; selected: boolean; onOpen
     >
       <TodoCheck todo={todo} />
       <button onClick={onOpen} className="min-w-0 flex-1 text-left">
-        <div className="text-[15px] font-medium">{todo.title}</div>
+        <div className="text-[15px] font-medium">
+          <DraftChip todo={todo} />
+          {todo.title}
+        </div>
         <div className="mt-0.5 text-[12.5px] text-muted-foreground">{[todo.slot ? whenLabel(todo) : null, dueLabel(todo, useStore.getState().now.date)].filter(Boolean).join(' · ')}</div>
       </button>
       <span className="text-[12.5px] text-muted-foreground tabular-nums">{todo.slot && clock(todo.slot.start)}</span>

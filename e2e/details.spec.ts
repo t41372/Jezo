@@ -99,13 +99,14 @@ test('the drawer edits every field, the notes keep their markdown, and files go 
   await page.keyboard.press('Escape')
 
   // An image and a PDF: stored next to the todo, linked from its notes; the image shows, the PDF is listed.
+  // A name with a space, # and parentheses stays one link, readable, and the image loads from it.
   await drawer.locator('input[type=file]').setInputFiles([
-    { name: '白板.png', mimeType: 'image/png', buffer: png() },
+    { name: '白板 #1 (v2).png', mimeType: 'image/png', buffer: png() },
     { name: '報名表.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4\n%%EOF\n') },
   ])
-  await expect.poll(() => read('todos/items/t-1.md').body).toContain('![白板.png](../attachments/t-1/%E7%99%BD%E6%9D%BF.png)')
-  expect(read('todos/items/t-1.md').body).toContain('[報名表.pdf](../attachments/t-1/%E5%A0%B1%E5%90%8D%E8%A1%A8.pdf)')
-  expect(readFileSync(join(root, 'todos/attachments/t-1/白板.png'))).toEqual(png())
+  await expect.poll(() => read('todos/items/t-1.md').body).toContain('![白板 #1 (v2).png](../attachments/t-1/白板%20%231%20%28v2%29.png)')
+  expect(read('todos/items/t-1.md').body).toContain('[報名表.pdf](../attachments/t-1/報名表.pdf)')
+  expect(readFileSync(join(root, 'todos/attachments/t-1/白板 #1 (v2).png'))).toEqual(png())
   expect(existsSync(join(root, 'todos/attachments/t-1/報名表.pdf'))).toBe(true)
   await expect.poll(() => editor.locator('img').first().evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(2)
   await expect(drawer.getByRole('list', { name: '附件' })).toContainText('報名表.pdf')

@@ -166,6 +166,33 @@ export function stamp(zone: Zone, at: Temporal.Instant | number = now()): string
 /** Today's date in `zone`. */
 export const todayIn = (zone: Zone, at: Temporal.Instant = now()) => at.toZonedDateTimeISO(zone).toPlainDate()
 
+/**
+ * A repeating series made from a todo (docs/design/frontend.md, "Repeating
+ * todos"): its `start`, the `date` of the todo as its first time, and its deadline
+ * as `dueAfter`. The start is the planned time, a clock in a zone, or else a day:
+ * the deadline's, or today. A length of days alone (P2D) is a day deadline that
+ * many days after; one with a time part (PT8H) is a time that long after the
+ * planned time, or after the day begins for a series on a day.
+ */
+export function seriesFrom(scheduled: string | undefined, due: string | undefined, zone: Zone): { start: string; date: Temporal.PlainDate; dueAfter?: string } {
+  const plan = readTime(scheduled)
+  const deadline = readTime(due, 'deadline')
+  if (plan?.kind === 'zoned') {
+    const date = plan.wall.toPlainDate()
+    if (!deadline) return { start: scheduled!, date }
+    if (deadline.kind === 'day') return { start: scheduled!, date, dueAfter: `P${Math.max(0, date.until(deadline.date).days)}D` }
+    const from = plan.wall.toZonedDateTime(plan.zone)
+    const length = from.until(resolve(deadline, plan.zone)!.at, { largestUnit: 'day' })
+    return { start: scheduled!, date, dueAfter: (length.sign < 0 ? Temporal.Duration.from('PT0S') : length).toString() }
+  }
+  if (!deadline) return { start: todayIn(zone).toString(), date: todayIn(zone) }
+  if (deadline.kind === 'day') return { start: deadline.date.toString(), date: deadline.date }
+  // A clock on the deadline's day, as it reads where the deadline is.
+  const wall = deadline.kind === 'moment' ? deadline.at.withTimeZone(zone).toPlainDateTime() : deadline.wall
+  const date = wall.toPlainDate()
+  return { start: date.toString(), date, dueAfter: date.toPlainDateTime().until(wall).toString() }
+}
+
 /** What placing a clock on a date gives, and whether that clock was real. */
 export interface Placed {
   value: TimeValue

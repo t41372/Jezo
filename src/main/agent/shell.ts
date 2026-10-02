@@ -23,7 +23,7 @@ import { SandboxManager } from '@anthropic-ai/sandbox-runtime'
 import { type BashOperations, createLocalBashOperations } from '@earendil-works/pi-coding-agent'
 import { textOf } from '../workspace/skill-source'
 import type { Actor, Workspace } from '../workspace/workspace'
-import type { CommandCheckpoints } from './undo'
+import { type CommandCheckpoints, commandChanges, type Snapshot } from './undo'
 
 const home = homedir()
 
@@ -52,21 +52,21 @@ export function namedFolders(said: string[]): string[] {
 }
 
 /**
- * Text files in the workspace, to see what a command changed. Sessions, dot
- * folders and the automations' history aren't the user's items: the scheduler
- * writes the history while commands run, and it isn't undone.
+ * The workspace's files, to see what a command changed: each text file's text,
+ * and null for one that isn't kept, being larger than 1 MiB or not text.
+ * Sessions, dot folders and the automations' history aren't the user's items:
+ * the scheduler writes the history while commands run, and it isn't undone.
  */
-export async function snapshot(root: string): Promise<Map<string, string>> {
-  const files = new Map<string, string>()
+export async function snapshot(root: string): Promise<Snapshot> {
+  const files: Snapshot = new Map()
   const visit = async (dir: string) => {
     for (const entry of await readdir(dir, { withFileTypes: true })) {
       if (entry.name.startsWith('.') || entry.name === 'node_modules') continue
       const path = join(dir, entry.name)
       if (entry.isDirectory()) {
         if (!['sessions', 'automations/history'].includes(relative(root, path))) await visit(path)
-      } else if (entry.isFile() && (await lstat(path)).size <= 1024 * 1024) {
-        const text = textOf(await readFile(path))
-        if (text !== null) files.set(relative(root, path), text)
+      } else if (entry.isFile()) {
+        files.set(relative(root, path), (await lstat(path)).size <= 1024 * 1024 ? textOf(await readFile(path)) : null)
       }
     }
   }
@@ -112,12 +112,8 @@ export function shellOperations(workspace: Workspace, context: () => { actor: Ac
       } finally {
         stop()
         // What else changed in the workspace is the command's, recorded for undo as the agent's, however it ended.
-        const after = await snapshot(workspace.root)
-        for (const path of new Set([...before.keys(), ...after.keys()])) {
-          if (others.has(path)) continue
-          const was = before.get(path) ?? null
-          const now = after.get(path) ?? null
-          if (was !== now) await workspace.changedOutside(path, was, now, actor)
+        for (const [path, was, now] of commandChanges(before, await snapshot(workspace.root))) {
+          if (!others.has(path)) await workspace.changedOutside(path, was, now, actor)
         }
         if (checkpoint) await checkpoints!.end(actor.run!, checkpoint)
       }

@@ -367,11 +367,13 @@ export class Schedule {
     if (previousZone !== zone) await this.history.append(item.id, { type: 'zone', zone, at: stamp(zone, at) })
 
     // Earlier times since the last run (or since watching began, that one included) that weren't run.
-    // Listed up to the time due now, never further; a claimed one isn't missed.
-    const from = summary.lastClaim?.due ? Temporal.Instant.from(summary.lastClaim.due) : watchingAt
+    // Listed up to the time due now, never further; a claimed one isn't missed. A run from before
+    // watching began again, after a pause, doesn't count the pause.
+    const sinceRun = summary.lastClaim?.due && Temporal.Instant.compare(Temporal.Instant.from(summary.lastClaim.due), watchingAt) >= 0
+    const from = sinceRun ? Temporal.Instant.from(summary.lastClaim!.due!) : watchingAt
     const missed: Slot[] = []
     let more = false
-    for (let cursor = new Date(from.epochMilliseconds - (summary.lastClaim?.due ? 0 : 1000)); ; ) {
+    for (let cursor = new Date(from.epochMilliseconds - (sinceRun ? 0 : 1000)); ; ) {
       const next = runs.nextRun(cursor)
       if (!next || next.getTime() >= due.epochMilliseconds) break
       cursor = next

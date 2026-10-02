@@ -71,17 +71,29 @@ function Quick() {
   }
 
   // Filed at once; the confirmation stays long enough to read, short enough not to be in the way.
+  // It closes once saved; if it couldn't be, the words come back to the box, where they're the only copy.
   const note = (content: string) => {
     setMode({ kind: 'noted' })
     setText('')
-    window.jezo.time.zone().then((zone) => window.jezo.workspace.create('note', { created: stamp(zone), source: 'hotkey', state: 'new' }, `${content}\n`)).catch(console.error)
-    window.setTimeout(() => window.jezo.quick.hide(), 600)
+    const saved = window.jezo.time.zone().then((zone) => window.jezo.workspace.create('note', { created: stamp(zone), source: 'hotkey', state: 'new' }, `${content}\n`))
+    Promise.all([saved, new Promise((done) => window.setTimeout(done, 600))]).then(
+      () => window.jezo.quick.hide(),
+      (error) => {
+        console.error(error)
+        setText(content)
+        setMode({ kind: 'type' })
+        toast.error(t('quick.noteFailed'))
+      },
+    )
   }
 
-  // The conversation goes on in the main window: the one started here, or a new one.
+  // The conversation goes on in the main window: the one started here, or a new one, with what's typed sent in it.
   const continueInMain = () => {
     const question = text.trim()
-    if (session) return window.jezo.quick.continue(session)
+    if (session) {
+      if (question) void window.jezo.agent.send(session, question, 'hotkey')
+      return window.jezo.quick.continue(session)
+    }
     if (question) window.jezo.agent.send(null, question, 'hotkey').then((id) => window.jezo.quick.continue(id))
   }
 

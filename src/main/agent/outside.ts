@@ -106,7 +106,17 @@ export function outsideToolResults(outside: OutsideContent, isOutside: (tool: st
           return { ...block, text: screened.text }
         }),
       )
-      return { content, ...(held.length && { details: { ...(event.details as object), held } }) }
+      // The machine-readable result a codemode script reads is checked as a whole too, and kept
+      // unless it's held back: pi drops it when content is replaced without it.
+      let structured = event.structuredContent
+      if (structured !== undefined) {
+        const screened = await outside.screen(JSON.stringify(structured), event.toolName)
+        if (screened.held) {
+          held.push(screened.held)
+          structured = undefined
+        }
+      }
+      return { content, ...(structured !== undefined && { structuredContent: structured }), ...(held.length && { details: { ...(event.details as object), held } }) }
     })
   }
 }

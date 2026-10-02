@@ -8,7 +8,7 @@ import { parse as parseYaml } from 'yaml'
 import type { Fields, Item, ItemChanges } from '../../shared/workspace'
 import { type Content, hashOf, newId, readContent, readIfExists, TEMP_SUFFIX, writeAtomic } from './files'
 import { FrontmatterError, parse, patch } from './frontmatter'
-import { compileSchema, type Check } from './schema'
+import { compileSchema, unknownFields, type Check } from './schema'
 
 /**
  * Who is writing. An explicit user history action may carry a run too
@@ -36,6 +36,8 @@ export interface Kind {
   dir: string
   prefix: string
   check: Check
+  /** Fields an item has that the manifest doesn't name (schema.ts). */
+  unknown: (data: unknown) => { field: string; known: string[] }[]
 }
 
 /** A file changed since the caller read it. The caller should reload and try again. */
@@ -302,7 +304,7 @@ export class Workspace {
       if (text === null) continue
       try {
         const manifest = parseYaml(text) as { kind: string; prefix: string; schema: object }
-        this.kinds.set(manifest.kind, { name: manifest.kind, dir: entry.name, prefix: manifest.prefix, check: compileSchema(manifest.schema) })
+        this.kinds.set(manifest.kind, { name: manifest.kind, dir: entry.name, prefix: manifest.prefix, check: compileSchema(manifest.schema), unknown: (data) => unknownFields(manifest.schema, data) })
       } catch (error) {
         console.error(`Can't read ${entry.name}/manifest.yaml:`, error)
       }

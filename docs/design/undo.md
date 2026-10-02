@@ -43,7 +43,7 @@ Restoring to a point undoes everything after that point, including the user's ow
 Follow Hermes' model, with storage outside the workspace. Built on 2026-09-29 (`src/main/agent/undo.ts`), at file level:
 
 1. **Record what the agent writes.** For every file Jezo's agent changes in a turn, store the file's content from before the change and the hash of what the agent wrote, in the app-data directory. Changes made through the shell are caught by comparing hashes of the workspace files before and after the turn.
-2. **Undo checks before it reverts.** A file is restored only if its current hash still matches what the agent wrote. If the user has changed it since, it's left alone, and the preview says so, for example: "3 changes undone, 1 kept because you edited it afterward". The restore is written through the workspace as a change by the user, like an edit in the GUI, so the index, the windows, and later a sync see it the same way.
+2. **Undo checks before it reverts.** A file is restored only if its current hash still matches what the agent wrote. If the user has changed it since, it's left alone, and the preview says so, for example: "3 changes undone, 1 kept because you edited it afterward". So is a file the user changed between two of the run's writes to it: the run's second write kept their edit, and restoring the file to before the run would take that edit back too. The restore is written through the workspace as a change by the user, like an edit in the GUI, so the index, the windows, and later a sync see it the same way.
 3. **For structured data, go per field** if file-level checks turn out to be too coarse. Record `{entity id, field, old, new}`, so the agent's change to one field can be undone even when the user edited a different field in the same file.
 4. **Keep only recent turns.** History older than a short window is dropped. Losing it is fine.
 
@@ -53,7 +53,7 @@ Follow Hermes' model, with storage outside the workspace. Built on 2026-09-29 (`
 
 **Jezo's own records aren't undoable.** Writes with the writer `jezo`, like the automation history in `automations/history/`, are never recorded. The shell's before-and-after snapshot skips that folder, so a scheduler write during a shell command isn't blamed on the agent.
 
-Skill installations and removals go through the workspace, bytes included. A file that isn't text is kept in the history as a blob named by its hash, in `history-blobs/` beside `history.json`, and dropped when no kept run refers to it; like the rest of the history, it's safe to lose. Its diff in 修改紀錄 is one line, `(binary)`. Files a shell command changes are compared as text only, so bytes it writes aren't in the history.
+Skill installations and removals go through the workspace, bytes included. A file that isn't text is kept in the history as a blob named by its hash, in `history-blobs/` beside `history.json`, and dropped when no kept run refers to it; like the rest of the history, it's safe to lose. Its diff in 修改紀錄 is one line, `(binary)`. Files a shell command changes are compared as text only, so bytes it writes aren't in the history. Neither is a file larger than 1 MiB, nor one that becomes text from bytes or from over 1 MiB: what it held before wasn't kept, so undo couldn't put it back, and recording it as new would make undo delete it.
 
 ## Open questions
 

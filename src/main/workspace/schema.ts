@@ -86,3 +86,21 @@ export function compileSchema(schema: object): Check {
     })
   }
 }
+
+type Schema = { properties?: Record<string, Schema>; items?: Schema; additionalProperties?: unknown; patternProperties?: unknown }
+
+/**
+ * Fields the data has that its schema doesn't name, each with the fields that
+ * are there, like `arms[].results` next to `label, condition, periods, value,
+ * basis`. An object whose schema allows other fields isn't looked into.
+ */
+export function unknownFields(schema: Schema, data: unknown, at = ''): { field: string; known: string[] }[] {
+  if (Array.isArray(data)) return schema.items ? data.flatMap((item) => unknownFields(schema.items!, item, `${at}[]`)) : []
+  if (!data || typeof data !== 'object' || !schema.properties || schema.additionalProperties !== undefined || schema.patternProperties) return []
+  const known = Object.keys(schema.properties)
+  return Object.entries(data).flatMap(([key, value]) => {
+    const field = at ? `${at}.${key}` : key
+    const sub = schema.properties![key]
+    return sub ? unknownFields(sub, value, field) : [{ field, known }]
+  })
+}

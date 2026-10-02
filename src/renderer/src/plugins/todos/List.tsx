@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { useDragItem, useDropTarget } from '@/app/Dnd'
 import { Disclosure } from '@/components/Disclosure'
 import { insertionAt, pointerY, type Insertion } from '@/components/todo/reorder'
+import { DraftChip } from '@/components/todo/DraftChip'
 import { dueLabel, repeatLabel } from '@/components/todo/format'
 import { TodoCheck } from '@/components/todo/TodoCheck'
 import { Segmented } from '@/components/Segmented'
@@ -296,7 +297,6 @@ function Row({ todo, selected, date, actions, onMove }: { todo: Todo; selected: 
   useStore((s) => s.now)
   const now = Date.now()
   const { listeners, setNodeRef, isDragging } = useDragItem({ kind: 'todo', id: todo.id }, todo.state === 'done' || todo.state === 'dropped')
-  const draft = todo.state === 'draft'
   const closed = todo.state === 'done' || todo.state === 'dropped'
   const when = todo.slot ? (date ? `${dayLabel(todo.slot.date, today)} ${clock(todo.slot.start)}` : clock(todo.slot.start)) : null
   const series = useStore((s) => (todo.series ? s.repeats.find((r) => r.id === todo.series && r.state !== 'ended') : undefined))
@@ -330,7 +330,7 @@ function Row({ todo, selected, date, actions, onMove }: { todo: Todo; selected: 
         className="min-w-0 flex-1 text-left outline-none focus-visible:underline"
       >
         <div className={cn('truncate text-[14.5px]', closed && 'text-muted-foreground', todo.state === 'done' && 'line-through')}>
-          {draft && <span className="mr-1.5 rounded bg-draft-chip px-1 py-px text-[11px] text-draft-ink">{t('draft')}</span>}
+          <DraftChip todo={todo} />
           {todo.title}
         </div>
         <div className="truncate text-[12px] text-muted-foreground">

@@ -68,6 +68,12 @@ interface Conversation {
   update?: Extract<PiClientEventBody, { type: 'message_update' }>
   liveAssistantId?: string
   initializing?: Promise<AgentSession | null>
+  /**
+   * Jezo has no model it may use for this conversation. pi would pick one of its
+   * own, from any key in the environment or the model a saved conversation used,
+   * so the session's model alone doesn't say.
+   */
+  noModel?: boolean
   completion?: Promise<void>
   /** How the last run ended, for an automation's history (docs/design/automations.md, "Attempts"). */
   outcome?: Outcome
@@ -498,7 +504,7 @@ export class AgentHost {
       if (c.aborted) return
       // An extension's command needs no model: pi runs its code, not the agent.
       const byExtension = session && userText !== undefined && command(session, userText)
-      if (!session || (!session.model && !byExtension)) {
+      if (!session || ((c.noModel || !session.model) && !byExtension)) {
         if (userText) c.manager.appendMessage({ role: 'user', content: userText, timestamp: Date.now() })
         this.note(c, { kind: 'error', code: 'no-model' })
         c.outcome = 'unreachable'
@@ -580,10 +586,12 @@ export class AgentHost {
       await this.providers.refreshServers()
       model = this.providers.model(role)
     }
+    c.noModel = !model
     if (c.session) {
-      // The user may have picked another model, or another thinking level, since this conversation started.
+      // The user may have picked another model, given its server another address, or another thinking level, since this conversation started.
       if (model) {
-        if (c.session.model?.provider !== model.provider || c.session.model?.id !== model.id) await c.session.setModel(model)
+        const current = c.session.model
+        if (current?.provider !== model.provider || current?.id !== model.id || current?.baseUrl !== model.baseUrl) await c.session.setModel(model)
         c.session.setThinkingLevel(this.providers.thinking(model) as ThinkingLevel)
       }
       return c.session

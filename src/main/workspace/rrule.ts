@@ -28,11 +28,15 @@ export function nextDate(rule: string, start: TimeValue, from: Temporal.PlainDat
   return null
 }
 
+/** How many times the rule has in all, or null when it doesn't say. */
+export const ruleCount = (rule: string) => ICAL.Recur.fromString(rule).count ?? null
+
 /** Why an RRULE won't do, in words the agent can act on; '' when it's fine. The workspace's check uses it too. */
 export function ruleProblem(text: string) {
   if (!/^FREQ=(DAILY|WEEKLY|MONTHLY|YEARLY)(;[A-Z]+=[^;]+)*$/.test(text)) return `"${text}" isn't a repeat rule: write an RRULE like FREQ=WEEKLY;BYDAY=MO.`
   try {
-    ICAL.Recur.fromString(text)
+    // Some rules only fail once walked, like BYMONTHDAY in a weekly one.
+    ICAL.Recur.fromString(text).iterator(ICAL.Time.fromData({ year: 2026, month: 1, day: 1, isDate: true })).next()
     return ''
   } catch (error) {
     return `"${text}" isn't a repeat rule: ${(error as Error).message}`

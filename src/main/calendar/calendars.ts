@@ -105,6 +105,12 @@ export class Calendars {
     if (getConfig().calendar.mac && this.access === 'full') this.watch()
     this.timer = setInterval(() => void this.refresh(), REFRESH_MINUTES * 60_000)
     void this.refresh()
+    // The subscriptions are a workspace file the agent, an undo or the user's editor can change too.
+    this.workspace.onFileChange((path) => {
+      if (path !== SUBSCRIPTIONS) return
+      this.changed()
+      void this.refresh()
+    })
   }
 
   close() {
@@ -252,10 +258,9 @@ export class Calendars {
   /** Turns the Mac's calendars on, asking macOS for access if it hasn't been asked. */
   async connectMac(): Promise<MacAccess> {
     this.access = await requestMacAccess()
-    if (this.access === 'full') {
-      await setConfig({ calendar: { ...getConfig().calendar, mac: true } })
-      this.watch()
-    }
+    // Turned on even when access was refused, so 連接 shows why and where to allow it rather than offering to connect again.
+    if (this.access !== 'unavailable') await setConfig({ calendar: { ...getConfig().calendar, mac: true } })
+    if (this.access === 'full') this.watch()
     this.changed()
     return this.access
   }
@@ -467,10 +472,12 @@ export class Calendars {
     const mac = shown.filter((c) => c.source === 'mac').map((c) => c.id)
     if (mac.length) {
       try {
-        for (const e of await macEvents(dayStart(from, zone).toInstant(), dayStart(to, zone).toInstant(), mac)) {
-          if (e.cancelled) continue
-          const { cancelled: _c, allDay, repeats, ...rest } = e
-          events.push({ ...rest, ...(allDay && { allDay }), ...(repeats && { repeats }) })
+        // EventKit places an event with no zone (all-day, or a floating time) by the Mac's own zone; asked a day
+        // either side, then kept by where it falls in `zone`, it's found when the run plans somewhere else.
+        for (const e of await macEvents(dayStart(from, zone).subtract({ days: 1 }).toInstant(), dayStart(to, zone).add({ days: 1 }).toInstant(), mac)) {
+          const { cancelled, allDay, repeats, ...rest } = e
+          const event = { ...rest, ...(allDay && { allDay }), ...(repeats && { repeats }) }
+          if (!cancelled && inRange(event)) events.push(event)
         }
       } catch (error) {
         console.error("Can't read the Mac's calendars:", error)

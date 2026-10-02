@@ -11,7 +11,7 @@ import type { ThemeSource } from '../../../shared/bridge'
 import type { CalendarStatus } from '../../../shared/calendar'
 import type { Fields, Item, ItemChanges } from '../../../shared/workspace'
 import i18n, { applyLanguage, storedLanguage, type LanguageSetting } from '@/i18n'
-import { formatTime, now, place, readTime, stamp, type Zone } from '../../../shared/time'
+import { formatTime, now, place, readTime, seriesFrom, stamp, type Zone } from '../../../shared/time'
 import { dueTextFor, entities, localDate, toDue, toExperiment, toRepeat, toGoal, toMemory, toNote, toSlot, toTodo, todoFields, type TimeContext } from './entities'
 import { connectCalendar } from './calendar'
 import { clock as clockText, inZone } from '@/lib/time'
@@ -127,7 +127,8 @@ interface State {
 
 
   /** Jots something down in 隨手記. */
-  addNote(text: string, source: Note['source']): void
+  /** Resolves to whether it was saved. */
+  addNote(text: string, source: Note['source']): Promise<boolean>
   editNote(id: string, text: string): void
   deleteNote(id: string): void
   /** Puts a deleted note back, for undo. */
@@ -237,7 +238,7 @@ function upsert<T extends { id: string }>(list: T[], changed: T[], removed: stri
 /** Goal files, kept as they are: a goal is counted again whenever its todos change. */
 let goalItems = new Map<string, Item>()
 
-const deriveGoals = (todos: Todo[], today: ISODate) => [...goalItems.values()].map((item) => toGoal(item, todos, today)).sort((a, b) => a.id.localeCompare(b.id))
+const deriveGoals = (todos: Todo[], today: ISODate, zone: Zone) => [...goalItems.values()].map((item) => toGoal(item, todos, today, zone)).sort((a, b) => a.id.localeCompare(b.id))
 
 function applyChanges({ changed, removed }: ItemChanges) {
   for (const id of removed) goalItems.delete(id)
@@ -254,11 +255,19 @@ function applyChanges({ changed, removed }: ItemChanges) {
       notes: upsert(s.notes, entities(changed, 'note', (i) => toNote(i, s.zone)), removed, byCreated),
       experiments: upsert(s.experiments, entities(changed, 'experiment', toExperiment), removed, byExperiment),
       repeats: upsert(s.repeats, entities(changed, 'repeat', toRepeat), removed, (a, b) => a.id.localeCompare(b.id)),
-      goals: deriveGoals(todos, s.now.date),
+      goals: deriveGoals(todos, s.now.date, s.zone),
       memories: memories.filter((m) => !replaced.includes(m.id)),
       ...(proposed.length && { lastProposal: { ids: proposed.map((t) => t.id), at: Date.now() } }),
     }
   })
+}
+
+/**
+ * Fields save when they lose focus. The rail doesn't take focus when clicked, so
+ * leaving a page would unmount a field mid-edit without its blur; this blurs it first.
+ */
+function leavePage() {
+  if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
 }
 
 const newestFirst = (a: Session, b: Session) => b.started - a.started
@@ -291,7 +300,7 @@ async function loadWorkspace() {
     notes: entities(items, 'note', (i) => toNote(i, zone)).sort(byCreated),
     experiments: entities(items, 'experiment', toExperiment).sort(byExperiment),
     repeats: entities(items, 'repeat', toRepeat),
-    goals: deriveGoals(todos, s.now.date),
+    goals: deriveGoals(todos, s.now.date, s.zone),
     memories: entities(items, 'memory', (i) => toMemory(i, zone))
       .filter((m): m is Memory => m !== null)
       .sort(newestMemory),
@@ -322,8 +331,11 @@ export async function connectWorkspace() {
     useStore.getState().loadSkills(),
     connectCalendar(),
   ])
-  // The clock moves on; the day changes at midnight.
-  window.setInterval(() => useStore.setState({ now: clock(zone()) }), 30_000)
+  // The clock moves on; the day changes at midnight, and with it what counts as this week's.
+  window.setInterval(() => {
+    const now = clock(zone())
+    useStore.setState((s) => ({ now, ...(now.date !== s.now.date && { goals: deriveGoals(s.todos, now.date, s.zone) }) }))
+  }, 30_000)
 }
 
 /** A time string with the same clock, fixed to another zone: 09:00 Taipei becomes 09:00 Tokyo. */
@@ -381,7 +393,7 @@ function showFields(id: string, change: Partial<Omit<Todo, 'slot'>> & { slot?: u
         ...('due' in fields && { due: (fields.due as string | null) ?? undefined }),
       },
     })).sort(byRank)
-    return { todos, goals: deriveGoals(todos, s.now.date) }
+    return { todos, goals: deriveGoals(todos, s.now.date, s.zone) }
   })
 }
 
@@ -436,6 +448,8 @@ const allTodoFields = (todo: Todo): Fields => ({
   completed: todo.times?.completed ?? null,
   dropped: todo.times?.dropped ?? null,
   due: todo.times?.due ?? null,
+  series: todo.series ?? null,
+  occurrence: todo.occurrence ?? null,
 })
 
 export const useStore = create<State>()((set, get) => ({
@@ -466,9 +480,15 @@ export const useStore = create<State>()((set, get) => ({
   calendarDate: localDate(startZone),
   calendarView: 'week',
 
-  navigate: (page, sub = null) => set({ nav: { page, sub } }),
+  navigate: (page, sub = null) => {
+    leavePage()
+    set({ nav: { page, sub } })
+  },
   setComposer: (composer) => set({ composer }),
-  openSession: (sessionId, composer = '') => set({ sessionId, composer, nav: { page: 'chat', sub: null } }),
+  openSession: (sessionId, composer = '') => {
+    leavePage()
+    set({ sessionId, composer, nav: { page: 'chat', sub: null } })
+  },
 
   send: (text, trigger = 'user') => {
     const { sessionId, sessions } = get()
@@ -509,13 +529,8 @@ export const useStore = create<State>()((set, get) => ({
         return
       }
       // A new series from this todo, which becomes its first time.
-      const date = todo.slot?.date ?? todo.due?.date ?? get().now.date
-      const start = todo.times?.scheduled ?? todo.times?.due ?? date
-      const dueAfter = todo.slot && todo.due
-        ? todo.due.time === undefined
-          ? `P${Math.max(0, Temporal.PlainDate.from(todo.slot.date).until(todo.due.date).days)}D`
-          : `PT${Math.max(0, Math.round((todo.due.at - todo.slot.at) / 60_000))}M`
-        : null
+      const { start, date: first, dueAfter } = seriesFrom(todo.times?.scheduled, todo.times?.due, zone())
+      const date = first.toString()
       const created = await workspace().create('repeat', {
         title: todo.title,
         state: todo.state === 'draft' ? 'draft' : 'on',
@@ -628,8 +643,14 @@ export const useStore = create<State>()((set, get) => ({
   setCalendarDate: (calendarDate) => set({ calendarDate }),
   setCalendarView: (calendarView) => set({ calendarView }),
 
-  addNote: (text, source) => {
-    workspace().create('note', { created: stamp(zone()), source, state: 'new' }, `${text}\n`).catch(failed)
+  addNote: async (text, source): Promise<boolean> => {
+    try {
+      await workspace().create('note', { created: stamp(zone()), source, state: 'new' }, `${text}\n`)
+      return true
+    } catch (error) {
+      failed(error)
+      return false
+    }
   },
   editNote: (id, text) => {
     set((s) => ({ notes: s.notes.map((n) => (n.id === id ? { ...n, text } : n)) }))
@@ -667,9 +688,10 @@ export const useStore = create<State>()((set, get) => ({
         .create('todo', fields)
         .then((todo) => settle({ kind: 'todo', ref: todo.id }), failed)
     } else if (kind === 'memory') {
-      // The note is the user's own words, and it's the evidence.
+      // The note is the user's own words, and it's the evidence. Accepting it is the user saying to keep it,
+      // beside related memories and even if they once deleted the same words; the hold for those is the agent's.
       window.jezo.memory
-        .remember({ text: title, epistemic: 'stated', evidence: [`notes/items/${noteId}.md`] })
+        .remember({ text: title, epistemic: 'stated', evidence: [`notes/items/${noteId}.md`], separate: true, again: true })
         .then((m) => settle({ kind: 'memory', ref: m.id }), failed)
     } else {
       settle(kind === 'goal' ? { kind: 'goal', title } : { kind: 'keep' })

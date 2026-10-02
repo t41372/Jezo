@@ -135,18 +135,20 @@ export class Memory {
 
   /** Reads every memory file and rebuilds the index. Returns the files it couldn't read. */
   async load(): Promise<{ path: string; problem: string }[]> {
-    this.records.clear()
+    // Read into a new map and swap it in at once: a save while the files are read sees the memories as they were, not half of them.
+    const records = new Map<string, MemoryRecord>()
     const problems: { path: string; problem: string }[] = []
     for (const name of await this.store.list(ITEMS)) {
       if (!name.endsWith('.md')) continue
       const path = `${ITEMS}/${name}`
       try {
-        this.records.set(...entry(parseRecord((await this.store.read(path)) ?? '')))
+        records.set(...entry(parseRecord((await this.store.read(path)) ?? '')))
       } catch (error) {
         problems.push({ path, problem: String(error instanceof Error ? error.message : error) })
       }
     }
     const tombstones = await this.store.read(FORGOTTEN)
+    this.records = records
     this.forgotten = tombstones ? ((parseYaml(tombstones) as { forgotten?: Forgotten[] })?.forgotten ?? []) : []
     this.reindex()
     return problems

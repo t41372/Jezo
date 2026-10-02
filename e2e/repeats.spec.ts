@@ -48,11 +48,15 @@ test.use({
   prepare: {
     model: null,
     workspace: (root) => {
-      write(root, 'todos', 't-trash', { title: '倒垃圾', state: 'open', estimate: 10, scheduled: `${today}T20:00[${ZONE}]` }, '分類：紙類、塑膠。\n')
+      write(root, 'todos', 't-trash', { title: '倒垃圾', state: 'open', estimate: 10, scheduled: `${today}T20:00[${ZONE}]`, due: today.toString() }, '分類：紙類、塑膠。\n')
       write(root, 'todos', 't-plants', { title: '澆花', state: 'open', estimate: 5, scheduled: `${today}T08:00[${ZONE}]` })
       // A monthly bill set up as a file: due on its day, each month.
       write(root, 'repeats', 'r-rent', { title: '繳房租', state: 'on', rule: `FREQ=MONTHLY;BYMONTHDAY=${today.day}`, start: today.toString(), estimate: 10, last: today.toString() })
       write(root, 'todos', 't-rent-now', { title: '繳房租', state: 'open', estimate: 10, due: today.toString(), series: 'r-rent', occurrence: today.toString() })
+      // Counted from when it's done, its time set five days out: done early, the next counts from today.
+      const later = today.add({ days: 5 })
+      write(root, 'repeats', 'r-filter', { title: '換濾心', state: 'on', rule: 'FREQ=DAILY;INTERVAL=3', from: 'done', start: `${later}T09:00[${ZONE}]`, estimate: 10, last: later.toString() })
+      write(root, 'todos', 't-filter-now', { title: '換濾心', state: 'open', estimate: 10, scheduled: `${later}T09:00[${ZONE}]`, series: 'r-filter', occurrence: later.toString() })
     },
   },
 })
@@ -71,7 +75,8 @@ test('a series from the details writes its next time once the last one’s day h
   await expect.poll(() => series().find((s) => s.data.title === '倒垃圾')?.data.rule).toBe(`FREQ=WEEKLY;BYDAY=${code(today)}`)
   const trash = series().find((s) => s.data.title === '倒垃圾')!
   const id = String(trash.data.id)
-  expect(trash.data).toMatchObject({ state: 'on', start: `${today}T20:00[${ZONE}]`, last: today.toString() })
+  // Due by the end of its day, planned at 20:00: each time is due by the end of its own day, not at 20:00.
+  expect(trash.data).toMatchObject({ state: 'on', start: `${today}T20:00[${ZONE}]`, last: today.toString(), due_after: 'P0D' })
   expect(trash.body).toContain('分類')
   expect(read('todos/items/t-trash.md').data).toMatchObject({ series: id, occurrence: today.toString() })
   await expect(details.locator('[data-repeat-field]')).toContainText('每週')
@@ -83,7 +88,7 @@ test('a series from the details writes its next time once the last one’s day h
   await wakeAt(app, at(today.add({ days: 1 })))
   await expect.poll(() => timesOf(id)).toEqual([today.toString(), week.toString()])
   const next = read(`todos/items/t-${id.slice(2)}-${week.toString().replaceAll('-', '')}.md`)
-  expect(next.data).toMatchObject({ state: 'open', scheduled: `${week}T20:00[${ZONE}]`, title: '倒垃圾' })
+  expect(next.data).toMatchObject({ state: 'open', scheduled: `${week}T20:00[${ZONE}]`, title: '倒垃圾', due: week.toString() })
   expect(next.body).toContain('分類')
   expect(read('todos/items/t-trash.md').data.state).toBe('open')
 
@@ -138,6 +143,18 @@ test('a series counted from when it was done writes the next once the last is do
   const path = join(jezo.root, 'todos/items', `t-${id.slice(2)}-${next.toString().replaceAll('-', '')}.md`)
   writeFileSync(path, readFileSync(path, 'utf8').replace(/^state: open$/m, 'state: done'))
   await expect.poll(() => items('todos').filter((t) => t.data.series === id).map((t) => String(t.data.occurrence)).sort()).toEqual([today.toString(), next.toString(), later.add({ days: 3 }).toString()])
+  expect(jezo.errors).toEqual([])
+})
+
+test('one counted from when it was done, done before its own day, writes the next from the day it was done', async ({ jezo }) => {
+  const { page, items, read } = jezo
+  await open(page, '待辦')
+  await page.locator('main [data-todo-row="t-filter-now"]').getByRole('checkbox').click()
+  await expect.poll(() => read('todos/items/t-filter-now.md').data.state).toBe('done')
+  const next = today.add({ days: 3 })
+  await expect.poll(() => items('todos').filter((t) => t.data.series === 'r-filter').map((t) => String(t.data.occurrence)).sort()).toEqual([next.toString(), today.add({ days: 5 }).toString()])
+  expect(read(`todos/items/t-filter-${next.toString().replaceAll('-', '')}.md`).data.scheduled).toBe(`${next}T09:00[${ZONE}]`)
+  expect(read('repeats/items/r-filter.md').data.last).toBe(next.toString())
   expect(jezo.errors).toEqual([])
 })
 

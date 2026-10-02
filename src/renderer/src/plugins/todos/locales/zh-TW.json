@@ -24,7 +24,6 @@
   "more": "再顯示 {{count}} 件",
   "nothing": "沒有待辦。上面那格可以加一件。",
   "noMatch": "沒有符合的待辦。",
-  "draft": "草稿",
   "undoAction": "撤銷",
   "grouping": "分組",
   "byTime": "依安排",

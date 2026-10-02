@@ -88,8 +88,11 @@ export class Reminders {
    * Sends what's due: a reminder whose time has come for a deadline still
    * ahead, open or a draft, and seen before its reminder time. A deadline set
    * after that (due tomorrow, set at 20:00) isn't reminded: the user just said
-   * it. Missed while the computer slept, it comes now; once the deadline is
-   * past it doesn't come at all, since the list shows that.
+   * it. A repeating todo's time is different, since the app wrote it and nobody
+   * said anything: a daily one is written on its own day, after 18:00 the day
+   * before, and is reminded when it's first seen, or at 08:00 if that's in the
+   * night. Missed while the computer slept, a reminder comes now; once the
+   * deadline is past it doesn't come at all, since the list shows that.
    */
   async check(now = Date.now()) {
     const zone = this.host.zone()
@@ -107,7 +110,12 @@ export class Reminders {
       const open = item.data.state === 'open' || item.data.state === 'draft'
       const when = Reminders.remindAt(due, zone)
       if (!open || !when || entry.sent || !this.host.enabled()) continue
-      if (now < when.at || now >= when.end || entry.seen > when.at) continue
+      if (now < when.at || now >= when.end) continue
+      if (entry.seen > when.at) {
+        if (typeof item.data.series !== 'string') continue
+        const hour = Temporal.Instant.fromEpochMilliseconds(now).toZonedDateTimeISO(zone).hour
+        if (hour >= NIGHT_FROM || hour < NIGHT_UNTIL) continue
+      }
       entry.sent = now
       changed = true
       ready.push({ item, end: when.end, day: when.day })

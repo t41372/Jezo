@@ -21,7 +21,7 @@ It's a first-party plugin, built the way a user's plugin would be: its own direc
 - **Nothing is created until the user accepts.** The proposal card is the draft. Accepting a row creates what it proposes; turning it down puts the note back in the list, so nothing is lost. Every decision on the card can be taken back, which removes what it created.
 - **Goal ideas land on the Goals page** under 還在想的目標. A goal needs a direction, a measure, and rules, which come from talking it through, so clicking an idea opens a conversation to do that. The skill tells the agent not to create goals straight from notes.
 - **Kept notes stay under 已整理** with the rest, and are never sorted again.
-- **The page shows the newest proposal** until every note in it is decided, and after that until the user puts it away, so a decision can still be taken back. The same card is in the conversation.
+- **The page shows the newest proposal,** from 交給 agent 整理 or from a chat where the user asked for sorting, and a conversation's latest if it proposed again, until every note in it is decided, and after that until the user puts it away, so a decision can still be taken back. The same card is in the conversation.
 - **⌥↵ in the ⌥X window files the text in 隨手記** instead of asking the agent, and doesn't bring the main window forward. ↵ still asks. The ⌥X window writes the note itself, so it's filed even when the main window is closed. It says 「記到隨手記了」 for a moment and closes, with no animation.
 - **How to sort is a skill,** 整理隨手記, on by default and editable like the others (AGENTS.md, principle 6). It sets the categories, the wording, and when to ask.
 

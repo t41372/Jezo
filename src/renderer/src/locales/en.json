@@ -76,6 +76,8 @@
     "estimate": "About",
     "estimateInline": "about {{duration}}",
     "accept": "OK",
+    "draftChip": "Draft",
+    "proposedChip": "Proposed time",
     "acceptTime": "This time works",
     "reject": "No",
     "why": "Why this time?",
@@ -172,6 +174,7 @@
   },
   "quick": {
     "placeholder": "Tell Jezo…",
+    "noteFailed": "Couldn't save the note. Your words are still in the box.",
     "noted": "Added to Notes",
     "planTomorrow": "Plan tomorrow for me",
     "badDay": "Today isn't going well",

@@ -1,6 +1,6 @@
 // Hold-to-talk between the windows and the speech server. One utterance at a time.
 
-import { BrowserWindow, ipcMain, systemPreferences } from 'electron'
+import { BrowserWindow, ipcMain, systemPreferences, webContents } from 'electron'
 import type { SpeechContext } from './context'
 import type { Speech } from './speech'
 
@@ -33,11 +33,19 @@ export function serveSpeech(speech: Speech, sources: SpeechSources) {
   /** The opening that letting go took over, which ends it itself. */
   let claimed: Promise<Utterance> | null = null
   let early: ArrayBuffer[] = []
+  /**
+   * The window the utterance is for. Its audio and its letting go are the only
+   * ones that count; another window starting one tells it to stop, so two
+   * microphones never feed one utterance.
+   */
+  let owner: number | null = null
 
   ipcMain.handle('speech:start', async (event, session?: string | null) => {
-    // A new utterance ends one still open.
+    // A new utterance ends one still open, and the window it was for stops listening.
     void current?.end()
     current = null
+    if (owner !== null && owner !== event.sender.id) webContents.fromId(owner)?.send('speech:replaced')
+    owner = event.sender.id
     // The main window asks here; the ⌥X window has asked already, before it shows.
     if (process.platform === 'darwin' && !(await systemPreferences.askForMediaAccess('microphone'))) return false
     early = []
@@ -54,11 +62,15 @@ export function serveSpeech(speech: Speech, sources: SpeechSources) {
     current = utterance
     return utterance !== null
   })
-  ipcMain.on('speech:audio', (_, chunk: ArrayBuffer) => {
+  ipcMain.on('speech:audio', (event, chunk: ArrayBuffer) => {
+    if (event.sender.id !== owner) return
     if (current) current.audio(chunk)
     else if (starting) early.push(chunk)
   })
-  ipcMain.handle('speech:end', async () => {
+  ipcMain.handle('speech:end', async (event) => {
+    // A window whose utterance another one took over has nothing left to end.
+    if (event.sender.id !== owner) return ''
+    owner = null
     const pending = starting
     starting = null
     claimed = pending

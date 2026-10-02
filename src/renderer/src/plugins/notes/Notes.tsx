@@ -94,13 +94,14 @@ export function Notes() {
  * taken back.
  */
 function pendingProposal(sessions: Session[], notes: Note[], closed: string[]) {
+  // Wherever it was asked for, 交給 agent 整理 or a chat; in a conversation that proposed more than once, the latest first.
   for (const session of sessions) {
-    if (session.trigger !== 'notes') continue
-    const index = session.messages.findIndex((m) => m.kind === 'plugin' && m.plugin === 'notes' && m.type === 'sort')
-    const message = session.messages[index]
-    if (message?.kind !== 'plugin') continue
-    const data = message.data as { items: SortItem[] }
-    if (liveItems(data.items, notes, session.id).some((i) => !i.decision) || !closed.includes(session.id)) return { sessionId: session.id, index, data: message.data }
+    for (let index = session.messages.length - 1; index >= 0; index--) {
+      const message = session.messages[index]
+      if (message.kind !== 'plugin' || message.plugin !== 'notes' || message.type !== 'sort') continue
+      const data = message.data as { items: SortItem[] }
+      if (liveItems(data.items, notes, session.id).some((i) => !i.decision) || !closed.includes(session.id)) return { sessionId: session.id, index, data: message.data }
+    }
   }
   return null
 }
@@ -112,8 +113,9 @@ function Composer() {
   const add = () => {
     const note = text.trim()
     if (!note) return
-    useStore.getState().addNote(note, 'page')
     setText('')
+    // Not saved: the words come back to the box, unless something new was typed there.
+    void useStore.getState().addNote(note, 'page').then((saved) => saved || setText((now) => now || note))
   }
   return (
     <div className="rounded-2xl border border-card-border bg-card px-4 pt-3 pb-2 shadow-[0_1px_2px_var(--card-border)] focus-within:ring-3 focus-within:ring-ring/25">

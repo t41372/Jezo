@@ -146,7 +146,8 @@ export function digest(items: Item[], now: Temporal.ZonedDateTime, device: Zone 
     .sort((a, b) => a.end - b.end)
   const deadlineLine = ({ t, end }: { t: Item; end: number }) => `${line(t)}${end <= now.epochMilliseconds ? ' — its deadline has passed' : ''}`
   const waitingNotes = items.filter((i) => i.kind === 'note' && i.data.state === 'new').length
-  const goals = items.filter((i) => i.kind === 'goal' && i.data.state === 'active')
+  // One whose file has problems is listed under them instead, since its fields can't be trusted to be what the manifest says.
+  const goals = items.filter((i) => i.kind === 'goal' && i.data.state === 'active' && !i.problems?.length)
   const goalLine = (g: Item) => {
     const d = g.data as { name: string; due?: string; measure?: { unit: string; total: number }; rules?: { cue: string; action: string }[] }
     const rules = (d.rules ?? []).map((r) => `${r.cue} → ${r.action}`).join('; ')

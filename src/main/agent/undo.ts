@@ -28,6 +28,8 @@ interface FileChange {
    * either this or `after`.
    */
   pending?: { content: Kept | null }
+  /** Someone else changed the file between two of the run's writes; undo leaves it alone rather than take their change back too. */
+  mixed?: boolean
 }
 
 interface Run {
@@ -48,9 +50,28 @@ interface Run {
    * Shell commands going right now, each with the workspace's text files as they
    * were before it started, as blobs. One still here at launch was cut off.
    */
-  commands?: { id: string; baseline: Record<string, string> }[]
+  commands?: { id: string; baseline: Record<string, string | null> }[]
   /** Changes found at launch, after a command was cut off: they may include edits made elsewhere while Jezo was closed. */
   found?: boolean
+}
+
+/** The workspace's files by path: a text file's text, or null for one there whose content isn't kept. */
+export type Snapshot = Map<string, string | null>
+
+/**
+ * The text files a command created, changed or deleted, as [path, before, after],
+ * null for a file that isn't there. A file whose content isn't kept on either side
+ * is left out: what it held before isn't known, so undo couldn't put it back.
+ */
+export function commandChanges(before: Snapshot, after: Snapshot): [string, string | null, string | null][] {
+  const changes: [string, string | null, string | null][] = []
+  for (const path of new Set([...before.keys(), ...after.keys()])) {
+    const was = before.get(path)
+    const now = after.get(path)
+    if (was === null || now === null || was === now) continue
+    changes.push([path, was ?? null, now ?? null])
+  }
+  return changes
 }
 
 /**
@@ -59,7 +80,7 @@ interface Run {
  * leaves what it changed in 修改紀錄 (docs/design/undo.md).
  */
 export interface CommandCheckpoints {
-  begin(run: string, files: Map<string, string>): Promise<string | null>
+  begin(run: string, files: Snapshot): Promise<string | null>
   end(run: string, id: string): Promise<void>
 }
 
@@ -134,11 +155,11 @@ export class UndoLog {
   }
 
   /** Saves the workspace as it is before a shell command, and returns the command's id. */
-  async beginCommand(runId: string, files: Map<string, string>): Promise<string | null> {
+  async beginCommand(runId: string, files: Snapshot): Promise<string | null> {
     const run = this.runs.find((r) => r.id === runId)
     if (!run) return null
-    const baseline: Record<string, string> = {}
-    for (const [path, text] of files) baseline[path] = this.blob(text)
+    const baseline: Record<string, string | null> = {}
+    for (const [path, text] of files) baseline[path] = text === null ? null : this.blob(text)
     const id = newId('c')
     ;(run.commands ??= []).push({ id, baseline })
     await this.save()
@@ -159,18 +180,14 @@ export class UndoLog {
    * listed as an interrupted change, never put back on its own. It can include
    * edits made elsewhere while Jezo was closed, so the history says it was found.
    */
-  async recover(read: () => Promise<Map<string, string>>) {
+  async recover(read: () => Promise<Snapshot>) {
     const cut = this.runs.filter((r) => r.commands?.length)
     if (!cut.length) return
     const current = await read()
     for (const run of cut) {
       for (const command of run.commands!) {
-        const files: FileChange[] = []
-        for (const path of new Set([...Object.keys(command.baseline), ...current.keys()])) {
-          const was = command.baseline[path] ? textOfBlob(this.content({ blob: command.baseline[path] })) : null
-          const now = current.get(path) ?? null
-          if (was !== now) files.push({ path, before: was, after: now })
-        }
+        const baseline: Snapshot = new Map(Object.entries(command.baseline).map(([path, blob]) => [path, blob === null ? null : textOfBlob(this.content({ blob }))]))
+        const files: FileChange[] = commandChanges(baseline, current).map(([path, before, after]) => ({ path, before, after }))
         if (files.length) this.runs.unshift({ id: newId('r'), session: run.session, trigger: run.trigger, at: run.at, summary: '', files, retries: 0, finished: false, interrupted: true, found: true })
       }
       delete run.commands
@@ -223,7 +240,10 @@ export class UndoLog {
     const pending = { content: this.keep(write.after) }
     const existing = this.change(write)
     // Written twice in one run: what was there before the run is still the first `before`.
-    if (existing) existing.pending = pending
+    if (existing) {
+      if (!holds(write.before, existing.after) && !(existing.pending && holds(write.before, existing.pending.content))) existing.mixed = true
+      existing.pending = pending
+    }
     else run.files.push({ path: write.path, before: this.keep(write.before), after: this.keep(write.before), pending })
     return this.save()
   }
@@ -245,9 +265,8 @@ export class UndoLog {
     for (const change of [...run.files].reverse()) {
       const current = await readContent(this.workspace.abs(change.path))
       // Still what the run left: its last finished write, or one that may have happened before Jezo stopped.
-      const holds = (kept: Kept | null) => (current === null ? kept === null : kept !== null && hashOf(current) === (typeof kept === 'string' ? hashOf(kept) : kept.blob))
-      const untouched = holds(change.after) || (!!change.pending && holds(change.pending.content))
-      if (!untouched) {
+      const untouched = holds(current, change.after) || (!!change.pending && holds(current, change.pending.content))
+      if (!untouched || change.mixed) {
         kept.push(change.path)
         continue
       }
@@ -292,12 +311,15 @@ export class UndoLog {
     // Blobs no run refers to any more, once old runs are dropped.
     const used = new Set([
       ...this.runs.flatMap((r) => r.files.flatMap((f) => [f.before, f.after, f.pending?.content ?? null])).flatMap((k) => (k && typeof k !== 'string' ? [k.blob] : [])),
-      ...this.runs.flatMap((r) => r.commands ?? []).flatMap((c) => Object.values(c.baseline)),
+      ...this.runs.flatMap((r) => r.commands ?? []).flatMap((c) => Object.values(c.baseline).filter((blob) => blob !== null)),
     ])
     if (existsSync(this.blobs)) for (const blob of readdirSync(this.blobs)) if (!used.has(blob)) rmSync(join(this.blobs, blob), { force: true })
     for (const listener of this.listeners) listener()
   }
 }
+
+/** Whether a file's content is what the history kept. */
+const holds = (content: Content | null, kept: Kept | null) => (content === null ? kept === null : kept !== null && hashOf(content) === (typeof kept === 'string' ? hashOf(kept) : kept.blob))
 
 const textOfBlob = (content: Content) => (typeof content === 'string' ? content : new TextDecoder().decode(content))
 
