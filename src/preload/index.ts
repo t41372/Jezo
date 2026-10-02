@@ -154,6 +154,7 @@ const bridge: JezoBridge = {
   setLanguage: (language) => ipcRenderer.send('language:set', language),
   onOpenSession: (listener) => listen<string>('session:open', listener),
   setContext: (pageTitle) => ipcRenderer.send('context:set', pageTitle),
+  about: () => ipcRenderer.invoke('app:about'),
   quick: {
     canHold: () => ipcRenderer.invoke('quick:can-hold'),
     continue: (session) => ipcRenderer.send('quick:continue', session),

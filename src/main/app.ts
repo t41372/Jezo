@@ -2,7 +2,7 @@
 
 import { join } from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell, type BrowserWindowConstructorOptions } from 'electron'
-import type { ThemeSource } from '../shared/bridge'
+import type { About, ThemeSource } from '../shared/bridge'
 import { AgentHost } from './agent/host'
 import { serveAgent } from './agent/ipc'
 import { createMemory, serveMemory } from './agent/memory'
@@ -96,6 +96,21 @@ ipcMain.on('context:set', (_, pageTitle: string) => {
   context = pageTitle
 })
 ipcMain.handle('quick:can-hold', () => canHold)
+/** The OS by its marketing name and version, as people say it. */
+function systemName() {
+  const name = { darwin: 'macOS', win32: 'Windows', linux: 'Linux' }[process.platform as string] ?? process.platform
+  return `${name} ${process.getSystemVersion()}`
+}
+ipcMain.handle('app:about', (): About => ({
+  version: __JEZO_BUILD__.version,
+  commit: __JEZO_BUILD__.commit,
+  dirty: __JEZO_BUILD__.dirty,
+  builtAt: __JEZO_BUILD__.date,
+  electron: process.versions.electron,
+  chrome: process.versions.chrome,
+  node: process.versions.node,
+  system: `${systemName()} (${process.arch})`,
+}))
 ipcMain.on('quick:hide', hideQuick)
 ipcMain.on('quick:resize', (_, height: number) => resizeQuick(height))
 /** Brings the main window forward with a conversation open. */

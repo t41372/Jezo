@@ -1,6 +1,7 @@
 // What the user does in the GUI ends up in the workspace's files, and what
 // changes in the files shows up in the GUI (docs/design/backend.md).
 
+import { execFileSync } from 'node:child_process'
 import { readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { drag, expect, open, test } from './jezo'
@@ -219,6 +220,17 @@ test('automations are files, and the settings rows edit the built-in ones', asyn
   await expect.poll(() => read('automations/items/a-morning.md').data.state).toBe('off')
   // The body, what the agent is asked, is untouched.
   expect(read('automations/items/a-morning.md').body).toContain('跟用戶一起排今天')
+  expect(jezo.errors).toEqual([])
+})
+
+test('設定 → 關於 names the commit the running app was built from', async ({ jezo }) => {
+  const { page } = jezo
+  await open(page, '設定')
+  await page.getByRole('button', { name: '關於 Jezo' }).click()
+  // The app under test was built from this checkout by `bun run e2e`.
+  const head = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  await expect(page.locator('[data-about="Commit"]')).toHaveText(new RegExp(`^${head}`))
+  await expect(page.locator('[data-about="版本"]')).toHaveText(JSON.parse(readFileSync('package.json', 'utf8')).version)
   expect(jezo.errors).toEqual([])
 })
 

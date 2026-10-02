@@ -1,3 +1,4 @@
+import { ChevronRight } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ListCard, Row } from '@/components/ListCard'
@@ -6,6 +7,7 @@ import { Kbd } from '@/components/ui/kbd'
 import { Switch } from '@/components/ui/switch'
 import { useStore } from '@/data/store'
 import { LANGUAGE_NAMES, LANGUAGES } from '@/i18n'
+import { About } from './About'
 import { ModelsCard } from './ModelsCard'
 import { Providers } from './Providers'
 import { ScheduleRows } from './ScheduleRows'
@@ -20,9 +22,10 @@ export function Settings() {
     window.jezo.schedule.atLogin().then(setAtLogin)
   }, [])
   const settings = useStore((s) => s.settings)
-  const { setTheme, setLanguage } = useStore.getState()
+  const { setTheme, setLanguage, navigate } = useStore.getState()
   const sub = useStore((s) => s.nav.sub)
   if (sub === 'providers') return <Providers />
+  if (sub === 'about') return <About />
   return (
     <div className="flex-1 overflow-auto px-10 py-9">
       <div className="mx-auto flex max-w-[620px] flex-col gap-4.5">
@@ -57,6 +60,12 @@ export function Settings() {
         <Row title={t('atLogin.title')} description={t('atLogin.hint')}>
           <Switch checked={atLogin} onCheckedChange={(on) => void window.jezo.schedule.setAtLogin(on).then(setAtLogin)} aria-label={t('atLogin.title')} />
         </Row>
+      </ListCard>
+      <ListCard>
+        <button onClick={() => navigate('settings', 'about')} className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors duration-150 hover:bg-muted/60">
+          <div className="min-w-0 flex-1 text-[14.5px] font-medium">{t('about.title')}</div>
+          <ChevronRight className="size-4 text-muted-foreground" />
+        </button>
       </ListCard>
       </div>
     </div>

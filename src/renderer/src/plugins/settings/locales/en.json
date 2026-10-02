@@ -108,5 +108,16 @@
   "atLogin": {
     "title": "Open in the background at login",
     "hint": "Automations run while the computer’s awake, without opening the window first. Quitting Jezo still quits it."
+  },
+  "about": {
+    "title": "About Jezo",
+    "version": "Version",
+    "commit": "Commit",
+    "dirty": "(plus changes not yet committed)",
+    "noCommit": "Not built from git",
+    "builtAt": "Built",
+    "system": "System",
+    "copy": "Copy",
+    "copied": "Copied"
   }
 }

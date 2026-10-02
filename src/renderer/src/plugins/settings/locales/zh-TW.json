@@ -107,5 +107,16 @@
   "atLogin": {
     "title": "登入時在背景開啟",
     "hint": "電腦醒著時，排好的自動化就會跑，不用先打開視窗。結束 Jezo 就真的結束。"
+  },
+  "about": {
+    "title": "關於 Jezo",
+    "version": "版本",
+    "commit": "Commit",
+    "dirty": "（加上還沒提交的改動）",
+    "noCommit": "不是從 git 建置的",
+    "builtAt": "建置時間",
+    "system": "系統",
+    "copy": "複製",
+    "copied": "已複製"
   }
 }

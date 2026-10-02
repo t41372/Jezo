@@ -111,9 +111,26 @@ export interface SpeechStatus {
   uv: boolean
 }
 
+/** Which Jezo is running, for 設定 → 關於. */
+export interface About {
+  version: string
+  /** The full commit the app was built from; empty when it wasn't built from a git checkout. */
+  commit: string
+  /** Whether the build had changes that weren't committed, so the commit alone doesn't describe it. */
+  dirty: boolean
+  /** When it was built, as an ISO instant. */
+  builtAt: string
+  electron: string
+  chrome: string
+  node: string
+  /** Like "macOS 26.1 (arm64)". */
+  system: string
+}
+
 export interface JezoBridge {
   /** process.platform: "darwin", "win32", "linux", … */
   platform: string
+  about(): Promise<About>
   /** The items in the workspace, and every change to them (docs/design/backend.md). */
   workspace: {
     list(): Promise<Item[]>
