@@ -119,5 +119,6 @@
     "system": "System",
     "copy": "Copy",
     "copied": "Copied"
-  }
+  },
+  "speechUpdateFailed": "Couldn’t update it, so the installed version is running: {{error}}"
 }

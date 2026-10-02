@@ -7,7 +7,7 @@ import workletUrl from './pcm-worklet.ts?worker&url'
  * waveform. The microphone stops on unmount; the caller ends the utterance.
  * `ready` is false when speech recognition isn't installed.
  */
-export function useDictation(count: number) {
+export function useDictation(count: number, session?: string | null) {
   const [levels, setLevels] = useState<number[]>(() => Array(count).fill(0))
   const [error, setError] = useState<string | null>(null)
   const [ready, setReady] = useState(true)
@@ -21,7 +21,7 @@ export function useDictation(count: number) {
     let last = 0
 
     const start = async () => {
-      const [media, available] = await Promise.all([navigator.mediaDevices.getUserMedia({ audio: true }), window.jezo.speech.start()])
+      const [media, available] = await Promise.all([navigator.mediaDevices.getUserMedia({ audio: true }), window.jezo.speech.start(session)])
       if (stopped) return media.getTracks().forEach((track) => track.stop())
       stream = media
       setReady(available)

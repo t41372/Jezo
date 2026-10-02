@@ -18,4 +18,4 @@ A goal needs a direction, a measure and rules. Create one only after talking it 
 
 ## What the app counts
 
-Don't write progress numbers into goals. The app counts them from todos: a done todo with this `goal` adds its `amount` (default 1) to the progress. Set `amount` on a todo when it moves the measure by more than one, like `amount: 16` for a 16 km run.
+Don't write progress numbers into goals. The app counts them from todos: a done todo with this `goal` adds its `amount` (default 1) to the progress. Set `amount` on a todo when it moves the measure by more than one, like `amount: 16` for a 16 km run. A todo the user dropped (`state: dropped`) counts neither as progress nor as a try of its rule.

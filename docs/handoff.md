@@ -42,6 +42,19 @@ Health connectors: none for now (Tim, 2026-10-01). Apple Health waits for the ph
 
 Google through EventKit won't be tested separately (Tim, 2026-09-30: every account on the Mac is read the same way).
 
+### GitHub #1, #3, #4 (built 2026-10-01)
+
+Research, reviews and measurements are in `.claude/research/2026-10-01/issues/`. Decisions are in frontend.md ("Chat", "The todo list") and backend.md ("Speech"). Waiting on Tim:
+- **A deadline field** apart from the scheduled time. The list groups by when things are planned; grouping by when they're due needs one (frontend.md, "The todo list").
+- **Moving a todo up or down without dragging** in the list isn't there.
+
+- **Workspaces made before 2026-10-01 refuse 不做了:** their own `todos/manifest.yaml` lists the states without `dropped`, and a write that breaks the manifest is refused. Tim's `~/Jezo` is one; adding `dropped` to its `state` enum fixes it. How a new Jezo updates the files it shipped into a workspace is still undecided (backend.md, "The workspace").
+
+Left over:
+- std-faster-whisper's phrase hints share the 400-unit budget, more than its ~223-token hotword buffer, which faster-whisper truncates quietly.
+- std-faster-whisper doesn't drop a decode that hands the prompt back, as std-mlx-audio does since `474277b`.
+- std-mlx-audio's own tests: four in `test_batch.py` fail on macOS before and after `474277b`, comparing `/var/...` with `/private/var/...`.
+
 ## Work in progress, in order
 
 1. **Time zones and missed automations: left over.**

@@ -22,6 +22,16 @@ export function SpeechRow() {
       </Row>
     )
   }
+  // Installed, but moving it to the version this Jezo uses didn't work (offline, say): it runs what's there.
+  if (status.installed && status.error) {
+    return (
+      <Row title={t('speech')} description={<span className="break-words">{t('speechUpdateFailed', { error: status.error })}</span>}>
+        <Button size="sm" variant="outline" disabled={!status.uv} onClick={() => window.jezo.speech.install()}>
+          {t('speechRetry')}
+        </Button>
+      </Row>
+    )
+  }
   if (status.installed) {
     return (
       <Row title={t('speech')} description={t('speechReady', { engine: status.engine })}>

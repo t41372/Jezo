@@ -118,5 +118,6 @@
     "system": "系統",
     "copy": "複製",
     "copied": "已複製"
-  }
+  },
+  "speechUpdateFailed": "更新沒成功，先用已經裝好的版本：{{error}}"
 }

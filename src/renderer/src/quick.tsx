@@ -126,7 +126,7 @@ function Quick() {
       {mode.kind === 'noted' ? (
         <Noted />
       ) : mode.kind === 'voice' ? (
-        <Voice context={mode.context} />
+        <Voice context={mode.context} session={session} />
       ) : (
         <>
           {asked && <Answer question={asked} view={view} onPick={ask} />}
@@ -147,6 +147,7 @@ function Quick() {
             className="shadow-none"
             textareaClassName="text-[15.5px]"
             commands={window.jezo.agent.commands}
+            session={session}
             menuSide="bottom"
             onKeyDown={(e) => {
               const question = text.trim()
@@ -296,9 +297,9 @@ function Noted() {
  * While ⌥X is held: the same box, showing what's heard as it's heard, with
  * the microphone's level, and what comes along from the main window.
  */
-function Voice({ context }: { context: string | null }) {
+function Voice({ context, session }: { context: string | null; session: string | null }) {
   const { t } = useTranslation()
-  const mic = useDictation(24)
+  const mic = useDictation(24, session)
   const [heard, setHeard] = useState('')
   useEffect(() => window.jezo.speech.onText((said) => setHeard(traditional(said))), [])
   return (

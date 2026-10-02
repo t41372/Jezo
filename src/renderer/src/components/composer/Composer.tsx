@@ -32,6 +32,7 @@ export function Composer({
   menuSide = 'top',
   className,
   textareaClassName,
+  session,
 }: {
   value: string
   onChange: (value: string) => void
@@ -53,6 +54,8 @@ export function Composer({
   menuSide?: 'top' | 'bottom'
   className?: string
   textareaClassName?: string
+  /** The conversation the box writes into, so dictation can expect what was said there. */
+  session?: string | null
 }) {
   const { t } = useTranslation()
   const input = useRef<HTMLTextAreaElement>(null)
@@ -138,7 +141,7 @@ export function Composer({
         </div>
         <ModelChip openModels={modelMenu} />
         {listening ? (
-          <Listening onHeard={setHeard} onStop={() => void stopListening()} onUnavailable={() => setListening(false)} />
+          <Listening session={session} onHeard={setHeard} onStop={() => void stopListening()} onUnavailable={() => setListening(false)} />
         ) : (
           <Button
             variant="ghost"
@@ -173,9 +176,9 @@ export function Composer({
 }
 
 /** The microphone while it's on: its level as three bars, and a click to stop. */
-function Listening({ onHeard, onStop, onUnavailable }: { onHeard: (text: string) => void; onStop: () => void; onUnavailable: () => void }) {
+function Listening({ session, onHeard, onStop, onUnavailable }: { session?: string | null; onHeard: (text: string) => void; onStop: () => void; onUnavailable: () => void }) {
   const { t } = useTranslation()
-  const mic = useDictation(3)
+  const mic = useDictation(3, session)
   useEffect(() => window.jezo.speech.onText((text) => onHeard(traditional(text))), [onHeard])
   useEffect(() => {
     if (mic.ready && !mic.error) return

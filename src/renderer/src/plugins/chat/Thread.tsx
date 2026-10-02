@@ -431,6 +431,7 @@ function ChatComposer() {
   const text = useAuiState((s) => s.composer.text)
   const running = useAuiState((s) => s.thread.isRunning)
   const prefill = useStore((s) => s.composer)
+  const sessionId = useStore((s) => s.sessionId)
   const extras = usePiRuntimeExtras()
   useEffect(() => {
     if (!prefill) return
@@ -456,6 +457,7 @@ function ChatComposer() {
           attach
           commands={window.jezo.agent.commands}
           onNew={() => useStore.getState().openSession(null)}
+          session={sessionId}
         />
       </div>
     </div>

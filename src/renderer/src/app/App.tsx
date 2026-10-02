@@ -7,7 +7,7 @@ import { useStore } from '@/data/store'
 import { DndProvider } from './Dnd'
 import { Layout } from './Layout'
 import { Rail } from './Rail'
-import { getPage, pageTitle } from './registry'
+import { getPage, listPages, pageTitle } from './registry'
 import { useTheme } from './theme'
 
 export function App() {
@@ -22,6 +22,10 @@ export function App() {
   useEffect(() => {
     if (page) window.jezo.setContext(pageTitle(page))
   }, [page, i18n.language])
+  // Dictation should expect the app's own page names, as they're said in its language.
+  useEffect(() => {
+    window.jezo.speech.setVocabulary(listPages().map(pageTitle), i18n.language)
+  }, [i18n.language])
 
   return (
     <MotionConfig reducedMotion="user">

@@ -193,8 +193,13 @@ export interface JezoBridge {
     status(): Promise<SpeechStatus>
     install(): Promise<void>
     onStatus(listener: (status: SpeechStatus) => void): () => void
-    /** Starts listening. False when speech isn't installed. */
-    start(): Promise<boolean>
+    /**
+     * Starts listening. `session` is the conversation the words go into, so
+     * recognition can expect what was just said there. False when speech isn't installed.
+     */
+    start(session?: string | null): Promise<boolean>
+    /** Tells recognition the app's page names, in the app's language, which it should expect to hear. */
+    setVocabulary(words: string[], language: string): void
     audio(chunk: ArrayBuffer): void
     /** The audio is over; resolves to everything that was said. */
     end(): Promise<string>

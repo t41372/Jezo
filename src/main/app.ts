@@ -3,6 +3,7 @@
 import { join } from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell, type BrowserWindowConstructorOptions } from 'electron'
 import type { About, ThemeSource } from '../shared/bridge'
+import { dateOf, readTime } from '../shared/time'
 import { AgentHost } from './agent/host'
 import { serveAgent } from './agent/ipc'
 import { createMemory, serveMemory } from './agent/memory'
@@ -17,6 +18,7 @@ import { getConfig } from './config'
 import { inBackground } from './env'
 import { registerQuickKey, unregisterQuickKey } from './hotkey'
 import { createQuickWindow, endVoice, hideQuick, resizeQuick, startVoice, toggleTyping } from './quick'
+import { gather } from './speech/context'
 import { serveSpeech } from './speech/ipc'
 import { Speech } from './speech/speech'
 import { registerFileScheme, serveFiles } from './workspace/attachments'
@@ -165,7 +167,23 @@ async function openWorkspace() {
   schedule = new Schedule(workspace, host, providers, openSession)
   serveAgent(host, undo, providers, schedule)
   void schedule.start()
-  serveSpeech(speech)
+  serveSpeech(speech, {
+    context: (session, vocabulary) => {
+      const zone = deviceZone()
+      const conversation = host!.list().find((view) => view.id === session)?.messages.flatMap((m) => (m.kind === 'user' || m.kind === 'agent' ? [m.text] : [])) ?? []
+      return gather({
+        items: workspace!.list(),
+        conversation,
+        vocabulary,
+        page: session ? null : context,
+        today: Temporal.Now.plainDateISO(zone).toString(),
+        dateOf: (scheduled) => {
+          const value = readTime(scheduled)
+          return value ? dateOf(value, zone).toString() : null
+        },
+      })
+    },
+  })
   // Start the speech server early, so the first hold of ⌥X doesn't wait for Python to start.
   setTimeout(() => void speech.start(), 3000)
   // The device may have moved to another zone (docs/design/time.md).
