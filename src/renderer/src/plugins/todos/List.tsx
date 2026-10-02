@@ -53,9 +53,9 @@ export function List() {
   // While searching, every group shows what it found.
   const searching = !!query.trim()
 
-  const row: RowOf = (todo, { date, actions, attributes } = {}) => (
+  const row: RowOf = (todo, { date, actions, attributes, onMove } = {}) => (
     <li key={todo.id} {...attributes}>
-      <Row todo={todo} selected={todo.id === selected} date={date} actions={actions} />
+      <Row todo={todo} selected={todo.id === selected} date={date} actions={actions} onMove={onMove} />
     </li>
   )
 
@@ -111,7 +111,7 @@ export function List() {
   )
 }
 
-type RowOf = (todo: Todo, options?: { date?: boolean; actions?: boolean; attributes?: Record<string, string> }) => React.ReactNode
+type RowOf = (todo: Todo, options?: { date?: boolean; actions?: boolean; attributes?: Record<string, string>; onMove?: (step: -1 | 1) => void }) => React.ReactNode
 
 /** A day's todos under its name; nothing when there are none. */
 function Group({ label, name, todos, row }: { label: string; name: string; todos: Todo[]; row: RowOf }) {
@@ -164,11 +164,20 @@ function Backlog({ todos, row }: { todos: Todo[]; row: RowOf }) {
     onDragEnd: () => setInsert(null),
     onDragCancel: () => setInsert(null),
   })
+  // ⌥↑ and ⌥↓ move a todo without dragging: in front of the one above, or of the one after the one below.
+  const move = (i: number, step: -1 | 1) => {
+    const target = i + step
+    if (target < 0 || target >= todos.length) return
+    const id = todos[i].id
+    useStore.getState().moveTodo(id, null, { before: step < 0 ? todos[target].id : (todos[target + 1]?.id ?? null) })
+    // Moving the row in the page can take the focus with it; it stays on the todo, so it can go on moving.
+    requestAnimationFrame(() => list.current?.querySelector<HTMLElement>(`[${ROW}="${id}"] [data-title]`)?.focus())
+  }
   return (
     <section ref={setNodeRef} data-group="backlog" className={cn('-mx-2 rounded-lg px-2 pb-1 transition-colors duration-150', isOver && 'bg-draft/5')}>
       <h2 className="mb-1 text-xs text-muted-foreground">{t('backlog')}</h2>
       <ul ref={list} className="relative">
-        {todos.map((x) => row(x, { attributes: { [ROW]: x.id } }))}
+        {todos.map((x, i) => row(x, { attributes: { [ROW]: x.id }, onMove: (step) => move(i, step) }))}
         {insert && (
           <li aria-hidden className="pointer-events-none absolute inset-x-0 top-0 flex items-center transition-transform duration-100 ease-out" style={{ transform: `translateY(${insert.y - 1}px)` }}>
             <span className="size-1.5 rounded-full border-[1.5px] border-draft bg-background" />
@@ -185,7 +194,7 @@ function Backlog({ todos, row }: { todos: Todo[]; row: RowOf }) {
  * One todo: its check, its title and when, in its goal's color. Choosing it
  * opens its details. Rows planned earlier offer what to do with them.
  */
-function Row({ todo, selected, date, actions }: { todo: Todo; selected: boolean; date?: boolean; actions?: boolean }) {
+function Row({ todo, selected, date, actions, onMove }: { todo: Todo; selected: boolean; date?: boolean; actions?: boolean; onMove?: (step: -1 | 1) => void }) {
   const { t } = useTranslation('todos')
   const { t: tc } = useTranslation()
   const goal = useStore((s) => goalById(s.goals, todo.goalId))
@@ -212,7 +221,17 @@ function Row({ todo, selected, date, actions }: { todo: Todo; selected: boolean;
       )}
     >
       {todo.state === 'dropped' ? <span className="size-5 shrink-0 rounded-full border-2 border-dashed border-muted-foreground/40" /> : <TodoCheck todo={todo} />}
-      <button onClick={() => useStore.getState().setListDetail(todo.id)} className="min-w-0 flex-1 text-left outline-none focus-visible:underline">
+      <button
+        onClick={() => useStore.getState().setListDetail(todo.id)}
+        onKeyDown={(e) => {
+          if (!onMove || !e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return
+          e.preventDefault()
+          onMove(e.key === 'ArrowUp' ? -1 : 1)
+        }}
+        aria-keyshortcuts={onMove ? 'Alt+ArrowUp Alt+ArrowDown' : undefined}
+        data-title
+        className="min-w-0 flex-1 text-left outline-none focus-visible:underline"
+      >
         <div className={cn('truncate text-[14.5px]', closed && 'text-muted-foreground', todo.state === 'done' && 'line-through')}>
           {draft && <span className="mr-1.5 rounded bg-draft-chip px-1 py-px text-[11px] text-draft-ink">{t('draft')}</span>}
           {todo.title}

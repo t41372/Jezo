@@ -12,4 +12,4 @@ You may add, change or turn off automations when the user asks, or when it clear
 - `catch_up`: how late it may still start when the computer was asleep or off at the time, in words: `no`, `for 90 minutes`, `for 2 hours`, `until 18:00` (that clock on the day it was due), `until end of day`, or `until next time`. Leave it out for `for 2 hours`. It never runs twice for one time, and never past the next one. A run that starts late is told how late, and which earlier times weren't run; what to do about them is up to the request.
 - `zone`: leave it out to run on the device's clock; give a zone, like `America/New_York`, for a time that belongs to another place ("09:00 New York, wherever I am").
 - `history/<id>.jsonl` records each time: run, skipped, or interrupted. Jezo writes it; read it, don't change it.
-- `trigger`: `morning`, `evening` or `weekly` for the built-in kinds, which the app labels; leave it out for others.
+- `trigger`: only on the three automations Jezo comes with (`morning`, `evening`, `weekly`), whose conversations the app labels by it. An automation you add has no `trigger`, even a weekly one.

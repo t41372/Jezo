@@ -46,29 +46,21 @@ Google through EventKit won't be tested separately (Tim, 2026-09-30: every accou
 
 Research, reviews and measurements are in `.claude/research/2026-10-01/issues/`. Decisions are in frontend.md ("Chat", "The todo list") and backend.md ("Speech"). Waiting on Tim:
 - **A deadline field** apart from the scheduled time. The list groups by when things are planned; grouping by when they're due needs one (frontend.md, "The todo list").
-- **Moving a todo up or down without dragging** in the list isn't there.
-
-- **Workspaces made before 2026-10-01 refuse 不做了:** their own `todos/manifest.yaml` lists the states without `dropped`, and a write that breaks the manifest is refused. Tim's `~/Jezo` is one; adding `dropped` to its `state` enum fixes it. How a new Jezo updates the files it shipped into a workspace is still undecided (backend.md, "The workspace").
 
 Left over:
-- std-faster-whisper's phrase hints share the 400-unit budget, more than its ~223-token hotword buffer, which faster-whisper truncates quietly.
-- std-faster-whisper doesn't drop a decode that hands the prompt back, as std-mlx-audio does since `474277b`.
 - std-mlx-audio's own tests: four in `test_batch.py` fail on macOS before and after `474277b`, comparing `/var/...` with `/private/var/...`.
 
 ## Work in progress, in order
 
 1. **Time zones and missed automations: left over.**
    - Try in the packaged app: start at login (`wasOpenedAtLogin` may be false on macOS 13+, which only means the window opens), EventKit against real calendars.
-   - The morning plan's late-run wording hasn't been tried at 15:00 with the real model on its real request.
-   - The code reviews of 2026-10-01 and what was done about them are in `.claude/research/2026-10-01/review/` (each part with its verification; `decisions-astra*.md` is the review of design decisions, `long-term-designs-sol.md` the research behind the fixes). Left: a repeat whose rule lands in a skipped hour is shifted and counted by ical.js, where RFC 5545 says to leave it out (calendar.md).
-   - The voice E2E fails while another Jezo runs in development with its own speech server.
+   - The code reviews of 2026-10-01 and what was done about them are in `.claude/research/2026-10-01/review/` (each part with its verification; `decisions-astra*.md` is the review of design decisions, `long-term-designs-sol.md` the research behind the fixes). A repeat that lands in a skipped hour is kept and counted, at the offset from before the change, as erratum 4271 to RFC 5545 says and as ical.js already does (calendar.md); an earlier note here had it as a bug.
+   - The voice E2E failed once while another Jezo ran in development with its own speech server; on 2026-10-02 it passed with one running.
 2. **Left over from merged work:**
    - The install entry isn't verified in the packaged app, with a native addon, or with a live OAuth sign-in (extensions.md). The pi directory (packages, MCP config) isn't in the workspace backup.
 3. **Sync:** designed (docs/design/sync.md); its eight questions are for Tim. The cheap changes are done; the rest waits for sync itself, with reasons in the doc.
 4. **Test model.** `qwen3.6-35b-a3b-splash` (Tim, 2026-09-30, replacing gemma-4-e4b). Read traces with `bun scripts/trace.ts` and fix the input first (AGENTS.md, "How we work"). It sometimes repeats a line in its thinking until it runs out of tokens (3 of ~20 runs); the chat now says so and offers a retry. The agent tests pass most runs; single failures are usually that loop.
 5. Later:
-   - an experiment's arm isn't checked against the morning plan in a test (the digest line is there, the effect isn't measured)
-   - bundling uv for the packaged app
    - trying the packaged app's EventKit permission
 
 ## Things that bit us (keep in mind)
@@ -99,7 +91,7 @@ Left over:
   - an experiment's conclusion or decision written by the agent;
   - "一小時後我要打給媽" answered with ask_user when that hour has a todo, instead of a time to move;
   - a tool call with keys and values run together (`"date2026-10-07": 2026`), repeated until it runs out of tokens;
-  - "每週一早上九點" written as a Sunday cron. The automations' instructions now give a Monday example and say 0 is Sunday; that test passed 2 of 3 runs after.
+  - "每週一早上九點" written as a Sunday cron. The automations' instructions give a Monday example and say 0 is Sunday, and since 2026-10-02 the write's result reads the schedule back as dates with weekdays. It still happened in 2 of 6 runs on 2026-10-02: the model's first thought turned 週一 into 周日 before it read anything, once explaining that "it's Sunday evening now" with Friday in its time note, and it went on past the read-back that said Sun. Not caused by what it's given; a check would have to read the user's words.
 
   Each passes on a rerun. Read the trace before changing anything for them.
 - **Bun has no Temporal.** Scripts and unit tests load `scripts/temporal.ts` (bunfig.toml preloads it for `bun test`); Electron and Node have it natively.

@@ -5,7 +5,8 @@
 
 import { existsSync, readFileSync } from 'node:fs'
 import { mkdir, readdir, stat } from 'node:fs/promises'
-import { basename, join } from 'node:path'
+import { basename, join, resolve } from 'node:path'
+import { Cron } from 'croner'
 import { randomUUID } from 'node:crypto'
 import type { PiAgentMessage, PiClient, PiClientEvent, PiClientEventBody, PiSendMessageInput, PiThreadMetadata } from '@assistant-ui/react-pi'
 import { shownCustom, typedText, UNCHANGED_ENTRY, type ChatSnapshot } from '../../shared/chat'
@@ -26,7 +27,7 @@ import { type Held, type OutsideContent, outsideToolResults } from './outside'
 import type { Calendars } from '../calendar/calendars'
 import { newId } from '../workspace/files'
 import { listSkills, skillRoots } from '../workspace/skills'
-import type { Workspace } from '../workspace/workspace'
+import { insideWorkspace, type Workspace } from '../workspace/workspace'
 import { type Memory, memoryExtension } from '../../../packages/pi-memory/src/index.ts'
 import { acting } from './acting'
 import { ExtensionUI } from './extension-ui'
@@ -702,6 +703,17 @@ export class AgentHost {
    * any language (docs/design/backend.md, "Checks").
    */
   private checks(pi: ExtensionAPI, c: Conversation) {
+    // An automation's schedule, read back as the times it will run. Asked for "every Monday at nine",
+    // a model wrote `0 9 * * 0`, Sundays, and said Sundays in its reply; the cron syntax is clear in
+    // automations/AGENTS.md, and the dates are what make the slip visible to it.
+    pi.on('tool_result', (event) => {
+      if (event.isError || (event.toolName !== 'write' && event.toolName !== 'edit') || typeof event.input.path !== 'string') return
+      const path = insideWorkspace(this.workspace.root, resolve(this.workspace.root, event.input.path))
+      const item = path && /^automations\/items\/[^/]+\.md$/.test(path) ? this.workspace.at(path) : undefined
+      const runs = item && !item.problems?.length ? nextRuns(item.data.schedule, item.data.zone) : null
+      if (!runs) return
+      return { content: [...event.content, { type: 'text' as const, text: `\nIt will run ${runs}. If that isn't when the user asked for, fix the schedule.` }] }
+    })
     let failedSentBack = ''
     pi.on('agent_before_settle', () => {
       const run = c.context.run
@@ -988,6 +1000,20 @@ interface Block {
   id?: string
   name?: string
   arguments?: Record<string, unknown>
+}
+
+/** "Mon 2026-10-05 09:00, Mon 2026-10-12 09:00, Mon 2026-10-19 09:00 (Asia/Taipei)": the next times a cron runs, or null. */
+function nextRuns(schedule: unknown, zone: unknown) {
+  if (typeof schedule !== 'string') return null
+  const timezone = typeof zone === 'string' ? zone : deviceZone()
+  try {
+    const runs = new Cron(schedule, { timezone, paused: true }).nextRuns(3)
+    const text = runs.map((run) => Temporal.Instant.fromEpochMilliseconds(run.getTime()).toZonedDateTimeISO(timezone))
+      .map((at) => `${at.toPlainDate().toLocaleString('en-US', { weekday: 'short' })} ${at.toPlainDate()} ${at.toPlainTime().toString({ smallestUnit: 'minute' })}`)
+    return text.length ? `${text.join(', ')} (${timezone})` : null
+  } catch {
+    return null
+  }
 }
 
 /** The last line of thinking in a message being written, while thinking is the newest thing in it. */

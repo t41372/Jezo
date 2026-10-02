@@ -157,7 +157,7 @@ Decided on 2026-10-01 (GitHub #4: the list form traditional todo apps have). Jez
   - The first draft left out "move all to today", since that rebuilds the pile tomorrow. The review pointed out that this decides for the user; the group actions are there, and each is one change in 修改紀錄 with a toast that takes it back.
 - **不做了 is a state, `dropped`** (review: deleting would lose the notes and what the user decided). A dropped todo keeps its file and notes, shows under 不做了, comes back with one click, and counts neither as done nor as a try of its goal's rule. The file says when (`dropped`), like `completed`. The agent can drop a todo too, when the user says so.
 - **刪除** in a todo's details removes its file, as a change in 修改紀錄 with a toast that undoes it, the way removing a skill is. Files in its notes stay where they are.
-- **Adding** is one field at the top; what's typed becomes a todo in 沒排時間. **Checking** a todo off works in every group. **Dragging** reorders 沒排時間, as on the calendar; times are set in the details or on the calendar. Rows are buttons, so Tab and Enter reach everything; moving a todo up or down without dragging isn't there yet.
+- **Adding** is one field at the top; what's typed becomes a todo in 沒排時間. **Checking** a todo off works in every group. **Dragging** reorders 沒排時間, as on the calendar; times are set in the details or on the calendar. Rows are buttons, so Tab and Enter reach everything, and ⌥↑ ⌥↓ move a todo in 沒排時間 without dragging.
 - **Choosing a todo** opens its details beside the list, as on 今天.
 - No deadline field was added. Grouping by due date needs one, and whether Jezo needs one apart from the scheduled time is Tim's call (handoff.md).
 

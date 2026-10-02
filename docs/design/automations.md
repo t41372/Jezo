@@ -188,11 +188,14 @@ On 2026-10-01:
   - waking again doesn't repeat it;
   - after 18:00 it's skipped;
   - after two weeks, on a Thursday afternoon, only the morning plan runs.
+  - the real morning plan, woken at 15:00, plans with qwen3.6 and puts nothing before 15:00 (2026-10-02, 3 of 3 runs).
 
 Also built:
 - **The automation's page in 更多** shows its window in a sentence, with a choice of others, and its recent history, one line per time.
 - **Undo saves each change as it's made**, so 修改紀錄 lists a cut-off run as 沒跑完, with undo and 接著做 (undo.md).
 - **"Start Jezo at login"** is a switch in 設定. The OS keeps the setting, and a login launch opens no window. It isn't covered by E2E, since turning it on in a test would add the development build to the Mac's login items; try it in the packaged app.
+
+- **A schedule the agent writes is read back to it** (2026-10-02). After a `write` or `edit` of an automation, the tool result ends with the next three times it will run, with their weekdays and its zone. Asked for 每週一早上九點, qwen3.6 once thought 每周日 before reading anything and wrote `0 9 * * 0`; automations/AGENTS.md states the weekday numbering plainly, so the input was clear, and the dates make the slip visible to the model at no cost when it's right. The same runs showed the agent setting `trigger: weekly` on a reminder it added, copying the built-in weekly review, which labels the conversation as a weekly review; AGENTS.md now says only the three built-in automations have a `trigger`.
 
 Not yet:
 - a Stop on the page for a run that's going; the conversation has Stop. Skip is on the line of a time that's waiting.

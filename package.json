@@ -14,7 +14,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.test.json && bun run check:i18n",
     "test": "bun test src/main src/shared",
     "e2e": "bun scripts/native.ts && electron-vite build && playwright test",
-    "package": "bun scripts/native.ts && electron-vite build && electron-builder --dir",
+    "package": "bun scripts/native.ts && bun scripts/uv.ts && electron-vite build && electron-builder --dir",
     "check:i18n": "bun scripts/check-locales.ts",
     "zone-names": "bun scripts/zone-names.ts",
     "postinstall": "electron-builder install-app-deps && bun scripts/native.ts"

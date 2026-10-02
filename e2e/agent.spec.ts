@@ -151,6 +151,8 @@ test('an automation added from its page by asking the agent is listed there in w
 
   const added = items('automations').find((a) => !['a-morning', 'a-evening', 'a-weekly'].includes(String(a.data.id)))
   expect(added?.data).toMatchObject({ schedule: '0 9 * * 1', state: 'on' })
+  // Only the built-in automations have a trigger; one with `weekly` would be labelled a weekly review.
+  expect(added?.data.trigger).toBeUndefined()
   await open(page, '更多')
   await page.getByText('自動化', { exact: true }).click()
   await expect(main.locator(`[data-automation="${added!.data.id}"]`)).toContainText('每週一 09:00')

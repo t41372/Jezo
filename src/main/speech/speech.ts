@@ -45,7 +45,7 @@ const ENGINE =
     : {
         name: 'Whisper small',
         model: 'faster-whisper/small',
-        package: { name: 'std-faster-whisper', dist: 'std_faster_whisper', repo: 'https://github.com/standard-voice/std-faster-whisper.git', commit: 'b902b1394efeff4c30fb968517ddd6fe96a29655' },
+        package: { name: 'std-faster-whisper', dist: 'std_faster_whisper', repo: 'https://github.com/standard-voice/std-faster-whisper.git', commit: 'eaf1e597fdba924720b76fceb409ecabac3fdf82' },
       }
 
 const dir = () => join(app.getPath('userData'), 'speech')
@@ -69,9 +69,14 @@ function installedCommit(p: Pinned) {
 /** Whether what's installed is older or newer than the commits above. */
 const outdated = () => [CORE, ENGINE.package].some((p) => installedCommit(p) !== p.commit)
 
-/** uv, wherever it's installed. A packaged app doesn't get the shell's PATH, so the usual places are tried too. */
+/**
+ * uv: the one a packaged Jezo brings (scripts/uv.ts), or else wherever it's
+ * installed. A packaged app doesn't get the shell's PATH, so the usual places
+ * are tried too.
+ */
 function findUv() {
   const candidates = [
+    ...(app.isPackaged ? [join(process.resourcesPath, 'uv', process.platform === 'win32' ? 'uv.exe' : 'uv')] : []),
     ...(process.env.PATH ?? '').split(':').map((p) => join(p, 'uv')),
     '/opt/homebrew/bin/uv',
     '/usr/local/bin/uv',

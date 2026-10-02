@@ -10,3 +10,5 @@ e2e/results/
 *.mov
 native/eventkit/build/
 native/foundation-models/build/
+
+vendor/

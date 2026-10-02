@@ -111,37 +111,43 @@ export function gather(input: {
 }
 
 /**
- * The config frame's `options` for this context and engine: the conversation
- * and the terms as one `prompt`, and the terms as `phrase_hints` too when the
- * engine takes them. Nothing the engine doesn't declare is sent, because the
- * reference server refuses a session that asks for it.
+ * The config frame's `options` for this context and engine. The terms go in
+ * `phrase_hints` when the engine takes them, and the conversation in `prompt`;
+ * an engine with only `prompt` gets both there. Everything sent together stays
+ * within one budget, because an engine may read both into one buffer
+ * (faster-whisper's holds about 223 tokens, and it cuts the rest without
+ * saying). Nothing the engine doesn't declare is sent, because the reference
+ * server refuses a session that asks for it.
  */
 export function options(context: SpeechContext, guidance: Guidance, language: string): { prompt?: string; phrase_hints?: string[] } | undefined {
   const out: { prompt?: string; phrase_hints?: string[] } = {}
+  const budget = Math.min(BUDGET, guidance.prompt?.maxTokens ?? BUDGET)
+  let used = 0
   if (guidance.phraseHints) {
     const { maxTerms, maxChars } = guidance.phraseHints
-    // The same budget as the prompt: an engine joins hints into one buffer of its own, which can overflow quietly.
     const hints: string[] = []
-    let used = 0
     for (const term of context.terms) {
       if (!term.trim() || (maxChars !== null && [...term].length > maxChars)) continue
       if (maxTerms !== null && hints.length >= maxTerms) break
-      if (used + units(term) > BUDGET) continue
+      // The conversation, if it fits, gets what's left.
+      if (used + units(term) > budget / 2) continue
       hints.push(term)
       used += units(term)
     }
     if (hints.length) out.phrase_hints = hints
   }
   if (guidance.prompt) {
-    const budget = Math.min(BUDGET, guidance.prompt.maxTokens ?? BUDGET)
     // Chinese and Japanese list with 、; the rest with a comma.
     const separator = /^(zh|ja)/.test(language) ? '、' : ', '
     const lines = context.recent.map((line) => clip(line, LINE))
-    let used = lines.reduce((sum, line) => sum + units(line), 0)
+    const start = used
+    used += lines.reduce((sum, line) => sum + units(line), 0)
+    // Terms sent as hints aren't repeated here.
+    const rest = out.phrase_hints ? [] : context.terms
     // The conversation gives way before the app's own name does.
-    while (lines.length && used + units(context.terms[0] ?? '') > budget) used -= units(lines.shift()!)
+    while (lines.length && used + units(rest[0] ?? '') > budget) used -= units(lines.shift()!)
     const terms: string[] = []
-    for (const term of context.terms) {
+    for (const term of rest) {
       const cost = units(term) + (terms.length ? 1 : 0)
       if (used + cost > budget) continue
       terms.push(term)
@@ -149,7 +155,7 @@ export function options(context: SpeechContext, guidance: Guidance, language: st
     }
     const prompt = [...lines, terms.join(separator)].filter(Boolean).join('\n')
     // Counted whole, as the server will count it: a prompt over the engine's limit loses the whole utterance.
-    if (prompt && units(prompt) <= budget) out.prompt = prompt
+    if (prompt && start + units(prompt) <= budget) out.prompt = prompt
   }
   return out.prompt || out.phrase_hints ? out : undefined
 }

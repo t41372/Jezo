@@ -16,9 +16,11 @@ qwen3.6-35b in LM Studio, 2026-09-30: asked to count a finished experiment, it g
 
 Asked from 新增 to try the hardest thing first for four weeks, counted by a goal's todos, it once laid the design out in its reply and asked "這樣可以嗎？" without writing anything: the skill opened with "問清楚要比什麼". It now says to write the file straight away, using what the user said and picking the rest, and to ask first only when what they want to compare can't be counted from the records; four runs of four wrote the file. In another run it copied the long temporary workspace path with a digit missing, found nothing, and went looking through `/` and the home folder; the system prompt now asks for paths relative to the workspace (backend.md).
 
+Planning the morning with an experiment running (2026-10-02): the arm's line came at the end of the day's instructions, after the count of notes waiting, and the morning plan's request named today's todos, the backlog and the goals but not experiments. In the traces the model never mentioned the experiment and filled the morning from the backlog. The line now comes right after today's todos, and the request says to plan by today's arm; with an arm that puts errands after 20:00, four runs of four did, and with no experiment the same plan put the emails at 08:30, 09:00 and 12:00.
+
 ## Tests
 
-`e2e/experiments.spec.ts`: the page from files (this week's arm, a finished result, the decision written back), the agent counting a finished experiment from seeded done todos (two evenings, five mornings), and the agent setting one up from 新增. A four-week experiment can't run end to end in a test: the clock would have to move four weeks, with automations firing along the way. The parts it's made of are tested instead.
+`e2e/automations.spec.ts` runs the real morning plan with an arm running and checks today's errands follow it. `e2e/experiments.spec.ts`: the page from files (this week's arm, a finished result, the decision written back), the agent counting a finished experiment from seeded done todos (two evenings, five mornings), and the agent setting one up from 新增. A four-week experiment can't run end to end in a test: the clock would have to move four weeks, with automations firing along the way. The parts it's made of are tested instead.
 
 ## Rejected
 

@@ -130,6 +130,14 @@ test('the list groups every todo by time, and what was planned earlier is folded
   const rank = (id: string) => String(read(`todos/items/${id}.md`).data.rank)
   await expect.poll(() => rank(second) < rank(first)).toBe(true)
 
+  // And without dragging: ⌥↓ twice moves the first one down two places, writing the ranks the same way.
+  const [a, b, c] = await order()
+  await backlogRows.nth(0).locator('[data-title]').focus()
+  await page.keyboard.press('Alt+ArrowDown')
+  await page.keyboard.press('Alt+ArrowDown')
+  await expect.poll(async () => (await order()).slice(0, 3)).toEqual([b, c, a])
+  await expect.poll(() => rank(c) < rank(a)).toBe(true)
+
   await artifact(page, info, 'list-after')
   expect(jezo.errors).toEqual([])
 })

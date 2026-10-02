@@ -151,13 +151,14 @@ export function digest(items: Item[], now: Temporal.ZonedDateTime, device: Zone 
     daysLine(now),
     '',
     todayTodos.length ? `Today's todos:\n${todayTodos.map(line).join('\n')}` : 'Nothing is scheduled today.',
+    // Right after today: it decides how today is planned. At the end, after the notes, a model planning the day never mentioned it.
+    ...(experiments.length ? ['', `Running experiments: plan today by the condition of the arm today is in (experiments/AGENTS.md says more).\n${experiments.map(experimentLine).join('\n')}`] : []),
     '',
     backlog.length ? `Backlog (${backlog.length}, not scheduled):\n${backlog.slice(0, 15).map(line).join('\n')}` : 'The backlog is empty.',
     '',
     goals.length ? `Active goals (progress is counted from done todos; read goals/AGENTS.md):\n${goals.map(goalLine).join('\n')}` : 'No active goals.',
     '',
     `Notes waiting to be sorted: ${waitingNotes}.`,
-    ...(experiments.length ? ['', `Running experiments (read experiments/AGENTS.md; plan today by its arm's condition):\n${experiments.map(experimentLine).join('\n')}`] : []),
     ...(problems.length
       ? ['', `Files with problems:\n${problems.map((p) => `- ${p.path}: ${p.problems!.join('; ')}`).join('\n')}`]
       : []),

@@ -2,7 +2,7 @@
 // The main process's clock is moved the way the two-hours test moves it, and
 // waking up is the real resume handler; the history is the workspace's own file.
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { ElectronApplication } from '@playwright/test'
 import { stringify } from 'yaml'
@@ -144,6 +144,83 @@ test.describe('back after two weeks', () => {
       expect(events.filter((e) => e.type === 'claimed')).toHaveLength(0)
       expect(events.some((e) => e.type === 'skipped' && e.reason === 'expired')).toBe(true)
     }
+    expect(jezo.errors).toEqual([])
+  })
+})
+
+test.describe('the morning plan, woken at 15:00', () => {
+  const at = today.toZonedDateTime({ timeZone: ZONE, plainTime: { hour: 15 } })
+  test.use({
+    prepare: {
+      workspace: (root) => {
+        // The real morning plan, its own request and window, on as a user would have it.
+        const path = join(root, 'automations/items/a-morning.md')
+        writeFileSync(path, readFileSync(path, 'utf8').replace(/^state: off$/m, 'state: on'))
+        watching(root, 'a-morning', today.subtract({ days: 1 }).toZonedDateTime({ timeZone: ZONE, plainTime: { hour: 21 } }))
+      },
+    },
+  })
+
+  test('plans only the hours left, and puts nothing before now', async ({ jezo }, info) => {
+    const { app, root, items } = jezo
+    const before = new Map(items('todos').map((t) => [String(t.data.id), JSON.stringify(t.data)]))
+    await wakeAt(app, at)
+    await expect.poll(() => history(root, 'a-morning').filter((e) => e.type === 'ended').length, { timeout: 240_000 }).toBe(1)
+    const session = readdirSync(join(root, 'sessions')).find((f) => f.endsWith('.jsonl'))!
+    await info.attach('pi-session', { body: readFileSync(join(root, 'sessions', session)), contentType: 'application/jsonl' })
+
+    // What the run wrote: new todos and changed ones. It planned something, all of it later than 15:00 today.
+    const written = items('todos').filter((t) => before.get(String(t.data.id)) !== JSON.stringify(t.data))
+    const times = written.map((t) => t.data.scheduled).filter((s): s is string => typeof s === 'string')
+    expect(times.length).toBeGreaterThan(0)
+    for (const time of times) {
+      const when = Temporal.ZonedDateTime.from(time.includes('[') ? time : `${time}[${ZONE}]`)
+      expect(Temporal.ZonedDateTime.compare(when, at), `${time} is before 15:00`).toBeGreaterThanOrEqual(0)
+    }
+    expect(jezo.errors).toEqual([])
+  })
+})
+
+test.describe('the morning plan, with an experiment running', () => {
+  const at = today.toZonedDateTime({ timeZone: ZONE, plainTime: { hour: 8, minute: 5 } })
+  const monday = today.subtract({ days: today.dayOfWeek - 1 })
+  test.use({
+    prepare: {
+      workspace: (root) => {
+        const path = join(root, 'automations/items/a-morning.md')
+        writeFileSync(path, readFileSync(path, 'utf8').replace(/^state: off$/m, 'state: on'))
+        watching(root, 'a-morning', today.subtract({ days: 1 }).toZonedDateTime({ timeZone: ZONE, plainTime: { hour: 21 } }))
+        // Today unplanned, so the plan starts from the backlog: answering emails, calling mom, booking a room.
+        for (const id of ['t-2', 't-3', 't-5', 't-6', 't-7']) rmSync(join(root, `todos/items/${id}.md`))
+        // This week's arm puts errands like those in the evening, where a plan wouldn't put them on its own.
+        mkdirSync(join(root, 'experiments/items'), { recursive: true })
+        writeFileSync(join(root, 'experiments/items/x-evening.md'), `---\n${stringify({
+          id: 'x-evening',
+          title: '雜事集中在晚上',
+          state: 'running',
+          measure: '雜事做完的件數',
+          arms: [
+            { label: '隨時做', condition: '照平常，雜事有空就排。', periods: [{ from: monday.subtract({ days: 7 }).toString(), to: monday.subtract({ days: 1 }).toString() }] },
+            { label: '晚上一起做', condition: '這週的雜事（回信、打電話、訂東西）都排在 20:00 以後，白天不排。', periods: [{ from: monday.toString(), to: monday.add({ days: 6 }).toString() }] },
+          ],
+        })}---\n雜事集中在晚上做，會不會做得比較多？\n`)
+      },
+    },
+  })
+
+  test("plans today by this week's arm", async ({ jezo }, info) => {
+    const { app, root, items } = jezo
+    const before = new Map(items('todos').map((t) => [String(t.data.id), JSON.stringify(t.data)]))
+    await wakeAt(app, at)
+    await expect.poll(() => history(root, 'a-morning').filter((e) => e.type === 'ended').length, { timeout: 240_000 }).toBe(1)
+    const session = readdirSync(join(root, 'sessions')).find((f) => f.endsWith('.jsonl'))!
+    await info.attach('pi-session', { body: readFileSync(join(root, 'sessions', session)), contentType: 'application/jsonl' })
+
+    // The errands it put on today are at 20:00 or later, as the arm says. Without it, a run put the emails at 08:20.
+    const when = (t: { data: Record<string, unknown> }) => Temporal.ZonedDateTime.from(String(t.data.scheduled).includes('[') ? String(t.data.scheduled) : `${t.data.scheduled}[${ZONE}]`)
+    const errands = items('todos').filter((t) => ['t-u1', 't-u2', 't-u3'].includes(String(t.data.id)) && typeof t.data.scheduled === 'string' && when(t).toPlainDate().equals(today))
+    expect(errands.length).toBeGreaterThan(0)
+    for (const t of errands) expect(when(t).hour, `${t.data.title} at ${t.data.scheduled}`).toBeGreaterThanOrEqual(20)
     expect(jezo.errors).toEqual([])
   })
 })

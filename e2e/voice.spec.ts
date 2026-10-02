@@ -4,7 +4,7 @@
 // Needs macOS on Apple Silicon, uv, and a local model server.
 
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { ElectronApplication, Page } from '@playwright/test'
@@ -116,6 +116,52 @@ test.describe('holding ⌥X with nothing said', () => {
     await hotkey(app, 'voice-end')
     await quick.waitForTimeout(1500)
     await expect(quick.locator('body')).not.toContainText('鵝鑾鼻')
+    expect(jezo.errors).toEqual([])
+  })
+})
+
+/** The engine commit an install in this app data was made from, from what pip recorded. */
+function engineCommit(data: string) {
+  const lib = join(data, 'speech/venv/lib')
+  try {
+    for (const python of readdirSync(lib)) {
+      const site = join(lib, python, 'site-packages')
+      const info = readdirSync(site).find((name) => name.startsWith('std_mlx_audio-') && name.endsWith('.dist-info'))
+      if (info) return JSON.parse(readFileSync(join(site, info, 'direct_url.json'), 'utf8')).vcs_info.commit_id as string
+    }
+  } catch {
+    // Not there yet.
+  }
+  return null
+}
+
+const OLD_ENGINE = '6b1044586c263ecee550124a7567504385d49e24'
+
+test.describe('an install from before this Jezo', () => {
+  test.skip(!ready, 'Needs macOS on Apple Silicon and uv.')
+  test.describe.configure({ timeout: 600_000 })
+  test.use({
+    prepare: {
+      model: null,
+      // What 設定 installed when Jezo named an older engine commit, the way it installs.
+      data: (dir) => {
+        const venv = join(dir, 'speech/venv')
+        execFileSync('uv', ['venv', '--python', '3.12', venv])
+        const core = 'standard-asr[server] @ git+https://github.com/standard-voice/standard_asr.git@1b2cf3fa5860c075e5160eb60b26b708a7c8bfea'
+        writeFileSync(join(dir, 'speech/overrides.txt'), `${core}\n`)
+        execFileSync('uv', ['pip', 'install', '--python', join(venv, 'bin/python'), '--overrides', join(dir, 'speech/overrides.txt'), core, `std-mlx-audio @ git+https://github.com/standard-voice/std-mlx-audio.git@${OLD_ENGINE}`])
+      },
+    },
+  })
+
+  test('is moved to the commits this Jezo names when it starts, and then works', async ({ jezo }) => {
+    const { page, data } = jezo
+    expect(engineCommit(data)).toBe(OLD_ENGINE)
+    await expect.poll(() => engineCommit(data), { timeout: 300_000 }).not.toBe(OLD_ENGINE)
+    const pinned = readFileSync('src/main/speech/speech.ts', 'utf8').match(/std-mlx-audio\.git', commit: '([0-9a-f]{40})'/)![1]
+    expect(engineCommit(data)).toBe(pinned)
+    await open(page, '設定')
+    await expect(page.getByText(/Qwen3-ASR 0.6B，在這台電腦上跑/)).toBeVisible({ timeout: 120_000 })
     expect(jezo.errors).toEqual([])
   })
 })
