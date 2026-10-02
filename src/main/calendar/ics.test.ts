@@ -17,6 +17,10 @@
 //  - a repeat's DTEND length is clock arithmetic on each day, so a day with a clock change gets a different length;
 //  - an occurrence moved into the range from outside it is missed, because repeats are walked by their original dates;
 //  - repeats are bounded by clocks a day either side, so a far zone's occurrence that falls in the range is missed.
+// The research into ical.js (2026-10-01) found, in a zone the feed defines itself:
+//  - a clock the clocks skip (02:30 on the spring-forward day) is read an hour early, at 01:30;
+//    RFC 5545 erratum 4271 says to keep it, counted, at the offset from before the change: 03:30;
+//  - a clock that happens twice (01:30 on the fall-back day) is read as the second; it's the first.
 
 import { describe, expect, test } from 'bun:test'
 import { formatTime, parseTime, resolve } from '../../shared/time'
@@ -344,5 +348,24 @@ describe('repeats and lengths across clock changes', () => {
     // 00:30 on Oct 3 in Kiritimati (+14) is 23:30 on Oct 1 in Pago Pago (-11).
     const text = feed(...event('UID:k', 'SUMMARY:Far', 'DTSTART;TZID=Pacific/Kiritimati:20260925T003000', 'DURATION:PT30M', 'RRULE:FREQ=DAILY'))
     expect(readIcs(text, '2026-10-01', '2026-10-02', 'Pacific/Pago_Pago').events.map((e) => e.start)).toEqual(['2026-10-03T00:30:00+14:00'])
+  })
+})
+
+describe('a zone the feed defines, when the clocks change', () => {
+  const eastern = [
+    'BEGIN:VTIMEZONE', 'TZID:Eastern Standard Time',
+    'BEGIN:STANDARD', 'DTSTART:16010101T020000', 'TZOFFSETFROM:-0400', 'TZOFFSETTO:-0500', 'RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=11', 'END:STANDARD',
+    'BEGIN:DAYLIGHT', 'DTSTART:16010101T020000', 'TZOFFSETFROM:-0500', 'TZOFFSETTO:-0400', 'RRULE:FREQ=YEARLY;BYDAY=2SU;BYMONTH=3', 'END:DAYLIGHT',
+    'END:VTIMEZONE',
+  ]
+  const starts = (start: string, from: string, to: string) =>
+    readIcs(feed(...eastern, ...event('UID:g', 'SUMMARY:G', `DTSTART;TZID=Eastern Standard Time:${start}`, 'DURATION:PT30M', 'RRULE:FREQ=DAILY;COUNT=3')), from, to, 'UTC').events.map((e) => e.start)
+
+  test('a skipped clock is kept and counted, at the offset from before the change (erratum 4271)', () => {
+    expect(starts('20260307T023000', '2026-03-06', '2026-03-12')).toEqual(['2026-03-07T02:30:00-05:00', '2026-03-08T03:30:00-04:00', '2026-03-09T02:30:00-04:00'])
+  })
+
+  test('a clock that happens twice is the first', () => {
+    expect(starts('20261031T013000', '2026-10-30', '2026-11-04')).toEqual(['2026-10-31T01:30:00-04:00', '2026-11-01T01:30:00-04:00', '2026-11-02T01:30:00-05:00'])
   })
 })

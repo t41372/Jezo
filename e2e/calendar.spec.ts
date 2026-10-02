@@ -84,6 +84,8 @@ test.beforeAll(async () => {
   feeds.set('/work.ics', { status: 200, body: work, etag: '"w1"' })
   feeds.set('/personal.ics', { status: 200, body: personal, etag: '"p1"' })
   feeds.set('/signin.html', { status: 200, body: '<html><body>Please sign in</body></html>', etag: '"s"' })
+  // A rule ical.js never finishes expanding (its issue #1038): February has no 30th.
+  feeds.set('/endless.ics', { status: 200, etag: '"e"', body: ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//e2e//EN', 'BEGIN:VEVENT', 'UID:endless', 'SUMMARY:Never', 'DTSTART:20260101T090000Z', 'DURATION:PT1H', 'RRULE:FREQ=DAILY;BYMONTH=2;BYMONTHDAY=30', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n') })
   server = createServer((req, res) => {
     requests.push(`${req.url} ${req.headers['if-none-match'] ?? ''}`.trim())
     const feed = feeds.get(req.url ?? '')
@@ -204,4 +206,18 @@ test('subscribing to calendars shows their events at the right times, and hiding
   await open(page, '行事曆')
   await expect(grid.getByText('Standup', { exact: true })).toHaveCount(0)
   expect(jezo.errors).toEqual([])
+})
+
+test('a feed whose repeat rule never ends is refused after a while, and Jezo keeps working meanwhile', async ({ jezo }) => {
+  const { page } = jezo
+  const subscribing = page.evaluate((url) => window.jezo.calendar.subscribe(url).then(() => 'subscribed', (e: Error) => e.message), `http://${base}/endless.ics`)
+  // The main process isn't stuck in the rule: other requests are answered right away.
+  await new Promise((r) => setTimeout(r, 1000))
+  const started = Date.now()
+  await page.evaluate(() => window.jezo.calendar.status())
+  expect(Date.now() - started).toBeLessThan(1000)
+  expect(await subscribing).toContain('took too long')
+  // The next feed is read by a fresh reader.
+  expect(await page.evaluate((url) => window.jezo.calendar.subscribe(url).then((s) => s.name), `http://${base}/work.ics`)).toBeTruthy()
+  expect(jezo.errors.filter((e) => !e.includes('took too long'))).toEqual([])
 })

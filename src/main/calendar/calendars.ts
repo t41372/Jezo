@@ -22,7 +22,8 @@ import type { Workspace } from '../workspace/workspace'
 import { dateOf, epochOf, now, readTime, todayIn, type Zone } from '../../shared/time'
 import { deviceZone } from '../clock'
 import { googleCalendars, googleClient, googleEvents, GoogleSignedOut, setGoogleClient, signIn, signOut, type GoogleCalendar, type SignInPage } from './google'
-import { readIcs, unknownZonesIn } from './ics'
+import { unknownZonesIn } from './ics'
+import { readFeed } from './ics-reader'
 import { macAccess, macAvailable, macCalendars, macEvents, requestMacAccess, watchMac, type MacAccess } from './mac'
 
 const SUBSCRIPTIONS = 'calendar/subscriptions.yaml'
@@ -173,7 +174,7 @@ export class Calendars {
     if (!response.ok) throw new Error(`${response.status} ${response.statusText}`.trim())
     const text = await response.text()
     const today = todayIn(deviceZone()).toString()
-    const { name: feedName } = readIcs(text, today, today, deviceZone())
+    const { name: feedName } = await readFeed(text, today, today, deviceZone())
     const id = `s-${randomBytes(4).toString('hex')}`
     await storeSecret(secretName(id), address)
     await writeFile(join(this.cacheDir(), `${id}.ics`), text)
@@ -224,7 +225,7 @@ export class Calendars {
           if (response.status !== 304) {
             if (!response.ok) throw new Error(`${response.status} ${response.statusText}`.trim())
             const text = await response.text()
-            readIcs(text, '2000-01-01', '2000-01-02', 'UTC')
+            await readFeed(text, '2000-01-01', '2000-01-02', 'UTC')
             // Removed while this was on its way: don't leave a copy behind.
             if (!(await this.subscriptions()).some((s) => s.id === id)) return
             await writeFile(join(this.cacheDir(), `${id}.ics`), text)
@@ -484,7 +485,7 @@ export class Calendars {
         continue
       }
       try {
-        const feed = readIcs(text, from, to, zone)
+        const feed = await readFeed(text, from, to, zone)
         for (const e of feed.events) events.push({ ...e, id: `${c.id}:${e.id}`, calendar: c.id })
       } catch (error) {
         console.error(`Can't read the calendar ${c.name}:`, error)

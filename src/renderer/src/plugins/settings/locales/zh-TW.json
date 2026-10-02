@@ -91,6 +91,16 @@
       "model": "用 {{model}}",
       "nothing": "pi 裡沒有可以匯入的設定",
       "skipped": "沒匯入 {{names}}：用的不是 OpenAI 格式，或金鑰要執行指令才拿得到。"
+    },
+    "apple": {
+      "available": "在這台 Mac 上執行，資料不離開電腦。Jezo 用它做小事，例如幫對話取名字。它能讀的內容太短，撐不起和 agent 的完整對話。",
+      "unsupported-system": "需要 macOS 26 以上版本和 Apple Silicon Mac。",
+      "device-not-eligible": "這台 Mac 不支援 Apple Intelligence。",
+      "intelligence-disabled": "請在系統設定中開啟 Apple Intelligence，再回來重新整理。",
+      "model-not-ready": "Apple Intelligence 正在準備模型。下載完成後，請回來重新整理。",
+      "unavailable": "Apple Intelligence 目前無法使用。請檢查系統設定，再回來重新整理。",
+      "helper-unavailable": "無法載入 Apple 模型。請重試重新整理，或更新 Jezo。",
+      "noModels": "Apple Intelligence 準備好後，就會顯示裝置端模型。"
     }
   },
   "scheduleOff": "關著",

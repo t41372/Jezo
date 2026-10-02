@@ -71,6 +71,64 @@ function vtimezone(tzid: string, until: Temporal.Instant): ICAL.Component {
   return vtz
 }
 
+/** When a zone the feed defines changes its offset: from what, to what, sorted. */
+interface Change {
+  ms: number
+  from: number
+  to: number
+}
+
+/**
+ * A feed's VTIMEZONE as the list of its changes, read from its observances: each
+ * one's DTSTART, RRULE and RDATEs are clocks in the offset it changes from.
+ * ical.js expands the rules (floating clocks, which it gets right); the offsets
+ * are worked out here, because ical.js puts the change of a zone it reads from a
+ * feed an hour off around the change itself.
+ */
+function changesOf(zone: ICAL.Timezone, until: number): Change[] {
+  const changes: Change[] = []
+  for (const observance of [...zone.component.getAllSubcomponents('standard'), ...zone.component.getAllSubcomponents('daylight')]) {
+    const from = (observance.getFirstPropertyValue('tzoffsetfrom') as ICAL.UtcOffset).toSeconds()
+    const to = (observance.getFirstPropertyValue('tzoffsetto') as ICAL.UtcOffset).toSeconds()
+    const start = observance.getFirstPropertyValue('dtstart') as ICAL.Time
+    const msOf = (t: ICAL.Time) => plainOf(t).toZonedDateTime('UTC').epochMilliseconds - from * 1000
+    const add = (t: ICAL.Time) => changes.push({ ms: msOf(t), from, to })
+    add(start)
+    for (const rdate of observance.getAllProperties('rdate')) for (const value of rdate.getValues() as ICAL.Time[]) if (value?.year) add(value)
+    const rule = observance.getFirstPropertyValue('rrule') as ICAL.Recur | null
+    if (!rule) continue
+    const it = rule.iterator(start)
+    for (let next = it.next(); next && msOf(next) <= until; next = it.next()) if (next.compare(start) !== 0) add(next)
+  }
+  return changes.sort((a, b) => a.ms - b.ms)
+}
+
+/** A moment's offset in a zone the feed defines, in seconds. */
+function offsetIn(changes: Change[], ms: number) {
+  let offset = changes[0]?.from ?? 0
+  for (const change of changes) {
+    if (change.ms > ms) break
+    offset = change.to
+  }
+  return offset
+}
+
+/**
+ * A clock in a zone the feed defines, as a moment, the way RFC 5545 reads it: a
+ * clock that happens twice is the first (3.3.5), and one the clocks skip keeps
+ * the offset from before the change, so 02:30 is 03:30 (erratum 4271, which
+ * Google and Apple Calendar follow).
+ */
+function inFeedZone(wall: Temporal.PlainDateTime, changes: Change[]) {
+  const asUtc = wall.toZonedDateTime('UTC').epochMilliseconds
+  const before = offsetIn(changes, asUtc - DAY_MS)
+  const after = offsetIn(changes, asUtc + DAY_MS)
+  // Each offset around the clock gives a moment; it's real if the zone has that offset then.
+  const real = [...new Set([asUtc - before * 1000, asUtc - after * 1000])].filter((ms) => offsetIn(changes, ms) * 1000 === asUtc - ms).sort((a, b) => a - b)
+  const ms = real[0] ?? asUtc - before * 1000
+  return { ms, offset: offsetIn(changes, ms) }
+}
+
 function parse(text: string) {
   let root: ICAL.Component
   try {
@@ -137,12 +195,19 @@ export function readIcs(text: string, from: string, to: string, zone: Zone): Ics
     zones.set(name, new ICAL.Timezone({ component: vtz, tzid: name }))
   }
 
+  // The feed's own zones as lists of changes, worked out once per read.
+  const changeLists = new Map<string, Change[]>()
+  const changesFor = (name: string) => {
+    let changes = changeLists.get(name)
+    if (!changes) changeLists.set(name, (changes = changesOf(zones.get(name)!, horizon.epochMilliseconds)))
+    return changes
+  }
+
   /** A clock in a zone the feed named, as a moment: the feed's own rules, or the runtime's for an IANA name. */
   const resolve = (wall: Temporal.PlainDateTime, name: string | undefined): Point => {
     if (name && own.has(name)) {
-      const t = ICAL.Time.fromData({ year: wall.year, month: wall.month, day: wall.day, hour: wall.hour, minute: wall.minute, second: wall.second }, zones.get(name)!)
-      const at = t.toUnixTime() * 1000
-      return { value: stamp(offsetName(t.utcOffset()), at), at, zone: name }
+      const { ms, offset } = inFeedZone(wall, changesFor(name))
+      return { value: stamp(offsetName(offset), ms), at: ms, zone: name }
     }
     if (name && knownZone(name)) {
       // Around a daylight-saving change, RFC 5545 and Temporal agree: a time that happens twice is the first,
@@ -157,10 +222,7 @@ export function readIcs(text: string, from: string, to: string, zone: Zone): Ics
 
   /** A moment, written in the zone a time was given in. */
   const at = (ms: number, like: Point): Point => {
-    if (like.zone && own.has(like.zone)) {
-      const t = ICAL.Time.fromJSDate(new Date(ms), true).convertToZone(zones.get(like.zone)!)
-      return { value: stamp(offsetName(t.utcOffset()), ms), at: ms, zone: like.zone }
-    }
+    if (like.zone && own.has(like.zone)) return { value: stamp(offsetName(offsetIn(changesFor(like.zone), ms)), ms), at: ms, zone: like.zone }
     if (like.zone) return { value: stamp(like.zone, ms), at: ms, zone: like.zone }
     if (like.utc) return { value: stamp('UTC', ms), at: ms, utc: true }
     // Floating: the clock moves by the same amount.

@@ -92,6 +92,16 @@
       "model": "Using {{model}}",
       "nothing": "Nothing in pi to import",
       "skipped": "Didn't import {{names}}: not an OpenAI-style API, or its key comes from running a command."
+    },
+    "apple": {
+      "available": "Runs on this Mac, and nothing leaves it. Jezo uses it for small tasks, like naming conversations. It can read too little at once to run a full conversation with the agent.",
+      "unsupported-system": "Requires macOS 26 or later and an Apple Silicon Mac.",
+      "device-not-eligible": "Apple Intelligence is not supported on this Mac.",
+      "intelligence-disabled": "Turn on Apple Intelligence in System Settings, then refresh here.",
+      "model-not-ready": "Apple Intelligence is still preparing its model. Refresh here once the download finishes.",
+      "unavailable": "Apple Intelligence is unavailable right now. Check System Settings, then refresh here.",
+      "helper-unavailable": "The Apple model could not be loaded. Try refreshing, or update Jezo.",
+      "noModels": "The on-device model will appear when Apple Intelligence is available."
     }
   },
   "scheduleOff": "Off",

@@ -222,6 +222,17 @@ Provider settings (addresses, models turned off, added servers, the choices) are
 - **How hard the model thinks** is one setting next to the model (medium unless changed), offered as the levels pi says the model supports. A model without the chosen level uses the nearest one it has.
 - **Importing from pi.** A button on the providers page copies what the user set up for their own pi: keys from `~/.pi/agent/auth.json`, OpenAI-compatible servers from `models.json` (keys written as `$NAME` are read from the environment; ones that run a command are skipped and named), and the default model and thinking level from `settings.json`. It reads those files only when pressed. A server at LM Studio's or Ollama's address updates that entry rather than adding a second one.
 
+### Apple Foundation Models
+
+Apple's on-device model is a provider in the same pi `ModelRuntime`, through a bundled Swift helper (JSON over stdin and stdout, one process per response). The [research](../research/apple-foundation-models.md) compares the other ways in.
+
+- **It does small tasks, not the agent** (Tim, 2026-10-01). Its context is 4K on macOS 26 and 8K on macOS 27, and Jezo's first request alone is about 7,300 tokens; even a much shorter prompt leaves no room for a calendar or a file. So it isn't in the agent's model pickers, and choosing it is refused.
+- **`Providers.small()`** is the model for small, bounded tasks: Apple's when this Mac has it ready (private, quick, nothing leaves the machine), the background model otherwise. It names a conversation the user started, after its first run ("爬山決定"); a name the user gave is kept.
+- **Checking outside content stays on the background model** until the small model has been measured on it: it's a layer of defense, and nothing published shows a 3B model is good at telling instructions from content.
+- **Apple's cloud model (Private Cloud Compute)** has a 32K context and tool calling, but needs a managed entitlement and App Store distribution (research, 2026-10-01, `.claude/research/2026-10-01/apple-models-sol.md`). Jezo isn't going to the App Store for now (Standard ASR and installed plugins), so it isn't used.
+- On Mac, the provider page says whether Apple Intelligence is ready, disabled, downloading its model, or unsupported. Windows and Linux don't probe or register it. It has no key or server address.
+- The helper's tool handoff (a tool call ends Apple's loop and goes back to pi, which runs it) is kept for a model with room for the agent; small tasks don't use tools.
+
 ## Speech
 
 Speech recognition runs through [Standard ASR](https://github.com/standard-voice/standard_asr), its protocol 0.2, in a Python environment Jezo manages with uv. Jezo starts `standard-asr serve` on a free local port and streams to its WebSocket (`/v1/stream/<model>`); there's no JavaScript client, and the protocol is small enough to speak directly.

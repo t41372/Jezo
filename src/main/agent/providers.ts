@@ -14,6 +14,7 @@ import { app } from 'electron'
 import type { CustomProviderInput, ModelChoices, ModelRef, PiImport, ProviderDetail, ProviderModel, ProviderSummary } from '../../shared/bridge'
 import { getConfig, setConfig } from '../config'
 import { getSecret, secretNames, storeSecret } from '../secrets'
+import { APPLE_PROVIDER, appleProvider, availability, type AppleAvailability } from './foundation-models/provider'
 
 /** Servers that run models on this machine, found without setup. */
 const LOCAL = [
@@ -88,6 +89,23 @@ export class Providers {
   private checks = new Map<string, Check>()
   private listeners = new Set<() => void>()
 
+  private apple: AppleAvailability | undefined
+  private appleBinary() {
+    return app.isPackaged
+      ? join(process.resourcesPath, 'bin/jezo-foundation-models')
+      : join(import.meta.dirname, '../../native/foundation-models/build/jezo-foundation-models')
+  }
+
+  private async refreshApple() {
+    if (process.platform !== 'darwin') return
+    this.apple = await availability(this.appleBinary())
+    if (this.apple.reason === 'available') {
+      this.runtime.registerProvider(APPLE_PROVIDER, appleProvider(this.appleBinary(), this.apple.contextWindow!))
+    } else if (this.runtime.getProvider(APPLE_PROVIDER)) {
+      this.runtime.unregisterProvider(APPLE_PROVIDER)
+    }
+  }
+
   async open() {
     this.runtime = await ModelRuntime.create({ credentials: new InMemoryCredentialStore(), modelsPath: null })
     for (const provider of secretNames()) {
@@ -125,8 +143,8 @@ export class Providers {
 
   /** Asks LM Studio, Ollama and the user's own servers what they have, and registers what answers. */
   async refreshServers(only?: string) {
-    await Promise.all(
-      this.servedProviders()
+    await Promise.all([
+      ...this.servedProviders()
         .filter((p) => !only || p.id === only)
         .map(async (p) => {
           const models = await serverModels(p.baseUrl, getSecret(p.id))
@@ -148,11 +166,17 @@ export class Providers {
             })),
           })
         }),
-    )
+      ...(!only || only === APPLE_PROVIDER ? [this.refreshApple()] : []),
+    ])
     this.changed()
   }
 
   private summary(id: string): ProviderSummary | null {
+    if (id === APPLE_PROVIDER) {
+      if (!this.apple) return null
+      return { id, name: 'Apple Foundation Models', kind: 'local',
+        state: this.apple.reason !== 'available' ? 'off' : this.checks.get(id)?.ok === false ? 'error' : 'ready' }
+    }
     const served = this.servedProviders().find((p) => p.id === id)
     const check = this.checks.get(id)
     if (served) {
@@ -176,8 +200,8 @@ export class Providers {
     const cloud = this.runtime
       .getProviders()
       .map((p) => p.id)
-      .filter((id) => !this.servedProviders().some((p) => p.id === id))
-    const all = [...this.servedProviders().map((p) => p.id), ...cloud].flatMap((id) => this.summary(id) ?? [])
+      .filter((id) => id !== APPLE_PROVIDER && !this.servedProviders().some((p) => p.id === id))
+    const all = [...this.servedProviders().map((p) => p.id), ...(this.apple ? [APPLE_PROVIDER] : []), ...cloud].flatMap((id) => this.summary(id) ?? [])
     const rank = (p: ProviderSummary) => (p.popular ? POPULAR.indexOf(p.id) : 100)
     return all.sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name))
   }
@@ -203,6 +227,10 @@ export class Providers {
   detail(id: string): ProviderDetail {
     const summary = this.summary(id)
     if (!summary) throw new Error(`There is no provider ${id}.`)
+    if (id === APPLE_PROVIDER) return {
+      ...summary, needsKey: false, canRefresh: true, models: this.models(id),
+      appleAvailability: this.apple!.reason, lastCheck: this.checks.get(id),
+    }
     const served = this.servedProviders().find((p) => p.id === id)
     return {
       ...summary,
@@ -217,6 +245,7 @@ export class Providers {
   }
 
   async setKey(id: string, key: string | null) {
+    if (id === APPLE_PROVIDER) throw new Error('Apple Foundation Models does not use an API key.')
     await storeSecret(id, key)
     this.checks.delete(id)
     if (this.servedProviders().some((p) => p.id === id)) await this.refreshServers(id)
@@ -227,6 +256,7 @@ export class Providers {
   }
 
   async setBaseUrl(id: string, baseUrl: string) {
+    if (id === APPLE_PROVIDER) throw new Error('Apple Foundation Models runs on this Mac and has no server address.')
     const custom = getConfig().models.custom.find((p) => p.id === id)
     if (custom) {
       const models = getConfig().models
@@ -298,9 +328,10 @@ export class Providers {
   // ─── Which model the agent uses ───
 
   /** Models the pickers offer: the enabled models of providers that are ready. */
+  /** Models the agent can run on. Apple's on-device model isn't one: its context is too small, so it only does small tasks (small()). */
   choosable() {
     return this.list()
-      .filter((p) => p.state === 'ready')
+      .filter((p) => p.state === 'ready' && p.id !== APPLE_PROVIDER)
       .flatMap((p) => this.models(p.id).filter((m) => m.enabled).map((model) => ({ provider: p.id, providerName: p.name, model })))
   }
 
@@ -321,6 +352,15 @@ export class Providers {
     const choosable = this.choosable()
     const pick = choosable.find((c) => c.model.loaded) ?? choosable[0]
     return pick ? { provider: pick.provider, id: pick.model.id } : null
+  }
+
+  /**
+   * The model for small, bounded tasks, like naming a conversation: Apple's
+   * on-device model when this Mac has it ready, since it's private and quick and
+   * its small context is enough for them; otherwise the background model.
+   */
+  small(): Model<Api> | null {
+    return this.runtime.getModel(APPLE_PROVIDER, 'system') ?? this.model('background')
   }
 
   model(role: 'main' | 'background'): Model<Api> | null {
@@ -426,6 +466,7 @@ export class Providers {
   }
 
   async choose(role: 'main' | 'background', ref: ModelRef | null) {
+    if (ref?.provider === APPLE_PROVIDER) throw new Error("Apple's on-device model can read too little at once to run the agent; Jezo uses it for small tasks.")
     await setConfig({ models: { ...getConfig().models, [role]: ref } })
     this.changed()
     return this.choices()

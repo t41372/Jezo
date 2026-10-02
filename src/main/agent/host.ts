@@ -32,6 +32,7 @@ import { acting } from './acting'
 import { ExtensionUI } from './extension-ui'
 import { installer } from '../install/installer'
 import type { Providers } from './providers'
+import { appleCompactionOverrides } from './foundation-models/provider'
 import { deviceZone } from '../clock'
 import { now, type Zone } from '../../shared/time'
 import { eventWhen } from '../calendar/agent'
@@ -46,6 +47,8 @@ interface Conversation {
   automation?: { id: string; name: string }
   /** The zone the user is planning in, when they started it from a calendar showing another zone. */
   zone?: Zone
+  /** The small model is naming it right now. */
+  naming?: boolean
   /** When it started, as a Date. */
   started: Date
   manager: SessionManager
@@ -319,6 +322,35 @@ export class AgentHost {
     return this.edit(id, userEntryId, text, true)
   }
 
+  /**
+   * Names a conversation the user started, after its first run, with the small
+   * model: a few words from what they asked. Until then, and if it fails, the
+   * title is the start of their first message. A name the user gave is kept.
+   */
+  private async name(c: Conversation) {
+    if ((c.trigger !== 'user' && c.trigger !== 'hotkey') || c.manager.getSessionName() || c.naming) return
+    const first = c.manager.getEntries().find((e) => e.type === 'message' && e.message.role === 'user')
+    const content = first?.type === 'message' && first.message.role === 'user' ? first.message.content : undefined
+    const asked = typeof content === 'string' ? content : content?.flatMap((b) => (b.type === 'text' ? [b.text] : [])).join('\n')
+    const model = this.providers.small()
+    if (!asked || !model) return
+    c.naming = true
+    try {
+      const reply = await this.providers.runtime.completeSimple(model, {
+        messages: [{ role: 'user', content: `${NAME_REQUEST}\n\n<message>\n${asked.slice(0, 1000)}\n</message>`, timestamp: Date.now() }],
+      }, { signal: AbortSignal.timeout(30_000) })
+      const name = reply.content.flatMap((b) => (b.type === 'text' ? [b.text] : [])).join('').trim().replace(/^["「『]|["」』。.]$/g, '').split('\n')[0]
+      if (reply.stopReason === 'error' || reply.stopReason === 'aborted' || !name || name.length > 40 || c.manager.getSessionName()) return
+      c.manager.appendSessionInfo(name)
+      this.publish(c, { type: 'session_info_changed', name })
+      this.emit(c, true)
+    } catch (error) {
+      console.error('Naming the conversation failed:', error)
+    } finally {
+      c.naming = false
+    }
+  }
+
   rename(id: string, name: string) {
     const c = this.conversation(id)
     c.manager.appendSessionInfo(name)
@@ -516,6 +548,7 @@ export class AgentHost {
       if (recording && !this.closing) await this.undo.finish(c.context.run, '').catch(console.error)
     } finally {
       for (const listener of this.finishedListeners) listener(c.id, c.automation, c.outcome)
+      void this.name(c)
       this.ui.cancel(c.id)
       c.running = false
       c.partial = null
@@ -584,7 +617,14 @@ export class AgentHost {
     })
     await loader.reload()
     // reload() reads settings from disk and clears applyOverrides().
-    settings.applyOverrides({ compaction: { enabled: true }, retry: { enabled: true, maxRetries: 2 }, cacheWarming: 'off', defaultTools: TOOL_NAMES })
+    settings.applyOverrides({
+      compaction: {
+        enabled: true,
+        // pi's default 16K reserve exceeds the Apple model's entire context.
+        modelOverrides: appleCompactionOverrides(settings.getSettings().compaction?.modelOverrides),
+      },
+      retry: { enabled: true, maxRetries: 2 }, cacheWarming: 'off', defaultTools: TOOL_NAMES,
+    })
     const { session } = await createAgentSession({
       cwd: this.workspace.root,
       agentDir: process.env.PI_CODING_AGENT_DIR!,
@@ -1024,6 +1064,9 @@ function target(tool: string, args: Record<string, unknown>, root: string): { ta
 }
 
 const title = (text: string) => (text.length > 16 ? `${text.slice(0, 16)}…` : text)
+
+/** What the small model is asked to name a conversation by. */
+const NAME_REQUEST = 'Give a short title for a conversation that starts with the message below: a few words saying what it is about, in the language of the message (at most 12 characters in Chinese or Japanese, 6 words otherwise). Reply with the title only.'
 
 function firstSentence(text: string) {
   // Chinese sentences end without a space after the stop.

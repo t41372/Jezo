@@ -178,11 +178,15 @@ function Provider({ id, onRemoved }: { id: string; onRemoved: () => void }) {
         )}
       </header>
 
-      {p.kind === 'local' && (
+      {p.appleAvailability && (
+        <p className="-mt-3 text-[13px] text-muted-foreground">{t(`providers.apple.${p.appleAvailability}`)}</p>
+      )}
+
+      {p.kind === 'local' && !p.appleAvailability && (
         <p className="-mt-3 text-[13px] text-muted-foreground">{p.state === 'ready' ? t('providers.localFound') : t('providers.localMissing', { name: p.name })}</p>
       )}
 
-      {p.kind !== 'cloud' && (
+      {p.kind !== 'cloud' && p.baseUrl !== undefined && (
         <Field label={t('providers.address')}>
           <SavedInput
             value={p.baseUrl ?? ''}
@@ -229,7 +233,7 @@ function Provider({ id, onRemoved }: { id: string; onRemoved: () => void }) {
           )}
         </div>
         {p.models.length === 0 ? (
-          <p className="rounded-xl border border-dashed px-4 py-5 text-center text-[13px] text-muted-foreground">{p.kind === 'cloud' ? t('providers.noModels') : t('providers.noServerModels')}</p>
+          <p className="rounded-xl border border-dashed px-4 py-5 text-center text-[13px] text-muted-foreground">{p.appleAvailability ? t('providers.apple.noModels') : p.kind === 'cloud' ? t('providers.noModels') : t('providers.noServerModels')}</p>
         ) : (
           <ul className="flex flex-col divide-y divide-card-border rounded-xl border border-card-border">
             {models.map((m) => (

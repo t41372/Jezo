@@ -22,7 +22,7 @@ export type QuickCommand =
 export interface ProviderSummary {
   id: string
   name: string
-  /** `local`: found on this machine (LM Studio, Ollama). `custom`: a server the user added. */
+  /** `local`: runs on this machine (LM Studio, Ollama, Apple Foundation Models). `custom`: a server the user added. */
   kind: 'local' | 'cloud' | 'custom'
   /** `ready` can be used; `off` isn't set up or isn't running; `error` failed its last check. */
   state: 'ready' | 'off' | 'error'
@@ -47,7 +47,10 @@ export interface ProviderModel {
   enabled: boolean
 }
 
+export type AppleAvailabilityReason = 'available' | 'unsupported-system' | 'device-not-eligible' | 'intelligence-disabled' | 'model-not-ready' | 'unavailable' | 'helper-unavailable'
+
 export interface ProviderDetail extends ProviderSummary {
+  appleAvailability?: AppleAvailabilityReason
   baseUrl?: string
   /** For LM Studio and Ollama: the usual address, to go back to. */
   defaultBaseUrl?: string

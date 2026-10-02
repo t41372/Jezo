@@ -9,3 +9,4 @@ e2e/results/
 .claude/worktrees/
 *.mov
 native/eventkit/build/
+native/foundation-models/build/

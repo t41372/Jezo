@@ -21,6 +21,10 @@ mac:
   extraResources:
     - from: native/eventkit/build/jezo-eventkit
       to: bin/jezo-eventkit
+    - from: native/foundation-models/build
+      to: bin
+      filter:
+        - jezo-foundation-models
 # What a new workspace starts with (src/main/workspace/seed.ts).
 extraResources:
   - from: resources/workspace
