@@ -15,6 +15,7 @@
     "test": "bun test src/main src/shared",
     "e2e": "bun scripts/native.ts && electron-vite build && playwright test",
     "package": "bun scripts/native.ts && bun scripts/uv.ts && electron-vite build && electron-builder --dir",
+    "release": "bun scripts/native.ts && bun scripts/uv.ts && electron-vite build && electron-builder --mac dmg zip --publish never",
     "check:i18n": "bun scripts/check-locales.ts",
     "zone-names": "bun scripts/zone-names.ts",
     "postinstall": "electron-builder install-app-deps && bun scripts/native.ts"

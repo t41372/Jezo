@@ -81,7 +81,7 @@ const fakeMicrophone = (file: string) => [
   `--use-file-for-fake-audio-capture=${file}`,
 ]
 
-test.describe('dictation knows the words in the workspace', () => {
+test.describe('dictation knows the words in the workspace', { tag: '@speech' }, () => {
   test.skip(!ready, 'Needs macOS on Apple Silicon and uv.')
   test.describe.configure({ timeout: 600_000 })
   test.use({ prepare: { model: null, workspace: campingTodo, args: fakeMicrophone(ready ? spoken('我要整理鵝鑾鼻露營裝備') : '') } })
@@ -99,7 +99,7 @@ test.describe('dictation knows the words in the workspace', () => {
   })
 })
 
-test.describe('holding ⌥X with nothing said', () => {
+test.describe('holding ⌥X with nothing said', { tag: '@speech' }, () => {
   test.skip(!ready, 'Needs macOS on Apple Silicon and uv.')
   test.describe.configure({ timeout: 600_000 })
   test.use({ prepare: { model: null, workspace: campingTodo, args: fakeMicrophone(ready ? spoken('') : '') } })
@@ -137,7 +137,7 @@ function engineCommit(data: string) {
 
 const OLD_ENGINE = '6b1044586c263ecee550124a7567504385d49e24'
 
-test.describe('an install from before this Jezo', () => {
+test.describe('an install from before this Jezo', { tag: '@speech' }, () => {
   test.skip(!ready, 'Needs macOS on Apple Silicon and uv.')
   test.describe.configure({ timeout: 600_000 })
   test.use({
@@ -166,7 +166,7 @@ test.describe('an install from before this Jezo', () => {
   })
 })
 
-test.describe('holding ⌥X', () => {
+test.describe('holding ⌥X', { tag: '@speech' }, () => {
   test.skip(!ready, 'Needs macOS on Apple Silicon and uv.')
   test.describe.configure({ timeout: 600_000 })
   test.use({

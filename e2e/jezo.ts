@@ -79,6 +79,7 @@ export const test = base.extend<{ jezo: Jezo; prepare: Prepare }>({
       await app.waitForEvent('window')
       page = app.windows().find((w) => w.url().includes('/index.html'))
     }
+    await fixSize(app)
     const errors: string[] = []
     page.on('pageerror', (e) => errors.push(String(e)))
     page.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
@@ -109,6 +110,7 @@ export const test = base.extend<{ jezo: Jezo; prepare: Prepare }>({
         await app.waitForEvent('window')
         next = app.windows().find((w) => w.url().includes('/index.html'))
       }
+      await fixSize(app)
       next.on('pageerror', (e) => errors.push(String(e)))
       next.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
       // A crash can lose what the window had stored, so the language and theme are set again.
@@ -147,6 +149,24 @@ export async function localModel() {
 }
 
 /** Goes to a page by its rail label. */
+/**
+ * The main window laid out at the size it opens at on a usual screen, 1320 × 840.
+ * CI's Macs have a 1024 × 768 screen, which macOS won't put a bigger window on,
+ * and the calendar's columns and drawer then land elsewhere than the tests
+ * expect; there the page is zoomed out until it's that size inside the window.
+ */
+async function fixSize(app: ElectronApplication) {
+  await app.evaluate(({ BrowserWindow, screen }) => {
+    const window = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes('/index.html'))
+    if (!window) return
+    window.setContentSize(1320, 840)
+    // A hidden window reports the size it was given; what it's drawn at is held to the screen.
+    const area = screen.getPrimaryDisplay().workAreaSize
+    const [width, height] = window.getContentSize()
+    window.webContents.setZoomFactor(Math.min(1, width / 1320, height / 840, area.width / 1320, (area.height - 28) / 840))
+  })
+}
+
 export const open = (page: Page, label: string) => page.locator('nav button', { hasText: label }).first().click()
 
 /** When a time from a todo's file happens, in milliseconds; a local time is read in Taipei, the tests' zone. */

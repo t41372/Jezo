@@ -1,0 +1,43 @@
+# Builds the Mac app for a version tag (v0.1.0) and attaches it to a draft
+# release, for a person to read over and publish. Run by hand, it builds the
+# same app and keeps it as the run's artifact, to try before tagging. The app
+# isn't signed or notarized yet, so macOS asks before opening it the first time.
+# macOS 26's SDK is needed for the Apple Foundation Models helper.
+
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  mac:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun run test
+      - run: bun run release
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Keep the build
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: jezo-mac
+          path: |
+            dist/*.dmg
+            dist/*.zip
+      - name: Draft release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --draft --title "Jezo ${GITHUB_REF_NAME#v}" --generate-notes dist/*.dmg dist/*.zip

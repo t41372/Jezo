@@ -1,0 +1,63 @@
+# Checks every push to main and every pull request: types, unit tests, the
+# build, and the end-to-end tests that need neither a local model server nor
+# a speech model. The agent's own tests run on a developer's machine with LM
+# Studio (docs/design/backend.md, "Tests"); here they skip themselves.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun run test
+      - name: Memory extension tests
+        working-directory: packages/pi-memory
+        run: node --test
+      - run: bun run build
+
+  e2e:
+    needs: check
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      # Playwright runs the specs in Node, which has Temporal from 26 on.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+      - run: bun install --frozen-lockfile
+      - run: bun run build
+      # The tests size the window themselves; the screen's size helps read a failure.
+      - name: Display
+        run: system_profiler SPDisplaysDataType | grep -i resolution || true
+      # Speech recognition downloads a model of about a gigabyte; it's tested on a developer's machine.
+      - run: bunx playwright test --grep-invert @speech
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-report
+          path: e2e/report
+          retention-days: 14
