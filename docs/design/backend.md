@@ -6,7 +6,11 @@ Status: decided on 2026-09-29, after the prototype ended. How the main process h
 
 Everything runs in Electron's main process, apart from speech recognition, which is a Python sidecar (below). The windows only draw: they get the workspace's entities over IPC and ask the main process to change them. Context isolation stays on and the renderer has no Node access (see [frontend.md](frontend.md)).
 
-The main process is ESM. pi's packages only export ESM (`require()` fails with `ERR_PACKAGE_PATH_NOT_EXPORTED`), so `package.json` has `"type": "module"`. The preload script stays CommonJS and is built as `index.cjs`, because a sandboxed renderer can't load an ESM preload. Dependencies aren't bundled into the main process (electron-vite's default), which pi needs: it finds its own `package.json` by walking up from its files.
+The main process is ESM. pi's packages only export ESM (`require()` fails with `ERR_PACKAGE_PATH_NOT_EXPORTED`), so `package.json` has `"type": "module"`. The preload script stays CommonJS and is built as `index.cjs`, because a sandboxed renderer can't load an ESM preload. Dependencies aren't bundled into the main process (electron-vite's default), which pi needs: it finds its own `package.json` by walking up from its files. So `dependencies` in `package.json` are what the main process loads when it runs, and electron-builder copies them, with what they depend on, into the app; everything the windows use is a dev dependency, since Vite bundles it into the renderer. Listed as dependencies, the renderer's packages went into the app a second time: 0.1.0's first build was 695 MB, and 488 MB after the move (2026-10-02). Then, measured the same day:
+  - Chromium's own strings ship for English and Chinese only (`electronLanguages`), the languages Jezo has; there were 55, with gendered variants, 47 MB of Electron's 286. Elsewhere its context menus and native dialogs read in English.
+  - Source maps, type declarations, Linux's seccomp helper and pi-tui's other platforms' prebuilds are left out: 33 MB of app.asar's 145.
+  - The disk image is recompressed with LZMA (`scripts/dmg.ts`), which electron-builder can't write: 156 MB as lzfse, 121 MB as LZMA.
+  - The app is 404 MB installed. Electron's 203 MB binary is already stripped. Not done: removing SwiftShader (17 MB, the GPU fallback a virtual machine needs), downloading uv on first use (34 MB, but speech would then need the network to install), and bundling pi and its provider SDKs into the main process (maybe 60 MB, against pi's dynamic imports).
 
 ## The workspace
 

@@ -5,6 +5,20 @@ directories:
 files:
   - out/**
   - package.json
+  # What packages ship for building or other platforms isn't loaded at run time:
+  # source maps, type declarations, Linux's seccomp helper, pi-tui's other prebuilds.
+  - "!**/*.map"
+  - "!**/*.d.ts"
+  - "!**/*.d.mts"
+  - "!**/*.d.cts"
+  - "!**/node_modules/@anthropic-ai/sandbox-runtime/vendor/seccomp/**"
+  - "!**/node_modules/@earendil-works/pi-tui/native/{win32,linux}/**"
+  - "!**/node_modules/@earendil-works/pi-tui/native/darwin/prebuilds/darwin-x64/**"
+# Chromium's own strings (context menus, native dialogs) in the languages Jezo has.
+electronLanguages: [en, zh_CN, zh_TW]
+# lzfse: smaller to download than the default zlib, on macOS 10.11 and later.
+dmg:
+  format: ULFO
 # The npm launcher uses Electron in Node mode. npm and its own dependencies
 # must be real files, including the executables npm's lifecycle scripts call.
 asarUnpack:
