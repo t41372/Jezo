@@ -15,6 +15,8 @@ export interface Config {
     main: { provider: string; id: string } | null
     /** For work Jezo starts on its own, like sorting notes. Null uses the main model. */
     background: { provider: string; id: string } | null
+    /** For small tasks, like naming a conversation. Null uses the background model. */
+    small?: { provider: string; id: string } | null
     /** How hard the model thinks before answering, where the model supports it. */
     thinking: string
     /** Per provider: a different address, and models turned off in the pickers. */
@@ -34,7 +36,7 @@ export interface Config {
 
 const defaults = (): Config => ({
   workspace: join(homedir(), 'Jezo'),
-  models: { main: null, background: null, thinking: 'medium', providers: {}, custom: [] },
+  models: { main: null, background: null, small: null, thinking: 'medium', providers: {}, custom: [] },
   calendar: { mac: false, hidden: [] },
   reminders: { deadlines: true },
 })

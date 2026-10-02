@@ -3,7 +3,7 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import type { CustomProviderInput, ModelRef, Schedule as ScheduleTimes } from '../../shared/bridge'
 import type { Trigger } from '../../shared/session'
-import type { Providers } from './providers'
+import type { Providers, Role } from './providers'
 import type { Schedule } from './schedule'
 import type { AgentHost } from './host'
 import type { UndoLog } from './undo'
@@ -73,7 +73,7 @@ export function serveAgent(host: AgentHost, undo: UndoLog, providers: Providers,
   ipcMain.handle('providers:remove', (_, id: string) => providers.remove(id))
   ipcMain.handle('providers:choosable', () => providers.choosable())
   ipcMain.handle('providers:choices', () => providers.choices())
-  ipcMain.handle('providers:choose', (_, role: 'main' | 'background', ref: ModelRef | null) => providers.choose(role, ref))
+  ipcMain.handle('providers:choose', (_, role: Role, ref: ModelRef | null) => providers.choose(role, ref))
   ipcMain.handle('providers:set-thinking', (_, level: string) => providers.setThinking(level))
   ipcMain.handle('providers:import-pi', () => providers.importFromPi())
   providers.onChange(() => broadcast('providers:changed'))

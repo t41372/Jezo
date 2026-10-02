@@ -32,14 +32,21 @@
     "mainHint": "Your pick",
     "automatic": "Not picked yet; this one works for now",
     "none": "No model to use yet. Connect one under Model providers below.",
-    "background": "Model for background work",
+    "background": "Background work",
     "backgroundHint": "Work Jezo starts on its own, like sorting notes, can use a cheaper or faster model.",
     "sameAsMain": "Same as above",
     "search": "Search models",
     "noneFound": "No matching models",
     "loaded": "Loaded",
     "image": "Understands images",
-    "reasoning": "Reasons"
+    "reasoning": "Reasons",
+    "others": "Models for background work and small tasks",
+    "small": "Small tasks",
+    "smallHint": "Small things like naming a conversation. Apple's on-device model can be picked here: private and quick, but it takes memory beside the main model.",
+    "sameAsBackground": "Same as background work",
+    "tooSmall": "Too small",
+    "tooSmallHint": "A conversation needs about {{needed}}K; this model holds less",
+    "mainTooSmall": "This model reads {{has}}K at a time, and a conversation of yours needs about {{needed}}K, so it may stop partway"
   },
   "providers": {
     "title": "Model providers",

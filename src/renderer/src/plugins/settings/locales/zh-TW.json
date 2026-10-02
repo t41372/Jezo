@@ -32,14 +32,21 @@
     "mainHint": "你選的",
     "automatic": "還沒選，先用這個能用的",
     "none": "還沒有能用的模型。到下面的「模型服務商」接一個。",
-    "background": "背景工作用的模型",
+    "background": "背景工作",
     "backgroundHint": "Jezo 自己開始的工作，像整理隨手記，可以用比較便宜或比較快的模型。",
     "sameAsMain": "跟上面一樣",
     "search": "搜尋模型",
     "noneFound": "沒有符合的模型",
     "loaded": "已載入",
     "image": "看得懂圖片",
-    "reasoning": "會推理"
+    "reasoning": "會推理",
+    "others": "背景工作和小任務用的模型",
+    "small": "小任務",
+    "smallHint": "幫對話取名這類小事。也可以選這台 Mac 的 Apple 裝置端模型：私密又快，但會在主模型之外再佔一份記憶體。",
+    "sameAsBackground": "跟背景工作一樣",
+    "tooSmall": "太小",
+    "tooSmallHint": "一輪對話大約要 {{needed}}K，這個模型放不下",
+    "mainTooSmall": "這個模型一次只讀得了 {{has}}K，你的一輪對話大約要 {{needed}}K，可能會中途出錯"
   },
   "providers": {
     "title": "模型服務商",

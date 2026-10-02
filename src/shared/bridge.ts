@@ -69,11 +69,15 @@ export interface ModelRef {
 
 export interface ModelChoices {
   /** The model the agent uses now, with its provider's name. */
-  main: (ModelRef & { providerName: string }) | null
+  main: (ModelRef & { name: string; providerName: string }) | null
   /** Jezo picked it because the user hasn't, or their pick can't be used. */
   mainIsAutomatic: boolean
   /** The model for work Jezo starts on its own; null means the main one. */
-  background: (ModelRef & { providerName: string }) | null
+  background: (ModelRef & { name: string; providerName: string }) | null
+  /** The model for small tasks, like naming a conversation; null means the background one. */
+  small: (ModelRef & { name: string; providerName: string }) | null
+  /** The tokens a conversation with the agent needs, measured from this user's own: a model with less is marked as too small for it. */
+  agentContext: number
   /** How hard the main model thinks, and the levels it supports, lowest first ("off" first when it can not think). */
   thinking: string
   thinkingLevels: string[]
@@ -289,7 +293,7 @@ export interface JezoBridge {
     /** The enabled models of every provider that's ready, for pickers. */
     choosable(): Promise<{ provider: string; providerName: string; model: ProviderModel }[]>
     choices(): Promise<ModelChoices>
-    choose(role: 'main' | 'background', ref: ModelRef | null): Promise<ModelChoices>
+    choose(role: 'main' | 'background' | 'small', ref: ModelRef | null): Promise<ModelChoices>
     setThinking(level: string): Promise<ModelChoices>
     /** Copies providers, keys and the default model from ~/.pi/agent. Only when the user asks. */
     importFromPi(): Promise<PiImport>

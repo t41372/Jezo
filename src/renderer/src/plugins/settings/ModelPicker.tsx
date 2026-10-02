@@ -1,6 +1,7 @@
 import { Check, ChevronDown } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { tooSmallForAgent } from '../../../../shared/models'
 import { Button } from '@/components/ui/button'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -15,12 +16,15 @@ export function ModelPicker({
   label,
   onChange,
   extra,
+  needed,
 }: {
   value: ModelRef | null
   label: React.ReactNode
   onChange: (ref: ModelRef | null) => void
   /** A choice above the models, like "same as the main model". */
   extra?: { label: string; selected: boolean }
+  /** The tokens a conversation with the agent needs, for a picker of a model that holds one: smaller ones are marked, not left out. */
+  needed?: number
 }) {
   const { t } = useTranslation('settings')
   const [open, setOpen] = useState(false)
@@ -60,6 +64,11 @@ export function ModelPicker({
                   .map(({ model }) => (
                     <CommandItem key={model.id} value={`${name} ${model.id}`} onSelect={() => pick({ provider, id: model.id })}>
                       <span className="min-w-0 flex-1 truncate">{model.name}</span>
+                      {needed !== undefined && tooSmallForAgent(model.contextWindow, needed) && (
+                        <span className="shrink-0 text-[11px] text-muted-foreground" title={t('models.tooSmallHint', { needed: Math.ceil(needed / 1000) })}>
+                          {t('models.tooSmall')}
+                        </span>
+                      )}
                       <Capabilities model={model} compact />
                       {!extra?.selected && value?.provider === provider && value.id === model.id && <Check className="size-3.5" />}
                     </CommandItem>

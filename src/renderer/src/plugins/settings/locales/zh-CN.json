@@ -32,14 +32,21 @@
     "mainHint": "你选的",
     "automatic": "还没选，先用这个能用的",
     "none": "还没有能用的模型。到下面的「模型服务商」接一个。",
-    "background": "后台任务用的模型",
+    "background": "后台任务",
     "backgroundHint": "Jezo 自己开始的工作，像整理随手记，可以用比较便宜或比较快的模型。",
     "sameAsMain": "跟上面一样",
     "search": "搜索模型",
     "noneFound": "没有符合的模型",
     "loaded": "已加载",
     "image": "看得懂图片",
-    "reasoning": "会推理"
+    "reasoning": "会推理",
+    "others": "后台和小任务用的模型",
+    "small": "小任务",
+    "smallHint": "给对话取名这类小事。也可以选这台 Mac 的 Apple 设备端模型：私密又快，但会在主模型之外再占一份内存。",
+    "sameAsBackground": "跟后台任务一样",
+    "tooSmall": "太小",
+    "tooSmallHint": "一轮对话大约要 {{needed}}K，这个模型放不下",
+    "mainTooSmall": "这个模型一次只读得了 {{has}}K，你的一轮对话大约要 {{needed}}K，可能会中途出错"
   },
   "providers": {
     "title": "模型服务商",

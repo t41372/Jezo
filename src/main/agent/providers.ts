@@ -9,10 +9,12 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { Api, Model } from '@earendil-works/pi-ai'
 import { getSupportedThinkingLevels, InMemoryCredentialStore } from '@earendil-works/pi-ai'
-import { ModelRuntime } from '@earendil-works/pi-coding-agent'
+import { DEFAULT_COMPACTION_SETTINGS, ModelRuntime } from '@earendil-works/pi-coding-agent'
 import { app } from 'electron'
 import type { CustomProviderInput, ModelChoices, ModelRef, PiImport, ProviderDetail, ProviderModel, ProviderSummary } from '../../shared/bridge'
+import { tooSmallForAgent } from '../../shared/models'
 import { getConfig, setConfig } from '../config'
+import { writeAtomic } from '../workspace/files'
 import { getSecret, secretNames, storeSecret } from '../secrets'
 import { APPLE_PROVIDER, appleProvider, availability, type AppleAvailability } from './foundation-models/provider'
 
@@ -82,8 +84,20 @@ interface Check {
   ms?: number
 }
 
+/** What a model is for: the agent, the work Jezo starts on its own, or small tasks like naming a conversation. */
+export type Role = 'main' | 'background' | 'small'
+
+/**
+ * The tokens of a conversation's first request (the system prompt with this
+ * user's skills, the tools, the workspace's digest) before one has been
+ * measured: 4.5K to 7.9K on the sample workspace (2026-10-02).
+ */
+const FIRST_REQUEST_GUESS = 8_000
+
 export class Providers {
   runtime!: ModelRuntime
+  /** The first request of the latest new conversation, in tokens, as its model counted it. Kept in the app's data; safe to lose. */
+  private firstRequest: number | undefined
   /** What each local or custom server said it has, or null when it didn't answer. */
   private servers = new Map<string, ServerModel[] | null>()
   private checks = new Map<string, Check>()
@@ -106,7 +120,33 @@ export class Providers {
     }
   }
 
+  private get firstRequestFile() {
+    return join(app.getPath('userData'), 'agent-context.json')
+  }
+
+  /**
+   * The tokens a conversation with the agent needs: its first request, which
+   * grows with the user's skills and workspace, and the room pi keeps free for
+   * the reply and for compacting. A model with less is marked in the pickers.
+   */
+  agentContext() {
+    return (this.firstRequest ?? FIRST_REQUEST_GUESS) + DEFAULT_COMPACTION_SETTINGS.reserveTokens
+  }
+
+  /** What a new conversation's first request took, from its model's own count. */
+  measuredFirstRequest(tokens: number) {
+    if (!tokens || tokens === this.firstRequest) return
+    this.firstRequest = tokens
+    void writeAtomic(this.firstRequestFile, JSON.stringify({ firstRequest: tokens })).catch(() => {})
+    this.changed()
+  }
+
   async open() {
+    try {
+      this.firstRequest = JSON.parse(readFileSync(this.firstRequestFile, 'utf8')).firstRequest
+    } catch {
+      // Not measured yet: the guess stands in.
+    }
     this.runtime = await ModelRuntime.create({ credentials: new InMemoryCredentialStore(), modelsPath: null })
     for (const provider of secretNames()) {
       const key = getSecret(provider)
@@ -327,11 +367,14 @@ export class Providers {
 
   // ─── Which model the agent uses ───
 
-  /** Models the pickers offer: the enabled models of providers that are ready. */
-  /** Models the agent can run on. Apple's on-device model isn't one: its context is too small, so it only does small tasks (small()). */
+  /**
+   * Models a picker offers: the enabled models of providers that are ready, every
+   * one for every role. One whose context is too small for the agent is marked in
+   * the picker, not left out (tooSmallForAgent).
+   */
   choosable() {
     return this.list()
-      .filter((p) => p.state === 'ready' && p.id !== APPLE_PROVIDER)
+      .filter((p) => p.state === 'ready')
       .flatMap((p) => this.models(p.id).filter((m) => m.enabled).map((model) => ({ provider: p.id, providerName: p.name, model })))
   }
 
@@ -349,18 +392,23 @@ export class Providers {
     const { main, background } = getConfig().models
     if (role === 'background' && this.usable(background)) return background!
     if (this.usable(main)) return main!
-    const choosable = this.choosable()
+    // Picked without asking, it should hold a conversation: a model with room for one first.
+    const all = this.choosable()
+    const roomy = all.filter((c) => !tooSmallForAgent(c.model.contextWindow, this.agentContext()))
+    const choosable = roomy.length ? roomy : all
     const pick = choosable.find((c) => c.model.loaded) ?? choosable[0]
     return pick ? { provider: pick.provider, id: pick.model.id } : null
   }
 
   /**
-   * The model for small, bounded tasks, like naming a conversation: Apple's
-   * on-device model when this Mac has it ready, since it's private and quick and
-   * its small context is enough for them; otherwise the background model.
+   * The model for small, bounded tasks, like naming a conversation: the user's
+   * pick if it can be used, otherwise the background model. Apple's on-device
+   * model can be picked, but isn't the default: not every Mac has it, and on one
+   * with little memory it would be a second model loaded beside the main one.
    */
   small(): Model<Api> | null {
-    return this.runtime.getModel(APPLE_PROVIDER, 'system') ?? this.model('background')
+    const picked = this.usable(getConfig().models.small)
+    return (picked && this.runtime.getModel(picked.provider, picked.id)) || this.model('background')
   }
 
   model(role: 'main' | 'background'): Model<Api> | null {
@@ -383,13 +431,15 @@ export class Providers {
   }
 
   choices(): ModelChoices {
-    const { main, background } = getConfig().models
-    const label = (ref: ModelRef | null) => ref && { ...ref, providerName: this.summary(ref.provider)?.name ?? ref.provider }
+    const { main, background, small } = getConfig().models
+    const label = (ref: ModelRef | null) => ref && { ...ref, name: this.runtime.getModel(ref.provider, ref.id)?.name ?? ref.id, providerName: this.summary(ref.provider)?.name ?? ref.provider }
     const model = this.model('main')
     return {
       main: label(this.resolve('main')),
       mainIsAutomatic: !this.usable(main),
       background: label(this.usable(background)),
+      small: label(this.usable(small)),
+      agentContext: this.agentContext(),
       thinking: this.thinking(model),
       thinkingLevels: this.thinkingLevels(model),
     }
@@ -465,8 +515,7 @@ export class Providers {
     return result
   }
 
-  async choose(role: 'main' | 'background', ref: ModelRef | null) {
-    if (ref?.provider === APPLE_PROVIDER) throw new Error("Apple's on-device model can read too little at once to run the agent; Jezo uses it for small tasks.")
+  async choose(role: Role, ref: ModelRef | null) {
     await setConfig({ models: { ...getConfig().models, [role]: ref } })
     this.changed()
     return this.choices()

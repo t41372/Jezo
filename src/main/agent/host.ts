@@ -888,6 +888,12 @@ export class AgentHost {
       c.update = undefined
     }
     if (event.type === 'message_end') {
+      // The first answer of a new conversation: what it was sent is the agent's starting context,
+      // which grows with the user's skills and workspace; the pickers mark models too small for it.
+      if (event.message.role === 'assistant' && event.message.usage?.input && !c.manager.getEntries().some((e) => e.type === 'message' && e.message.role === 'assistant')) {
+        const u = event.message.usage
+        this.providers.measuredFirstRequest(u.input + (u.cacheRead ?? 0) + (u.cacheWrite ?? 0))
+      }
       // Pi appends the entry after public listeners return. Final messages use
       // that entry's ID; live messages have a temporary UUID until it exists.
       queueMicrotask(() => {
