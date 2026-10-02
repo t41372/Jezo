@@ -109,7 +109,7 @@ test.afterAll(() => server.close())
 test('Google Calendar with the user’s own client: set up, sign in, show, refresh, sign in again, remove', async ({ jezo }) => {
   const { app, page, root } = jezo
   const main = page.locator('main')
-  const dataDir = join(root, '..', 'data')
+  const dataDir = jezo.data
   const accounts = () => (parseYaml(readFileSync(join(root, 'calendar/google.yaml'), 'utf8')) as { accounts: { id: string; hidden?: string[] }[] }).accounts
 
   // The test is the browser: it follows the sign-in page to where Google sends it back.

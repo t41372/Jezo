@@ -149,7 +149,8 @@ test.describe('an install from before this Jezo', { tag: '@speech' }, () => {
         execFileSync('uv', ['venv', '--python', '3.12', venv])
         const core = 'standard-asr[server] @ git+https://github.com/standard-voice/standard_asr.git@1b2cf3fa5860c075e5160eb60b26b708a7c8bfea'
         writeFileSync(join(dir, 'speech/overrides.txt'), `${core}\n`)
-        execFileSync('uv', ['pip', 'install', '--python', join(venv, 'bin/python'), '--overrides', join(dir, 'speech/overrides.txt'), core, `std-mlx-audio @ git+https://github.com/standard-voice/std-mlx-audio.git@${OLD_ENGINE}`])
+        // From the speech folder, as Jezo does: uv cuts an --overrides path at a space.
+        execFileSync('uv', ['pip', 'install', '--python', join(venv, 'bin/python'), '--overrides', 'overrides.txt', core, `std-mlx-audio @ git+https://github.com/standard-voice/std-mlx-audio.git@${OLD_ENGINE}`], { cwd: join(dir, 'speech') })
       },
     },
   })

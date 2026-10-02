@@ -52,7 +52,10 @@ export const test = base.extend<{ jezo: Jezo; prepare: Prepare }>({
   prepare: [{}, { option: true }],
   jezo: async ({ prepare }, use, info) => {
     const dir = mkdtempSync(join(tmpdir(), 'jezo-e2e-'))
-    const root = join(dir, 'workspace')
+    // With spaces, like the real ones (~/Library/Application Support): a tool that
+    // splits a path at a space (uv's --overrides did) fails here and not first on a user's Mac.
+    const root = join(dir, 'My Jezo')
+    const appData = join(dir, 'Application Support')
     execFileSync('bun', ['scripts/fixture.ts', root], { cwd: repo })
     // Automations are off unless a test turns one on, so nothing starts on its own mid-test.
     for (const file of readdirSync(join(root, 'automations/items'))) {
@@ -60,17 +63,17 @@ export const test = base.extend<{ jezo: Jezo; prepare: Prepare }>({
       writeFileSync(path, readFileSync(path, 'utf8').replace(/^state: on$/m, 'state: off'))
     }
     prepare.workspace?.(root)
-    mkdirSync(join(dir, 'data'), { recursive: true })
+    mkdirSync(appData, { recursive: true })
     if (prepare.model !== null) {
-      writeFileSync(join(dir, 'data/config.json'), JSON.stringify({ models: { main: { provider: 'lmstudio', id: TEST_MODEL } } }))
+      writeFileSync(join(appData, 'config.json'), JSON.stringify({ models: { main: { provider: 'lmstudio', id: TEST_MODEL } } }))
       info.annotations.push({ type: 'model', description: `lmstudio/${TEST_MODEL}` })
     }
-    prepare.data?.(join(dir, 'data'))
+    prepare.data?.(appData)
     const launchOptions = {
       executablePath: electronPath,
       args: [join(repo, 'out/main/index.js'), ...(prepare.args ?? [])],
       // In the background, so the tests don't take the keyboard from whoever is using the computer.
-      env: { ...process.env, JEZO_WORKSPACE: root, JEZO_USER_DATA: join(dir, 'data'), JEZO_IN_BACKGROUND: '1' },
+      env: { ...process.env, JEZO_WORKSPACE: root, JEZO_USER_DATA: appData, JEZO_IN_BACKGROUND: '1' },
     }
     let app = await electron.launch(launchOptions)
     // The ⌥X window is created too; the main window is the one showing index.html.
@@ -102,7 +105,7 @@ export const test = base.extend<{ jezo: Jezo; prepare: Prepare }>({
             return []
           }
         })
-    const jezo: Jezo = { app, page, root, data: join(dir, 'data'), read, items, errors, restart: async () => {
+    const jezo: Jezo = { app, page, root, data: appData, read, items, errors, restart: async () => {
       await app.close()
       app = await electron.launch(launchOptions)
       let next = app.windows().find((w) => w.url().includes('/index.html'))
@@ -129,7 +132,7 @@ export const test = base.extend<{ jezo: Jezo; prepare: Prepare }>({
 
     // The workspace as the test left it is part of the result.
     await info.attach('workspace', { body: root })
-    await info.attach('app-data', { body: join(dir, 'data') })
+    await info.attach('app-data', { body: appData })
     await app.close()
   },
 })

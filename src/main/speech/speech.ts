@@ -156,9 +156,10 @@ export class Speech {
    */
   private async installPackages(uv: string) {
     this.report('packages')
-    const overrides = join(dir(), 'overrides.txt')
-    writeFileSync(overrides, `${requirement(CORE, '[server]')}\n`)
-    await run(uv, ['pip', 'install', '--python', bin('python'), '--overrides', overrides, requirement(CORE, '[server]'), requirement(ENGINE.package)], { maxBuffer: 16 * 1024 * 1024 })
+    writeFileSync(join(dir(), 'overrides.txt'), `${requirement(CORE, '[server]')}\n`)
+    // Named relative to the speech folder: uv cuts an --overrides path at a space, and the
+    // app's data is in "Application Support" (uv 0.12.22).
+    await run(uv, ['pip', 'install', '--python', bin('python'), '--overrides', 'overrides.txt', requirement(CORE, '[server]'), requirement(ENGINE.package)], { cwd: dir(), maxBuffer: 16 * 1024 * 1024 })
   }
 
   /**

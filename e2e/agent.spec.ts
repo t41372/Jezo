@@ -334,7 +334,7 @@ test.describe('a new install', () => {
 
   test('a server added by hand is tested, and its model can be picked for the agent', async ({ jezo }) => {
     const { page } = jezo
-    const config = () => JSON.parse(readFileSync(join(jezo.root, '../data/config.json'), 'utf8'))
+    const config = () => JSON.parse(readFileSync(join(jezo.data, 'config.json'), 'utf8'))
     await open(page, '設定')
     // Until the user picks, Jezo uses a model that works and says so.
     await expect(page.getByText('還沒選，先用這個能用的')).toBeVisible()

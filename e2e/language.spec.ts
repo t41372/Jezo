@@ -15,13 +15,14 @@ const repo = join(import.meta.dirname, '..')
 
 test('a Mac in Simplified Chinese gets the app and a new workspace in Simplified, and 设置 switches languages', async ({}, info) => {
   const dir = mkdtempSync(join(tmpdir(), 'jezo-e2e-'))
-  const root = join(dir, 'workspace')
-  mkdirSync(join(dir, 'data'), { recursive: true })
+  const root = join(dir, 'My Jezo')
+  const appData = join(dir, 'Application Support')
+  mkdirSync(appData, { recursive: true })
   const app = await electron.launch({
     executablePath: createRequire(join(repo, 'package.json'))('electron') as string,
     // --lang is the system language as Chromium and app.getLocale() see it.
     args: [join(repo, 'out/main/index.js'), '--lang=zh-CN'],
-    env: { ...process.env, JEZO_WORKSPACE: root, JEZO_USER_DATA: join(dir, 'data'), JEZO_IN_BACKGROUND: '1' },
+    env: { ...process.env, JEZO_WORKSPACE: root, JEZO_USER_DATA: appData, JEZO_IN_BACKGROUND: '1' },
   })
   try {
     let page = app.windows().find((w) => w.url().includes('/index.html'))

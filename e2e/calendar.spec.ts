@@ -134,7 +134,7 @@ test('subscribing to calendars shows their events at the right times, and hiding
   // The subscriptions are the user's, in the workspace; the addresses aren't, since they work like passwords.
   expect(subscriptions().map((s) => s.name)).toEqual(['Work (Outlook)', '家裡'])
   expect(readFileSync(join(root, 'calendar/subscriptions.yaml'), 'utf8')).not.toContain(base)
-  const dataDir = join(root, '..', 'data')
+  const dataDir = jezo.data
   expect(readFileSync(join(dataDir, 'keys.json'), 'utf8')).not.toContain(base)
 
   // The calendar page: each event where it belongs, checked in its detail panel.
