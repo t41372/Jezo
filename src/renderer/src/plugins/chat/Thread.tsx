@@ -65,8 +65,9 @@ function Conversation() {
           {running && waiting(messages.at(-1)) && (
             <div className="px-1.5 text-[12.5px] text-muted-foreground motion-safe:animate-pulse">{t('working')}</div>
           )}
+          {/* Floats at the bottom while the conversation is scrolled up; gone at the bottom, and in an empty one. */}
           <ThreadPrimitive.ScrollToBottom asChild>
-            <Button variant="ghost" size="icon" className="self-center rounded-full" aria-label={t('actions.latest')}>
+            <Button variant="outline" size="icon" className="sticky bottom-3 self-center rounded-full bg-card shadow-sm disabled:invisible" aria-label={t('actions.latest')}>
               <ArrowDown />
             </Button>
           </ThreadPrimitive.ScrollToBottom>

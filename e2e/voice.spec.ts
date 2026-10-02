@@ -189,3 +189,29 @@ test.describe('holding ⌥X', { tag: '@speech' }, () => {
     await expect.poll(() => read('todos/items/t-u2.md').data.scheduled, { timeout: 240_000 }).toMatch(/T20:00(\[Asia\/Taipei\])?$/)
   })
 })
+
+test.describe('dictating in the chat box', { tag: '@speech' }, () => {
+  test.skip(!ready, 'Needs macOS on Apple Silicon and uv.')
+  test.describe.configure({ timeout: 600_000 })
+  const long = '我今天想把升等文件的影響那一段寫完，然後下午去健身房，晚上再打電話給媽媽，問她週末要不要一起吃飯，順便把露營的東西整理好。'
+  test.use({ prepare: { model: null, args: fakeMicrophone(ready ? spoken(long) : '') } })
+
+  test('what is heard grows the box with it, and stays inside it', async ({ jezo }, info) => {
+    const { page } = jezo
+    await install(page)
+    await open(page, '聊天')
+    const box = page.locator('main textarea').first()
+    const card = box.locator('xpath=ancestor::div[contains(@class, "rounded-[26px]")]')
+    const before = (await card.boundingBox())!.height
+    await page.locator('main').getByRole('button', { name: '用說的' }).click()
+    const heard = page.locator('main [aria-live="polite"]')
+    await expect(heard).toContainText('健身房', { timeout: 60_000 })
+    await expect.poll(async () => (await card.boundingBox())!.height).toBeGreaterThan(before + 20)
+    // Everything heard is drawn inside the box: nothing hangs below its edge.
+    const inner = (await heard.boundingBox())!
+    const outer = (await card.boundingBox())!
+    expect(inner.y + inner.height).toBeLessThanOrEqual(outer.y + outer.height + 1)
+    await info.attach('dictating', { body: await page.screenshot(), contentType: 'image/png' })
+    expect(jezo.errors).toEqual([])
+  })
+})

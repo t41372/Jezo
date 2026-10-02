@@ -1,6 +1,6 @@
 import { cn } from 'cn'
 import { ArrowUp, CornerUpLeft, Mic, Plus, Square } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -136,16 +136,17 @@ export function Composer({
             placeholder={listening ? '' : placeholder}
             className={cn(
               'max-h-40 w-full resize-none bg-transparent py-1.5 pl-1.5 text-[14.5px] leading-relaxed outline-none [field-sizing:content] placeholder:text-muted-foreground',
-              listening && heard && 'text-transparent',
+              // While listening, the box keeps the keys (Enter stops) and what's heard below gives the height.
+              listening && 'absolute inset-0 text-transparent caret-transparent',
               textareaClassName,
             )}
           />
-          {/* While listening, what's heard shows in place of the text, faded, until it's inserted. */}
+          {/* While listening, what's heard shows in place of the text, faded, until it's inserted; the box grows with it. */}
           {listening && (
-            <div aria-live="polite" className="pointer-events-none absolute inset-0 py-1.5 pl-1.5 text-[14.5px] leading-relaxed">
+            <Heard className={cn('min-w-0 flex-1 max-h-40 overflow-hidden py-1.5 pl-1.5 text-[14.5px] leading-relaxed', textareaClassName)}>
               {value && <span>{value.trimEnd()} </span>}
               <span className="text-muted-foreground">{heard || t('composer.listening')}</span>
-            </div>
+            </Heard>
           )}
         </div>
         <ModelChip openModels={modelMenu} />
@@ -180,6 +181,19 @@ export function Composer({
         )}
       </div>
       {menu.open && <SlashMenu items={menu.items} active={menu.active} onHover={menu.setActive} onPick={menu.pick} side={menuSide} />}
+    </div>
+  )
+}
+
+/** What's heard so far, kept scrolled to its end, so the latest words show when it runs past the box's height. */
+function Heard({ className, children }: { className: string; children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    if (ref.current) ref.current.scrollTop = ref.current.scrollHeight
+  })
+  return (
+    <div ref={ref} aria-live="polite" className={cn('pointer-events-none', className)}>
+      {children}
     </div>
   )
 }
