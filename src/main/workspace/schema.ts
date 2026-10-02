@@ -3,6 +3,7 @@
 
 import { Ajv } from 'ajv'
 import { Cron } from 'croner'
+import { ruleProblem } from './rrule'
 import { parseTime, type Role } from '../../shared/time'
 import { parseCatchUp } from '../../shared/catch-up'
 
@@ -41,6 +42,12 @@ const formats: Record<string, (text: string) => string> = {
     new Cron(text, { paused: true })
   }),
   'jezo-catch-up': problemOf((text) => parseCatchUp({ catch_up: text })),
+  // A repeating todo's rule (docs/design/frontend.md, "Repeating todos").
+  'jezo-rrule': ruleProblem,
+  'jezo-duration': problemOf((text) => {
+    const length = Temporal.Duration.from(text)
+    if (length.sign < 0) throw new Error(`"${text}" is a length before, not after: write one like P2D.`)
+  }),
   'jezo-zone': problemOf((text) => {
     if (text !== 'local') Temporal.Instant.fromEpochMilliseconds(0).toZonedDateTimeISO(text)
   }),

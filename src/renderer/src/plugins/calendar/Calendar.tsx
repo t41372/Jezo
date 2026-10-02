@@ -6,7 +6,7 @@
 import { useDndMonitor } from '@dnd-kit/core'
 import { cn } from 'cn'
 import { enUS, zhTW } from 'date-fns/locale'
-import { Check, ChevronLeft, ChevronRight, Globe } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, Flag, Globe } from 'lucide-react'
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { CalendarSource } from '../../../../shared/calendar'
@@ -38,7 +38,7 @@ import { addDays, ago, clock, dayLabel, inZone, longDate, monthDay, mondayOf, pa
 import { now, todayIn, type Zone } from '../../../../shared/time'
 
 /** What each block on the grid stands for. */
-type Block = { kind: 'event' } | { kind: 'todo'; todo: Todo }
+type Block = { kind: 'event' } | { kind: 'todo'; todo: Todo } | { kind: 'due'; todo: Todo }
 
 /** Where a todo lands when it's put on a day without a time: a month cell, the all-day row. */
 const DEFAULT_HOUR = 9
@@ -58,7 +58,8 @@ export function Calendar() {
   const pointer = useRef({ x: 0, y: 0 })
 
   const draftTitle = (title: string) => t('todo.draft', { ns: 'common', title })
-  const blocks = useMemo(() => toBlocks(todos, events, goals, selected, draftTitle, viewZone), [todos, events, goals, selected, i18n.language, viewZone])
+  const dueTitle = (title: string) => t('due', { title })
+  const blocks = useMemo(() => toBlocks(todos, events, goals, selected, draftTitle, dueTitle, viewZone), [todos, events, goals, selected, i18n.language, viewZone])
   const labels = useGridLabels()
 
   // Moving or resizing a todo on the grid schedules it there. Calendar events are read-only.
@@ -102,7 +103,9 @@ export function Calendar() {
         onEventClick={(occurrence, e) => {
           // The detail panel shows what's selected, so the grid's own selection stays off.
           e.preventDefault()
-          setCalendarDetail(occurrence.eventId)
+          const block = occurrence.event.data
+          // A deadline's flag opens its todo.
+          setCalendarDetail(block?.kind === 'due' ? block.todo.id : occurrence.eventId)
         }}
         onSelectSlot={(slot) => setCreating(newTodoSlot(slot, pointer.current, viewZone))}
         onEventDropOutside={(occurrence, { x, y }) => {
@@ -136,6 +139,7 @@ function toBlocks(
   goals: Goal[],
   selected: string | null,
   draftTitle: (title: string) => string,
+  dueTitle: (title: string) => string,
   zone: Zone,
 ): GridEvent<Block>[] {
   const ring = (id: string) => id === selected && 'inset-ring-2 inset-ring-ring/60'
@@ -174,6 +178,22 @@ function toBlocks(
           data: { kind: 'todo' as const, todo },
         }
       }),
+    // Deadlines: a flag on the day, or at the time, with no length of its own (frontend.md, "Deadlines").
+    ...todos
+      .filter((todo) => todo.due && (todo.state === 'open' || todo.state === 'draft'))
+      .map((todo) => {
+        const due = todo.due!
+        return {
+          id: `due:${todo.id}`,
+          title: dueTitle(todo.title),
+          ...(due.time === undefined ? { start: dayStart(due.date, zone), end: dayStart(addDays(due.date, 1), zone) } : block(due.at, due.at)),
+          allDay: due.time === undefined,
+          readOnly: true,
+          color: goalColor(goalById(goals, todo.goalId)?.hue),
+          className: cn('border border-dashed border-(--ec-event-color) bg-background/80 text-(--ec-event-color) inset-ring-0', ring(todo.id)),
+          data: { kind: 'due' as const, todo },
+        }
+      }),
   ]
 }
 
@@ -203,6 +223,7 @@ function BlockContent({ occurrence, segment, view }: EventCalendarRenderEventPro
             {done && <Check className="size-2" strokeWidth={4} />}
           </span>
         )}
+        {block?.kind === 'due' && <Flag className="size-[11px] shrink-0" strokeWidth={2.5} />}
         <span className={tall ? 'line-clamp-2' : 'truncate'}>{occurrence.event.title}</span>
         {view === 'month' && !occurrence.allDay && <span className="shrink-0 font-normal opacity-70">{clock(hours(occurrence.start))}</span>}
       </span>

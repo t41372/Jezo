@@ -54,4 +54,13 @@ function useQuickWindow() {
       }),
     [],
   )
+  // A deadline's reminder opens its todo in 待辦.
+  useEffect(
+    () =>
+      window.jezo.onOpenTodo((todo) => {
+        useStore.getState().navigate('todos')
+        if (todo) useStore.getState().setListDetail(todo)
+      }),
+    [],
+  )
 }

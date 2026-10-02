@@ -28,12 +28,15 @@ export interface Config {
     /** Calendars on the Mac the user hid. */
     hidden: string[]
   }
+  /** Notifications before deadlines (src/main/reminders.ts). On unless turned off in 設定. */
+  reminders: { deadlines: boolean }
 }
 
 const defaults = (): Config => ({
   workspace: join(homedir(), 'Jezo'),
   models: { main: null, background: null, thinking: 'medium', providers: {}, custom: [] },
   calendar: { mac: false, hidden: [] },
+  reminders: { deadlines: true },
 })
 
 const file = () => join(app.getPath('userData'), 'config.json')
@@ -50,7 +53,7 @@ export function getConfig(): Config {
   }
   const base = defaults()
   const { model: _older, ...rest } = stored as Partial<Config> & { model?: unknown }
-  config = { ...base, ...rest, models: { ...base.models, ...rest.models }, calendar: { ...base.calendar, ...rest.calendar } }
+  config = { ...base, ...rest, models: { ...base.models, ...rest.models }, calendar: { ...base.calendar, ...rest.calendar }, reminders: { ...base.reminders, ...rest.reminders } }
   // Tests and development point at a workspace of their own.
   if (process.env.JEZO_WORKSPACE) config.workspace = process.env.JEZO_WORKSPACE
   return config

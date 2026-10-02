@@ -10,6 +10,7 @@
 
 import { Cron } from 'croner'
 import { BrowserWindow, Notification, powerMonitor } from 'electron'
+import { inBackground } from '../env'
 import type { AutomationHistoryView, AutomationRow, Schedule as ScheduleTimes } from '../../shared/bridge'
 import type { Trigger } from '../../shared/session'
 import { now, stamp, type Zone } from '../../shared/time'
@@ -550,6 +551,8 @@ export class Schedule {
   private notify(session: string, name: string | null, count: number) {
     // In front, the results are in the app already.
     if (!Notification.isSupported() || BrowserWindow.getFocusedWindow()) return false
+    // The E2E tests' background mode keeps it off the screen; it's still recorded as sent.
+    if (inBackground) return true
     const body = language === 'zh-TW'
       ? (name ? `「${name}」好了，看一下再決定。` : `Jezo 補做了 ${count} 件事，看一下再決定。`)
       : (name ? `“${name}” is ready for you to look at.` : `Jezo caught up on ${count} things for you to look at.`)
@@ -593,6 +596,7 @@ let language = 'en'
 export const setLanguage = (value: string) => {
   language = value
 }
+export const appLanguage = () => language
 
 export type { HistoryEvent }
 

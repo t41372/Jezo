@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { useDragItem, useDropTarget } from '@/app/Dnd'
 import { Disclosure } from '@/components/Disclosure'
 import { insertionAt, pointerY, type Insertion } from '@/components/todo/reorder'
-import { dueLabel } from '@/components/todo/format'
+import { dueLabel, repeatLabel } from '@/components/todo/format'
 import { TodoCheck } from '@/components/todo/TodoCheck'
 import { Segmented } from '@/components/Segmented'
 import { Input } from '@/components/ui/input'
@@ -299,7 +299,8 @@ function Row({ todo, selected, date, actions, onMove }: { todo: Todo; selected: 
   const draft = todo.state === 'draft'
   const closed = todo.state === 'done' || todo.state === 'dropped'
   const when = todo.slot ? (date ? `${dayLabel(todo.slot.date, today)} ${clock(todo.slot.start)}` : clock(todo.slot.start)) : null
-  const meta = [when, dueLabel(todo, today, now), goal?.name, duration(todo.estimateMinutes)].filter(Boolean).join(' · ')
+  const series = useStore((s) => (todo.series ? s.repeats.find((r) => r.id === todo.series && r.state !== 'ended') : undefined))
+  const meta = [when, dueLabel(todo, today, now), series && repeatLabel(series.rule, series.from), goal?.name, duration(todo.estimateMinutes)].filter(Boolean).join(' · ')
 
   return (
     <div

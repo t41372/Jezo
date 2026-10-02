@@ -17,9 +17,11 @@ export function Settings() {
   const { t } = useTranslation('settings')
   const [canHold, setCanHold] = useState(true)
   const [atLogin, setAtLogin] = useState(false)
+  const [deadlines, setDeadlines] = useState(true)
   useEffect(() => {
     window.jezo.quick.canHold().then(setCanHold)
     window.jezo.schedule.atLogin().then(setAtLogin)
+    window.jezo.reminders.deadlines().then(setDeadlines)
   }, [])
   const settings = useStore((s) => s.settings)
   const { setTheme, setLanguage, navigate } = useStore.getState()
@@ -57,6 +59,9 @@ export function Settings() {
         </Row>
         <SpeechRow />
         <ScheduleRows />
+        <Row title={t('reminders.title')} description={t('reminders.hint')}>
+          <Switch checked={deadlines} onCheckedChange={(on) => void window.jezo.reminders.setDeadlines(on).then(setDeadlines)} aria-label={t('reminders.title')} />
+        </Row>
         <Row title={t('atLogin.title')} description={t('atLogin.hint')}>
           <Switch checked={atLogin} onCheckedChange={(on) => void window.jezo.schedule.setAtLogin(on).then(setAtLogin)} aria-label={t('atLogin.title')} />
         </Row>

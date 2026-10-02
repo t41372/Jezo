@@ -3,7 +3,7 @@
 
 import { dateOf, deadlineEnd, epochOf, formatTime, moveTo, place, readTime, resolve, stamp, todayIn, type TimeValue, type Zone } from '../../../shared/time'
 import type { Fields, Item } from '../../../shared/workspace'
-import type { Experiment, Goal, ISODate, Memory, Note, SlotInput, Todo } from './types'
+import type { Experiment, Goal, ISODate, Memory, Note, Repeat, SlotInput, Todo } from './types'
 
 // ─── Times ───
 // On disk a time is one string of the kinds in docs/design/time.md, read and
@@ -39,7 +39,7 @@ export function toDue(text: unknown, zone: Zone): Todo['due'] {
   const at = deadlineEnd(value, zone)
   if (value.kind === 'day') return { date: value.date.toString(), at }
   const here = Temporal.Instant.fromEpochMilliseconds(at).toZonedDateTimeISO(zone)
-  return { date: here.toPlainDate().toString(), time: here.hour + here.minute / 60, at }
+  return { date: here.toPlainDate().toString(), time: here.hour + here.minute / 60, at, ...(value.kind === 'zoned' && { zone: value.zone }) }
 }
 
 export function toTodo(item: Item, zone: Zone): Todo {
@@ -67,6 +67,8 @@ export function toTodo(item: Item, zone: Zone): Todo {
     completedAt,
     droppedAt: epochOf(dropped, zone),
     due: toDue(d.due, zone),
+    series: str(d.series),
+    occurrence: str(d.occurrence),
     elapsedMinutes: startedAt !== undefined && completedAt !== undefined ? Math.round((completedAt - startedAt) / 60_000) : undefined,
     times: { scheduled: str(d.scheduled), started: str(d.started), completed: str(d.completed), dropped: str(d.dropped), due: str(d.due) },
     links: item.links,
@@ -248,6 +250,18 @@ export function toNote(item: Item, zone: Zone): Note {
 
 /** Items of one kind, as the UI's entities. */
 // ─── Experiments ───
+
+export function toRepeat(item: Item): Repeat {
+  const d = item.data
+  return {
+    id: item.id,
+    title: str(d.title) ?? '',
+    state: d.state === 'draft' || d.state === 'ended' ? d.state : 'on',
+    rule: str(d.rule) ?? '',
+    from: d.from === 'done' ? 'done' : 'schedule',
+    start: str(d.start),
+  }
+}
 
 export function toExperiment(item: Item): Experiment {
   const d = item.data

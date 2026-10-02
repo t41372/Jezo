@@ -61,5 +61,6 @@
     "preview": "預覽：{{city}}時間",
     "device": "這台裝置的時區（{{city}}）",
     "search": "找城市或時區"
-  }
+  },
+  "due": "截止 · {{title}}"
 }

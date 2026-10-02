@@ -10,7 +10,7 @@ import { ZonePicker } from '@/components/ZonePicker'
 import { goalStyle } from '@/lib/goal-color'
 import { cityOf } from '@/lib/zones'
 import { epochOf, now, readTime, todayIn } from '../../../../shared/time'
-import { dueLabel, meaningLabel } from './format'
+import { dayCode, dueLabel, meaningLabel, repeatLabel } from './format'
 import type { Todo } from '@/data/types'
 import { clock, duration, inZone, monthDay, parseDate, toISODate, weekday } from '@/lib/time'
 import { slotLabel } from './format'
@@ -270,54 +270,145 @@ export function GoalField({ todo }: { todo: Todo }) {
   )
 }
 
-/** When it has to be done by: a day from the month view, a time if it has one, or none. */
+/**
+ * When it has to be done by: a day from the month view, a time if it has one,
+ * the zone that time is in (this device's unless picked), or none.
+ */
 export function DueField({ todo }: { todo: Todo }) {
   const { t, i18n } = useTranslation()
   const [open, setOpen] = useState(false)
+  const [picking, setPicking] = useState(false)
   const today = useStore((s) => s.now.date)
+  const device = useStore((s) => s.zone)
   const { setDue } = useStore.getState()
   const label = dueLabel(todo, today) ?? t('todo.noDue')
+  const zone = todo.due?.zone ?? device
+  // The deadline's own day and clock, in its zone.
+  const own = todo.due && todo.due.time !== undefined ? inZone(todo.due.at, zone) : todo.due && { date: todo.due.date, start: undefined }
+  const set = (date: string, time: number | undefined, in_ = zone) => setDue(todo.id, { date, time, zone: in_ })
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={(o) => { setOpen(o); setPicking(false) }}>
       <PopoverTrigger className={`${row} w-full ${todo.due ? '' : 'text-muted-foreground'}`} data-due-field>
         {label}
+        {todo.due?.zone && todo.due.zone !== device && <span className="ml-1.5 text-muted-foreground">{t('todo.meaning.here', { city: cityOf(todo.due.zone) })}</span>}
       </PopoverTrigger>
       <PopoverContent side="bottom" align="start" className="w-auto p-2">
-        <Calendar
-          mode="single"
-          selected={todo.due ? parseDate(todo.due.date) : undefined}
-          defaultMonth={parseDate(todo.due?.date ?? today)}
-          onSelect={(day) => day && setDue(todo.id, { date: toISODate(day), time: todo.due?.time })}
-          locale={i18n.language.startsWith('zh') ? zhTW : enUS}
-          className="bg-transparent"
-        />
-        <div className="flex items-center gap-2 border-t px-1 pt-2">
-          <span className="text-[12.5px] text-muted-foreground">{t('todo.dueTime')}</span>
-          <Input
-            type="time"
-            className="h-8 w-32"
-            value={todo.due?.time === undefined ? '' : clock(todo.due.time)}
-            onChange={(e) => {
-              const [h, m] = e.target.value.split(':').map(Number)
-              setDue(todo.id, { date: todo.due?.date ?? today, time: e.target.value ? h + m / 60 : undefined })
+        {picking ? (
+          <ZonePicker
+            value={zone}
+            placeholder={t('todo.meaning.search')}
+            first={[{ value: device, label: t('todo.meaning.device', { city: cityOf(device) }) }]}
+            onPick={(picked) => {
+              // The clock stays; it's read in the zone picked.
+              if (picked && own) set(own.date, own.start, picked)
+              setPicking(false)
             }}
-            aria-label={t('todo.dueTime')}
           />
-          <span className="flex-1" />
-          {todo.due && (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="text-muted-foreground"
-              onClick={() => {
-                setDue(todo.id, null)
-                setOpen(false)
-              }}
-            >
-              {t('todo.noDue')}
-            </Button>
-          )}
+        ) : (
+          <>
+            <Calendar
+              mode="single"
+              selected={own ? parseDate(own.date) : undefined}
+              defaultMonth={parseDate(own?.date ?? today)}
+              onSelect={(day) => day && set(toISODate(day), own?.start)}
+              locale={i18n.language.startsWith('zh') ? zhTW : enUS}
+              className="bg-transparent"
+            />
+            <div className="flex items-center gap-2 border-t px-1 pt-2">
+              <span className="text-[12.5px] text-muted-foreground">{t('todo.dueTime')}</span>
+              <Input
+                type="time"
+                className="h-8 w-32"
+                value={own?.start === undefined ? '' : clock(own.start)}
+                onChange={(e) => {
+                  const [h, m] = e.target.value.split(':').map(Number)
+                  set(own?.date ?? today, e.target.value ? h + m / 60 : undefined)
+                }}
+                aria-label={t('todo.dueTime')}
+              />
+              <span className="flex-1" />
+              {todo.due && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-muted-foreground"
+                  onClick={() => {
+                    setDue(todo.id, null)
+                    setOpen(false)
+                  }}
+                >
+                  {t('todo.noDue')}
+                </Button>
+              )}
+            </div>
+            {own?.start !== undefined && (
+              <button className="mt-1 w-full rounded-md px-1 py-1.5 text-left text-[12.5px] text-muted-foreground hover:bg-muted" onClick={() => setPicking(true)} data-due-zone>
+                {t('todo.meaning.reading', { city: cityOf(zone) })}
+              </button>
+            )}
+          </>
+        )}
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+/**
+ * How it repeats: the common rules in words, from the todo's own date, or
+ * 做完後幾天; 不再重複 ends the series and leaves the times there are.
+ */
+export function RepeatField({ todo }: { todo: Todo }) {
+  const { t } = useTranslation()
+  const [open, setOpen] = useState(false)
+  const today = useStore((s) => s.now.date)
+  const series = useStore((s) => s.repeats.find((r) => r.id === todo.series))
+  const [days, setDays] = useState('7')
+  const live = series && series.state !== 'ended' ? series : undefined
+  const date = todo.slot?.date ?? todo.due?.date ?? today
+  const day = Temporal.PlainDate.from(date)
+  const choices: { rule: string; from: 'schedule' | 'done' }[] = [
+    { rule: 'FREQ=DAILY', from: 'schedule' },
+    { rule: `FREQ=WEEKLY;BYDAY=${dayCode(date)}`, from: 'schedule' },
+    { rule: `FREQ=WEEKLY;INTERVAL=2;BYDAY=${dayCode(date)}`, from: 'schedule' },
+    { rule: `FREQ=MONTHLY;BYMONTHDAY=${day.day}`, from: 'schedule' },
+    { rule: `FREQ=YEARLY;BYMONTH=${day.month};BYMONTHDAY=${day.day}`, from: 'schedule' },
+  ]
+  const pick = (choice: { rule: string; from: 'schedule' | 'done' } | null) => {
+    void useStore.getState().setRepeat(todo.id, choice)
+    setOpen(false)
+  }
+  const label = live ? repeatLabel(live.rule, live.from) : t('todo.repeat.none')
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger className={`${row} w-full ${live ? '' : 'text-muted-foreground'}`} data-repeat-field>
+        {label}
+      </PopoverTrigger>
+      <PopoverContent side="bottom" align="start" className="flex w-60 flex-col p-1.5">
+        {choices.map((c) => (
+          <button
+            key={c.rule}
+            onClick={() => pick(c)}
+            aria-pressed={live?.rule === c.rule && live.from === c.from}
+            className="rounded-md px-2 py-1.5 text-left text-[13px] transition-colors duration-150 hover:bg-muted aria-pressed:font-medium"
+          >
+            {repeatLabel(c.rule, c.from)}
+          </button>
+        ))}
+        <div className="flex items-center gap-1.5 px-2 py-1 text-[13px]">
+          <Input type="number" min={1} className="h-7 w-16" value={days} onChange={(e) => setDays(e.target.value)} aria-label={t('todo.repeat.days')} />
+          <button
+            onClick={() => Number(days) >= 1 && pick({ rule: `FREQ=DAILY;INTERVAL=${Math.round(Number(days))}`, from: 'done' })}
+            className="flex-1 rounded-md px-1.5 py-1 text-left transition-colors duration-150 hover:bg-muted"
+            data-repeat-after-done
+          >
+            {repeatLabel(`FREQ=DAILY;INTERVAL=${Math.max(1, Math.round(Number(days) || 1))}`, 'done')}
+          </button>
         </div>
+        {live && (
+          <button onClick={() => pick(null)} className="mt-1 rounded-md border-t px-2 pt-2 pb-1.5 text-left text-[13px] text-muted-foreground hover:text-foreground">
+            {t('todo.repeat.stop')}
+          </button>
+        )}
       </PopoverContent>
     </Popover>
   )

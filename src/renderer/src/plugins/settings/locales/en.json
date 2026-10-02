@@ -120,5 +120,9 @@
     "copy": "Copy",
     "copied": "Copied"
   },
-  "speechUpdateFailed": "Couldn’t update it, so the installed version is running: {{error}}"
+  "speechUpdateFailed": "Couldn’t update it, so the installed version is running: {{error}}",
+  "reminders": {
+    "title": "Deadline reminders",
+    "hint": "Once, at 6 pm the day before a deadline, or 3 hours before a deadline with a time. Not once it’s done or dropped."
+  }
 }

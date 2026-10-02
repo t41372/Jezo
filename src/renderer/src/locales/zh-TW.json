@@ -122,7 +122,21 @@
     "dueAt": "{{day}} {{time}} 截止",
     "duePassed": "截止日已過 · {{day}}",
     "pastDue": "排的時間在截止之後",
-    "dueTime": "時間（可不填）"
+    "dueTime": "時間（可不填）",
+    "repeat": {
+      "title": "重複",
+      "none": "不重複",
+      "daily": "每天",
+      "everyDays_other": "每 {{count}} 天",
+      "weekly": "每{{days}}",
+      "everyWeeks_other": "每 {{count}} 週的{{days}}",
+      "monthly": "每月 {{day}} 號",
+      "yearly": "每年",
+      "afterDone_other": "做完後 {{count}} 天",
+      "rule": "重複：{{rule}}",
+      "stop": "不再重複",
+      "days": "天"
+    }
   },
   "event": {
     "readOnly": "來自 {{source}}，時間要在那邊改。",

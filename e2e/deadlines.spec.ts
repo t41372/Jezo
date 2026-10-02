@@ -2,11 +2,11 @@
 // "Deadlines"): set in the details and written to the file, grouped by in the
 // list, shown on 今天, and set by the agent from what the user says.
 
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { Page, TestInfo } from '@playwright/test'
+import type { ElectronApplication, Page, TestInfo } from '@playwright/test'
 import { stringify } from 'yaml'
-import { expect, localModel, open, test } from './jezo'
+import { drag, expect, localModel, open, test } from './jezo'
 
 const ZONE = 'Asia/Taipei'
 const day = (days: number) => Temporal.Now.plainDateISO(ZONE).add({ days }).toString()
@@ -15,6 +15,26 @@ const today = day(0)
 function write(root: string, id: string, data: object) {
   mkdirSync(join(root, 'todos/items'), { recursive: true })
   writeFileSync(join(root, 'todos/items', `${id}.md`), `---\n${stringify({ id, ...data })}---\n`)
+}
+
+/** Moves the main process's clock to a moment, then wakes the computer up (as automations.spec.ts does). */
+async function wakeAt(app: ElectronApplication, at: Temporal.ZonedDateTime) {
+  await app.evaluate(({ powerMonitor }, target) => {
+    const g = globalThis as unknown as { RealDate?: DateConstructor; Date: DateConstructor }
+    const Real = (g.RealDate ??= g.Date)
+    const offset = target - Real.now()
+    class Moved extends Real {
+      constructor(...args: unknown[]) {
+        if (args.length) super(...(args as [number]))
+        else super(Real.now() + offset)
+      }
+      static now() {
+        return Real.now() + offset
+      }
+    }
+    g.Date = Moved as DateConstructor
+    powerMonitor.emit('resume')
+  }, at.epochMilliseconds)
 }
 
 async function artifact(page: Page, info: TestInfo, name: string) {
@@ -77,6 +97,103 @@ test.describe('in the app', () => {
     await page.reload()
     await open(page, '待辦')
     await expect(page.locator('main [data-group="due-passed"]')).toBeVisible()
+    expect(jezo.errors).toEqual([])
+  })
+})
+
+test.describe('in another zone and on the calendar', () => {
+  test.use({
+    prepare: {
+      model: null,
+      workspace: (root) => {
+        write(root, 't-fee', { title: '繳學費', state: 'open', estimate: 15, due: today })
+        write(root, 't-call', { title: '回東京客戶', state: 'open', estimate: 20, due: day(2) })
+      },
+    },
+  })
+
+  test('a deadline time can be in another zone, and deadlines are flags on the calendar that open their todo', async ({ jezo }) => {
+    const { page, read } = jezo
+    await open(page, '待辦')
+    await page.locator('main [data-todo-row="t-call"]').getByRole('button', { name: /回東京客戶/ }).click()
+    const details = page.locator('aside')
+    await details.locator('[data-due-field]').click()
+    await page.getByLabel('時間（可不填）').fill('10:00')
+    await expect.poll(() => read('todos/items/t-call.md').data.due).toBe(`${day(2)}T10:00[${ZONE}]`)
+    // The clock stays; it's read in Tokyo now.
+    await page.locator('[data-due-zone]').click()
+    await page.getByPlaceholder('找城市或時區').fill('東京')
+    await page.locator('[data-slot=popover-content]').getByRole('button', { name: /東京/ }).first().click()
+    await expect.poll(() => read('todos/items/t-call.md').data.due).toBe(`${day(2)}T10:00[Asia/Tokyo]`)
+    await page.keyboard.press('Escape')
+    await expect(details.locator('[data-due-field]')).toContainText('東京時間')
+
+    // Today's deadline is a flag in the all-day row; clicking it opens the todo.
+    await open(page, '行事曆')
+    const flag = page.locator('[data-slot=event-calendar-event]', { hasText: '截止 · 繳學費' })
+    await expect(flag).toBeVisible()
+    // It can't be dragged: a deadline is moved in the todo's details, not by its flag.
+    const box = (await flag.boundingBox())!
+    await drag(page, { x: box.x + 20, y: box.y + box.height / 2 }, { x: box.x + 260, y: box.y + box.height / 2 })
+    expect(read('todos/items/t-fee.md').data.due).toBe(today)
+    await expect(flag).toBeVisible()
+    // The grid ignores the click that ends a drag; this one is a click of its own.
+    await page.waitForTimeout(400)
+    await flag.click()
+    await expect(page.locator('aside')).toContainText('繳學費')
+    expect(jezo.errors).toEqual([])
+  })
+})
+
+test.describe('reminders', () => {
+  // Deadlines Jezo has known about for a while, so their reminders are due when their time comes.
+  const long = Temporal.Now.instant().subtract({ hours: 24 * 30 }).epochMilliseconds
+  test.use({
+    prepare: {
+      model: null,
+      workspace: (root) => {
+        write(root, 't-rent', { title: '繳房租', state: 'open', estimate: 10, due: day(2) })
+        write(root, 't-form', { title: '交申請表', state: 'open', estimate: 20, due: `${day(2)}T08:00[${ZONE}]` })
+        write(root, 't-tax', { title: '報稅', state: 'open', estimate: 60, due: day(3) })
+        write(root, 't-visa', { title: '簽證文件', state: 'open', estimate: 30, due: day(3) })
+        write(root, 't-gift', { title: '買生日禮物', state: 'open', estimate: 30, due: day(5) })
+        write(root, 't-done', { title: '已經交了', state: 'done', estimate: 10, due: day(2), completed: `${today}T09:00:00+08:00` })
+      },
+      data: (dir) => {
+        const seen = (due: string) => ({ due, seen: long })
+        writeFileSync(join(dir, 'reminders.json'), JSON.stringify({
+          't-rent': seen(day(2)), 't-form': seen(`${day(2)}T08:00[${ZONE}]`), 't-tax': seen(day(3)), 't-visa': seen(day(3)), 't-gift': seen(day(5)), 't-done': seen(day(2)),
+        }))
+      },
+    },
+  })
+
+  test('come once, the evening before, said from when they come, several in one, and not for what is done', async ({ jezo }) => {
+    const { app, data } = jezo
+    const said = () => JSON.parse(readFileSync(join(data, 'reminders.json'), 'utf8')) as Record<string, { sent?: number; said?: string }>
+    const at = (days: number, hour: number, minute = 0) => Temporal.PlainDate.from(day(days)).toZonedDateTime({ timeZone: ZONE, plainTime: { hour, minute } })
+
+    // Tomorrow at 19:00: the day deadline the day after is reminded (its time was 18:00); the 08:00 one waits for 21:00, not 05:00.
+    await wakeAt(app, at(1, 19))
+    await expect.poll(() => said()['t-rent']?.said).toBe('明天截止：繳房租')
+    expect(said()['t-form']?.sent).toBeUndefined()
+    expect(said()['t-done']?.sent).toBeUndefined()
+    await wakeAt(app, at(1, 21, 5))
+    await expect.poll(() => said()['t-form']?.said).toBe('明天 08:00 截止：交申請表')
+    // Once only.
+    const sent = said()['t-rent'].sent
+    await wakeAt(app, at(1, 21, 30))
+    await new Promise((r) => setTimeout(r, 1500))
+    expect(said()['t-rent'].sent).toBe(sent)
+
+    // Asleep through two reminder times: one notification names both.
+    await wakeAt(app, at(2, 20))
+    await expect.poll(() => said()['t-tax']?.said).toBe('2 件快截止了：報稅、簽證文件')
+    expect(said()['t-visa']?.said).toBe('2 件快截止了：報稅、簽證文件')
+
+    // Woken on the day itself, it says today.
+    await wakeAt(app, at(5, 10))
+    await expect.poll(() => said()['t-gift']?.said).toBe('今天截止：買生日禮物')
     expect(jezo.errors).toEqual([])
   })
 })

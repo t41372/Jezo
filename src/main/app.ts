@@ -8,13 +8,15 @@ import { AgentHost } from './agent/host'
 import { serveAgent } from './agent/ipc'
 import { createMemory, serveMemory } from './agent/memory'
 import { Providers } from './agent/providers'
-import { Schedule, setLanguage } from './agent/schedule'
+import { appLanguage, Schedule, setLanguage } from './agent/schedule'
 import { modelJudge, OutsideContent } from './agent/outside'
 import { snapshot } from './agent/shell'
 import { historyFile, UndoLog } from './agent/undo'
 import { Calendars } from './calendar/calendars'
 import { serveCalendars } from './calendar/ipc'
-import { getConfig } from './config'
+import { getConfig, setConfig } from './config'
+import { Reminders } from './reminders'
+import { Repeats } from './repeats'
 import { inBackground } from './env'
 import { registerQuickKey, unregisterQuickKey } from './hotkey'
 import { createQuickWindow, endVoice, hideQuick, resizeQuick, startVoice, toggleTyping } from './quick'
@@ -128,6 +130,18 @@ function openSession(session: string) {
   else deliver()
 }
 
+/** Brings the main window forward with a todo open in 待辦, from a deadline's reminder. */
+function openTodo(todo: string | null) {
+  const fresh = !mainWindow
+  if (fresh) createMainWindow()
+  const window = mainWindow!
+  window.show()
+  window.focus()
+  const deliver = () => window.webContents.send('todo:open', todo)
+  if (fresh) window.webContents.once('did-finish-load', deliver)
+  else deliver()
+}
+
 ipcMain.on('quick:continue', (_, session: string) => {
   hideQuick()
   openSession(session)
@@ -167,6 +181,22 @@ async function openWorkspace() {
   schedule = new Schedule(workspace, host, providers, openSession)
   serveAgent(host, undo, providers, schedule)
   void schedule.start()
+  // Reminders before deadlines, from the todos' own `due`.
+  const reminders = new Reminders(workspace, join(app.getPath('userData'), 'reminders.json'), {
+    zone: deviceZone,
+    language: appLanguage,
+    enabled: () => getConfig().reminders.deadlines,
+    open: openTodo,
+    show: !inBackground,
+  })
+  reminders.start()
+  // Repeating todos: the next time of each series, written from its rule.
+  new Repeats(workspace, deviceZone).start()
+  ipcMain.handle('reminders:deadlines', () => getConfig().reminders.deadlines)
+  ipcMain.handle('reminders:set-deadlines', async (_, on: boolean) => {
+    await setConfig({ reminders: { deadlines: on } })
+    return on
+  })
   serveSpeech(speech, {
     context: (session, vocabulary) => {
       const zone = deviceZone()

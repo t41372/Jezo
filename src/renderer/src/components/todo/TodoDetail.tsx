@@ -15,7 +15,7 @@ import { offerUndo } from '@/lib/undo'
 import { attachmentsIn, fileUrl, isImage, linkedPath } from '@/lib/files'
 import { endsPastDue, whenLabel } from './format'
 import { Related } from './Related'
-import { CueField, DueField, EstimateField, GoalField, SlotField, TitleField, ZoneField } from './TodoFields'
+import { CueField, DueField, EstimateField, GoalField, RepeatField, SlotField, TitleField, ZoneField } from './TodoFields'
 
 /** Everything about one todo, and what you can do with it. */
 /** `zone` is the zone the calendar shows, when the details open from it: times are picked in it. */
@@ -44,7 +44,7 @@ export function TodoDetail({ todo, onClose, zone }: { todo: Todo; onClose: () =>
   const proposedSlot = !draftTodo && !!todo.slot?.proposed
 
   return (
-    <div className="flex h-full flex-col gap-4" style={goalStyle(goal?.hue)}>
+    <div className="flex min-h-full flex-col gap-4" style={goalStyle(goal?.hue)}>
       <div className="flex items-center gap-2">
         <GoalField todo={todo} />
         <span className="flex-1" />
@@ -72,6 +72,12 @@ export function TodoDetail({ todo, onClose, zone }: { todo: Todo; onClose: () =>
           <>
             <dt className="text-muted-foreground">{t('todo.due')}</dt>
             <dd><DueField todo={todo} /></dd>
+          </>
+        )}
+        {!todo.fromCalendar && (
+          <>
+            <dt className="text-muted-foreground">{t('todo.repeat.title')}</dt>
+            <dd><RepeatField todo={todo} /></dd>
           </>
         )}
         <dt className="text-muted-foreground">{t('todo.estimate')}</dt>
@@ -160,7 +166,7 @@ export function EventDetail({ event, onClose }: { event: CalendarEvent; onClose:
   const { t } = useTranslation()
   const openSession = useStore((s) => s.openSession)
   return (
-    <div className="flex h-full flex-col gap-4">
+    <div className="flex min-h-full flex-col gap-4">
       <div className="flex items-center">
         <span className="rounded-md bg-muted px-2.5 py-0.5 text-[11.5px] font-medium text-muted-foreground">{event.source}</span>
         <span className="flex-1" />

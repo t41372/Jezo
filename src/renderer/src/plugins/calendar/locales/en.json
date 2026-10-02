@@ -65,5 +65,6 @@
     "preview": "Previewing {{city}} time",
     "device": "This device’s zone ({{city}})",
     "search": "Find a city or zone"
-  }
+  },
+  "due": "Due · {{title}}"
 }

@@ -155,6 +155,11 @@ const bridge: JezoBridge = {
   setTheme: (source) => ipcRenderer.send('theme:set', source),
   setLanguage: (language) => ipcRenderer.send('language:set', language),
   onOpenSession: (listener) => listen<string>('session:open', listener),
+  onOpenTodo: (listener) => listen<string | null>('todo:open', listener),
+  reminders: {
+    deadlines: () => ipcRenderer.invoke('reminders:deadlines'),
+    setDeadlines: (on) => ipcRenderer.invoke('reminders:set-deadlines', on),
+  },
   setContext: (pageTitle) => ipcRenderer.send('context:set', pageTitle),
   about: () => ipcRenderer.invoke('app:about'),
   quick: {

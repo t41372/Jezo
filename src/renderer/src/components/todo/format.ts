@@ -51,3 +51,31 @@ export function dueLabel(todo: Todo, today: string, now = Date.now()) {
 export function endsPastDue(todo: Todo) {
   return !!(todo.slot && todo.due && todo.slot.at + todo.estimateMinutes * 60_000 > todo.due.at)
 }
+
+const DAYS = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU']
+
+/** The two-letter RRULE code of a date's weekday, like MO. */
+export const dayCode = (date: string) => DAYS[Temporal.PlainDate.from(date).dayOfWeek - 1]
+
+/** A weekday code in the app's language: 週一, Mon. (2024-01-01 was a Monday.) */
+const dayName = (code: string) => weekday(Temporal.PlainDate.from('2024-01-01').add({ days: DAYS.indexOf(code) }).toString())
+
+/**
+ * A repeat rule in words: 每天, 每週一, 每兩週的週四, 每月 1 號, 做完後 7 天; any other
+ * rule as written. Null for none.
+ */
+export function repeatLabel(rule: string | undefined, from: 'schedule' | 'done' = 'schedule') {
+  if (!rule) return null
+  const parts = Object.fromEntries(rule.split(';').map((p) => p.split('=')))
+  const n = Number(parts.INTERVAL ?? 1)
+  const keys = Object.keys(parts).filter((k) => k !== 'INTERVAL')
+  if (from === 'done' && parts.FREQ === 'DAILY' && keys.length === 1) return i18n.t('todo.repeat.afterDone', { count: n })
+  if (parts.FREQ === 'DAILY' && keys.length === 1) return n === 1 ? i18n.t('todo.repeat.daily') : i18n.t('todo.repeat.everyDays', { count: n })
+  if (parts.FREQ === 'WEEKLY' && keys.length === 2 && parts.BYDAY && parts.BYDAY.split(',').every((d: string) => DAYS.includes(d))) {
+    const days = parts.BYDAY.split(',').map(dayName).join('、')
+    return n === 1 ? i18n.t('todo.repeat.weekly', { days }) : i18n.t('todo.repeat.everyWeeks', { count: n, days })
+  }
+  if (parts.FREQ === 'MONTHLY' && n === 1 && keys.length === 2 && /^\d+$/.test(parts.BYMONTHDAY ?? '')) return i18n.t('todo.repeat.monthly', { day: parts.BYMONTHDAY })
+  if (parts.FREQ === 'YEARLY' && n === 1 && keys.length === 1) return i18n.t('todo.repeat.yearly')
+  return i18n.t('todo.repeat.rule', { rule })
+}

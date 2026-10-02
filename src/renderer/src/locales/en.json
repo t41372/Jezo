@@ -127,7 +127,24 @@
     "dueAt": "Due {{day}} {{time}}",
     "duePassed": "Deadline passed · {{day}}",
     "pastDue": "Planned to end after the deadline",
-    "dueTime": "Time (optional)"
+    "dueTime": "Time (optional)",
+    "repeat": {
+      "title": "Repeat",
+      "none": "Doesn't repeat",
+      "daily": "Every day",
+      "everyDays_one": "Every {{count}} day",
+      "everyDays_other": "Every {{count}} days",
+      "weekly": "Every {{days}}",
+      "everyWeeks_one": "Every {{count}} week on {{days}}",
+      "everyWeeks_other": "Every {{count}} weeks on {{days}}",
+      "monthly": "Monthly on day {{day}}",
+      "yearly": "Every year",
+      "afterDone_one": "{{count}} day after it's done",
+      "afterDone_other": "{{count}} days after it's done",
+      "rule": "Repeats: {{rule}}",
+      "stop": "Stop repeating",
+      "days": "days"
+    }
   },
   "event": {
     "readOnly": "From {{source}}. Change the time there.",

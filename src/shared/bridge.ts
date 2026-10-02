@@ -303,6 +303,13 @@ export interface JezoBridge {
   setLanguage(language: string): void
   /** Called with a conversation to open, from the ⌥X window or a notification. */
   onOpenSession(listener: (session: string) => void): () => void
+  /** Called with a todo to open in 待辦, from a deadline's reminder. */
+  onOpenTodo(listener: (todo: string | null) => void): () => void
+  /** Notifications before deadlines: whether they're on, and turning them on or off. */
+  reminders: {
+    deadlines(): Promise<boolean>
+    setDeadlines(on: boolean): Promise<boolean>
+  }
   /** Tells the ⌥X window which page the main window shows, so voice can bring it along as context. */
   setContext(pageTitle: string): void
   quick: {

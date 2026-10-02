@@ -128,7 +128,8 @@ describe('skill sources', () => {
     expect(() => archiveEntries(tgz, 'tar.gz')).toThrow('unpacks to more than')
     const zip = zipSync({ 'one/SKILL.md': skill('one'), 'one/zeros.bin': huge })
     expect(() => archiveEntries(zip, 'zip')).toThrow('unpacks to more than')
-  })
+    // Making the two 200 MB archives takes seconds; bun's default 5 s ran out on a busy machine.
+  }, 30_000)
 
   test('distinguishes text from binary without changing valid bytes', () => {
     expect(textOf(bytes('繁體中文\n'))).toBe('繁體中文\n')

@@ -27,6 +27,7 @@ import { insideWorkspace, type Workspace } from '../workspace/workspace'
 import { dateOf, deadlineEnd, epochOf, formatTime, moveTo, place, readTime, stamp, todayIn, type Zone } from '../../shared/time'
 import { deviceZone } from '../clock'
 import { dueWords, whenText } from './prompt'
+import { ruleProblem, upcoming } from '../workspace/rrule'
 
 /** The run the tools are working for. The session updates it before each prompt. */
 export interface RunContext {
@@ -90,6 +91,15 @@ function dueText(input: string, here: Zone): string {
   }
   if (placed.gap) throw new Error(`${date} ${clock} doesn't exist${zone ? ` in ${zone}` : ''}: the clocks skip it that day. ${formatTime(placed.value).slice(11, 16)} is the time after the gap.`)
   return formatTime(placed.value)
+}
+
+/** A series' `due_after`: how long after the planned time its deadline is, in whole days when the deadline is a day. */
+function dueAfter(scheduled: string, due: string) {
+  const plan = readTime(scheduled)
+  const deadline = readTime(due, 'deadline')
+  if (!plan || plan.kind !== 'zoned' || !deadline) return 'P0D'
+  if (deadline.kind === 'day') return `P${Math.max(0, plan.wall.toPlainDate().until(deadline.date).days)}D`
+  return plan.wall.toZonedDateTime(plan.zone).until(deadline.kind === 'zoned' ? deadline.wall.toZonedDateTime(deadline.zone) : deadline.kind === 'moment' ? deadline.at : plan.wall.toZonedDateTime(plan.zone)).toString()
 }
 
 /** Said when a todo's planned time ends after its deadline: a fact to act on, not a refusal (sometimes late is the plan). */
@@ -254,6 +264,12 @@ export function createTools(
     estimate: Type.Integer({ minimum: 1, description: 'Minutes, based on how long similar todos actually took.' }),
     ...timeParams('Leave date and time out to put it in the backlog.'),
     deadline: deadlineParam,
+    repeat: Type.Optional(
+      Type.String({
+        description:
+          'When the user wants it done again and again: an RRULE like FREQ=WEEKLY;BYDAY=MO, FREQ=DAILY, FREQ=MONTHLY;BYMONTHDAY=1. Its date and time are the first time; the app writes each next one. Leave it out for a one-off.',
+      }),
+    ),
     goal: Type.Optional(Type.String({ description: 'The id of the goal it serves.' })),
     cue: Type.Optional(Type.String({ description: 'The situation it gets done in.' })),
     why: Type.Optional(Type.String({ description: 'Your reasoning for when and how long, in one sentence to the user.' })),
@@ -294,6 +310,7 @@ export function createTools(
       // A kept draft is moved, not placed anew, so it keeps its zone: a New York call given back as 22:00 in Tokyo stays 09:00 New York.
       const times = params.todos.map((todo) => (todo.date || todo.time ? scheduleText(todo, here(), draftFor(todo)?.data.scheduled) : null))
       // Left out, a deadline stays as it was; "" removes it.
+      for (const todo of params.todos) if (todo.repeat && ruleProblem(todo.repeat.trim())) throw new Error(`${ruleProblem(todo.repeat.trim())} Nothing was proposed.`)
       const dues = params.todos.map((todo) => (todo.deadline === undefined ? undefined : todo.deadline.trim() ? dueText(todo.deadline, here()) : null))
       // Asked to schedule a todo from the backlog, a small model proposed a new one with the same name.
       const open = workspace.list().filter((i) => i.kind === 'todo' && i.data.state !== 'done' && i.data.state !== 'dropped' && !drafts.some((d) => d.id === i.id))
@@ -326,8 +343,27 @@ export function createTools(
           item = await workspace.create('todo', { ...Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== null)), state: 'draft', rank, created: stamp(deviceZone()) }, '', actor())
           changes.added.push(item.id)
         }
+        // A repeating one: its series, which writes each next time once this first one is accepted.
+        let repeats = ''
+        if (todo.repeat && !draft) {
+          const series = await workspace.create('repeat', {
+            title: todo.title,
+            state: 'draft',
+            rule: todo.repeat.trim(),
+            start: time?.text ?? dues[index] ?? todayIn(here()).toString(),
+            estimate: todo.estimate,
+            ...(todo.goal && { goal: todo.goal }),
+            ...(todo.cue && { cue: todo.cue }),
+            ...(dues[index] && time && { due_after: dueAfter(time.text, dues[index]!) }),
+            last: (readTime(time?.text) ? dateOf(readTime(time!.text)!, here()) : todayIn(here())).toString(),
+            created: stamp(deviceZone()),
+          }, '', actor())
+          item = await workspace.update(item.id, { series: series.id, occurrence: String(series.data.last) }, actor())
+          const dates = upcoming(String(series.data.rule), readTime(series.data.start, 'deadline')!, todayIn(here()))
+          repeats = `\n  Repeats ${series.data.rule} (${series.id}): ${dates.map((d) => `${d.toLocaleString('en-US', { weekday: 'short' })} ${d}`).join(', ')}, … If that isn't what the user said, fix the rule in its file.`
+        }
         ids.push(item.id)
-        lines.push(`- ${describe(item.data, here())}${time?.note ?? ''}${pastDue(item.data, here())}${await overlaps(item.data)}${unknownFields(todo, Object.keys(todoInput.properties))}`)
+        lines.push(`- ${describe(item.data, here())}${repeats}${time?.note ?? ''}${pastDue(item.data, here())}${await overlaps(item.data)}${unknownFields(todo, Object.keys(todoInput.properties))}`)
       }
       // Drafts are the agent's own proposals, so leaving one out removes it; undo brings it back.
       for (const draft of drafts.filter((d) => !ids.includes(d.id))) {

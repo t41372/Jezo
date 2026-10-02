@@ -87,7 +87,10 @@ export interface Todo {
    * in the device's zone, its clock there when the deadline is a time, and the
    * moment it's past, which for a day is when that day ends here.
    */
-  due?: { date: ISODate; time?: number; at: number }
+  due?: { date: ISODate; time?: number; at: number; zone?: string }
+  /** The repeating todo this is one time of, and the date it's for (docs/design/frontend.md, "Repeating todos"). */
+  series?: string
+  occurrence?: ISODate
   /** How long it took, from two exact records; not for records written before they carried a zone. */
   elapsedMinutes?: number
   /** The time fields as written, so a change keeps what it doesn't touch (docs/design/time.md). */
@@ -213,6 +216,18 @@ export interface Skill extends SkillInfo {
 }
 
 /** A small experiment, from `experiments/items/` (experiments/AGENTS.md in the workspace). */
+/** A repeating todo: the rule and where it starts. Each time is a Todo with its `series`. */
+export interface Repeat {
+  id: string
+  title: string
+  state: 'draft' | 'on' | 'ended'
+  /** An RRULE, like FREQ=WEEKLY;BYDAY=MO. */
+  rule: string
+  /** `schedule`: on the rule's dates; `done`: counted from when the last time was done. */
+  from: 'schedule' | 'done'
+  start?: string
+}
+
 export interface Experiment {
   id: string
   title: string

@@ -12,11 +12,11 @@ import type { CalendarStatus } from '../../../shared/calendar'
 import type { Fields, Item, ItemChanges } from '../../../shared/workspace'
 import i18n, { applyLanguage, storedLanguage, type LanguageSetting } from '@/i18n'
 import { formatTime, now, place, readTime, stamp, type Zone } from '../../../shared/time'
-import { dueTextFor, entities, localDate, toDue, toExperiment, toGoal, toMemory, toNote, toSlot, toTodo, todoFields, type TimeContext } from './entities'
+import { dueTextFor, entities, localDate, toDue, toExperiment, toRepeat, toGoal, toMemory, toNote, toSlot, toTodo, todoFields, type TimeContext } from './entities'
 import { connectCalendar } from './calendar'
 import { clock as clockText, inZone } from '@/lib/time'
 import { cityOf } from '@/lib/zones'
-import type { CalendarEvent, CalendarViewName, Experiment, Goal, HistoryEntry, ISODate, Memory, Note, NoteKind, NoteOutcome, NoteProposal, Session, SlotInput, Skill, Todo, Trigger } from './types'
+import type { CalendarEvent, CalendarViewName, Experiment, Repeat, Goal, HistoryEntry, ISODate, Memory, Note, NoteKind, NoteOutcome, NoteProposal, Session, SlotInput, Skill, Todo, Trigger } from './types'
 
 export interface Nav {
   page: string
@@ -50,6 +50,7 @@ interface State {
   memories: Memory[]
   skills: Skill[]
   experiments: Experiment[]
+  repeats: Repeat[]
   history: HistoryEntry[]
   notes: Note[]
   settings: { theme: ThemeSource; language: LanguageSetting }
@@ -78,6 +79,11 @@ interface State {
   setDone(id: string, done: boolean): void
   /** Sets when it has to be done by: a day, or a day and a clock in `zone` (the device's unless given); null removes it. */
   setDue(id: string, due: { date: ISODate; time?: number; zone?: Zone } | null): void
+  /**
+   * Makes a todo repeat, changes how its series repeats, or with null ends the
+   * series, leaving the times there are (docs/design/frontend.md, "Repeating todos").
+   */
+  setRepeat(id: string, choice: { rule: string; from: Repeat['from'] } | null): Promise<void>
   /** 不做了: the user decided not to do it. It stays, under 不做了, and false brings it back. */
   setDropped(id: string, dropped: boolean): void
   /** Deletes a todo's file, as a change in 修改紀錄. Resolves to that change, to take it back, or null if it failed. */
@@ -247,6 +253,7 @@ function applyChanges({ changed, removed }: ItemChanges) {
       todos,
       notes: upsert(s.notes, entities(changed, 'note', (i) => toNote(i, s.zone)), removed, byCreated),
       experiments: upsert(s.experiments, entities(changed, 'experiment', toExperiment), removed, byExperiment),
+      repeats: upsert(s.repeats, entities(changed, 'repeat', toRepeat), removed, (a, b) => a.id.localeCompare(b.id)),
       goals: deriveGoals(todos, s.now.date),
       memories: memories.filter((m) => !replaced.includes(m.id)),
       ...(proposed.length && { lastProposal: { ids: proposed.map((t) => t.id), at: Date.now() } }),
@@ -283,6 +290,7 @@ async function loadWorkspace() {
     todos,
     notes: entities(items, 'note', (i) => toNote(i, zone)).sort(byCreated),
     experiments: entities(items, 'experiment', toExperiment).sort(byExperiment),
+    repeats: entities(items, 'repeat', toRepeat),
     goals: deriveGoals(todos, s.now.date),
     memories: entities(items, 'memory', (i) => toMemory(i, zone))
       .filter((m): m is Memory => m !== null)
@@ -444,6 +452,7 @@ export const useStore = create<State>()((set, get) => ({
   notes: [],
   skills: [],
   experiments: [],
+  repeats: [],
   history: [],
   settings: { theme: storedTheme(), language: storedLanguage() },
 
@@ -485,6 +494,47 @@ export const useStore = create<State>()((set, get) => ({
     const text = due ? dueTextFor(due.date, due.time, due.zone ?? zone) : null
     if (due && !text) return void toast(i18n.t('todo.dueGap'))
     writeFields(id, { due: text ? toDue(text, zone) : undefined }, { due: text })
+  },
+  setRepeat: async (id, choice) => {
+    const todo = get().todos.find((t) => t.id === id)
+    if (!todo) return
+    const series = todo.series ? get().repeats.find((r) => r.id === todo.series) : undefined
+    try {
+      if (!choice) {
+        if (series) await workspace().update(series.id, { state: 'ended' })
+        return
+      }
+      if (series) {
+        await workspace().update(series.id, { rule: choice.rule, from: choice.from, ...(series.state === 'ended' && { state: 'on' }) })
+        return
+      }
+      // A new series from this todo, which becomes its first time.
+      const date = todo.slot?.date ?? todo.due?.date ?? get().now.date
+      const start = todo.times?.scheduled ?? todo.times?.due ?? date
+      const dueAfter = todo.slot && todo.due
+        ? todo.due.time === undefined
+          ? `P${Math.max(0, Temporal.PlainDate.from(todo.slot.date).until(todo.due.date).days)}D`
+          : `PT${Math.max(0, Math.round((todo.due.at - todo.slot.at) / 60_000))}M`
+        : null
+      const created = await workspace().create('repeat', {
+        title: todo.title,
+        state: todo.state === 'draft' ? 'draft' : 'on',
+        rule: choice.rule,
+        from: choice.from,
+        start,
+        estimate: todo.estimateMinutes,
+        ...(todo.goalId && { goal: todo.goalId }),
+        ...(todo.cue && { cue: todo.cue }),
+        ...(todo.amount !== undefined && { amount: todo.amount }),
+        ...(todo.subtasks?.length && { steps: todo.subtasks.map((s) => ({ text: s.text })) }),
+        ...(dueAfter && { due_after: dueAfter }),
+        last: date,
+        created: stamp(zone()),
+      }, todo.notes)
+      await workspace().update(todo.id, { series: created.id, occurrence: date })
+    } catch (error) {
+      failed(error)
+    }
   },
   setDropped: (id, dropped) => {
     writeTodo(id, dropped ? { state: 'dropped', droppedAt: Date.now(), startedAt: undefined } : { state: 'open', droppedAt: undefined })

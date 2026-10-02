@@ -9,6 +9,7 @@ Each top-level directory with a `manifest.yaml` holds one kind of item:
 - `todos/`: things to do, scheduled or in the backlog
 - `goals/`: what the user is working toward, with the rules that get it done
 - `notes/`: things the user jotted down without sorting (隨手記)
+- `repeats/`: todos that come up again and again, like 每週一倒垃圾; each time is a todo the app writes
 - `automations/`: things Jezo starts on its own at set times, like the morning plan
 - `experiments/`: small experiments that try one way of doing things against another on the user's own days
 - `memory/`: what you remember about the user; use the memory tools to change it
