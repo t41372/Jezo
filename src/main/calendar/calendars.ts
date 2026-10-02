@@ -388,6 +388,8 @@ export class Calendars {
 
     if (macAvailable()) {
       if (config.mac) this.access = await macAccess().catch(() => this.access)
+      // Allowed in System Settings after it was refused: from now on, changes there show here.
+      if (config.mac && this.access === 'full' && !this.stopWatching) this.watch()
       const state = !config.mac ? 'off' : this.access === 'full' ? 'ok' : this.access === 'notDetermined' ? 'needs-access' : 'denied'
       const mac: CalendarSource = { id: 'mac', kind: 'mac', name: 'Mac', state }
       if (state === 'ok') {

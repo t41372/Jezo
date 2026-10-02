@@ -123,6 +123,14 @@ export class Memory {
   private index = new DatabaseSync(':memory:')
   private options: MemoryOptions
 
+  /** Loading and changes run one at a time, so a load that read the files before a change can't put back what it replaced. */
+  private turn: Promise<unknown> = Promise.resolve()
+  private inTurn<T>(work: () => Promise<T>): Promise<T> {
+    const run = this.turn.then(work, work)
+    this.turn = run.catch(() => undefined)
+    return run
+  }
+
   constructor(options: MemoryOptions) {
     this.options = options
     this.store = options.store
@@ -134,7 +142,11 @@ export class Memory {
   }
 
   /** Reads every memory file and rebuilds the index. Returns the files it couldn't read. */
-  async load(): Promise<{ path: string; problem: string }[]> {
+  load() {
+    return this.inTurn(() => this.loadNow())
+  }
+
+  private async loadNow(): Promise<{ path: string; problem: string }[]> {
     // Read into a new map and swap it in at once: a save while the files are read sees the memories as they were, not half of them.
     const records = new Map<string, MemoryRecord>()
     const problems: { path: string; problem: string }[] = []
@@ -177,7 +189,11 @@ export class Memory {
     return this.records.get(id)
   }
 
-  async remember(input: RememberInput): Promise<MemoryRecord> {
+  remember(input: RememberInput) {
+    return this.inTurn(() => this.rememberNow(input))
+  }
+
+  private async rememberNow(input: RememberInput): Promise<MemoryRecord> {
     const text = input.text.trim()
     if (!text) throw new MemoryError('A memory needs text.')
     const source = this.options.source()
@@ -253,7 +269,11 @@ export class Memory {
   }
 
   /** Deletes a memory and remembers that it was deleted, so the same words aren't saved again. */
-  async forget(id: string) {
+  forget(id: string) {
+    return this.inTurn(() => this.forgetNow(id))
+  }
+
+  private async forgetNow(id: string) {
     const record = this.records.get(id)
     if (!record) throw new MemoryError(`There is no memory ${id}.`)
     this.forgotten.push({ id, hash: hashOf(record.text), ...(record.evidence && { evidence: record.evidence }), at: local(this.now()) })
@@ -264,7 +284,11 @@ export class Memory {
   }
 
   /** Puts back a memory the user just deleted, and lets its words be saved again. For undo. */
-  async restore(record: MemoryRecord) {
+  restore(record: MemoryRecord) {
+    return this.inTurn(() => this.restoreNow(record))
+  }
+
+  private async restoreNow(record: MemoryRecord) {
     this.forgotten = this.forgotten.filter((f) => f.id !== record.id)
     await this.saveForgotten()
     await this.store.write(pathOf(record.id), serialize(record))
@@ -273,7 +297,11 @@ export class Memory {
   }
 
   /** Removes a memory without remembering it was deleted. For taking back one that was just made. */
-  async discard(id: string) {
+  discard(id: string) {
+    return this.inTurn(() => this.discardNow(id))
+  }
+
+  private async discardNow(id: string) {
     await this.store.remove(pathOf(id))
     this.records.delete(id)
     this.reindex()

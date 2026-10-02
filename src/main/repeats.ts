@@ -7,14 +7,15 @@ import { powerMonitor } from 'electron'
 import type { Fields, Item } from '../shared/workspace'
 import { formatTime, place, readTime, stamp, todayIn, type TimeValue, type Zone } from '../shared/time'
 import type { Workspace } from './workspace/workspace'
-import { nextDate, occurrenceId, ruleCount } from './workspace/rrule'
+import { nextDate, occurrenceId, ruleCount, withoutCount } from './workspace/rrule'
 
 /** The app writes the times; they aren't anyone's change, so they're not in 修改紀錄. */
 const APP = { by: 'user' } as const
 /**
  * Each time's deadline, from the series' `due_after`: days alone are a day that
  * many days after its date; a time part makes it a time that long after its
- * planned time, or after its day begins (in `zone`) for a series on a day.
+ * planned time, or after its day begins (in `zone`: the series' `due_zone`, or
+ * where the user is) for a series on a day.
  */
 function dueOn(date: Temporal.PlainDate, start: TimeValue, after: string | undefined, scheduled: TimeValue | null, zone: Zone): string | null {
   if (!after) return start.kind === 'day' ? date.toString() : null
@@ -90,9 +91,12 @@ export class Repeats {
       const closed = readTime(latest.data.completed ?? latest.data.dropped, 'record')
       const on = closed ? Temporal.Instant.from(formatTime(closed)).toZonedDateTimeISO(zone).toPlainDate() : today
       const from: TimeValue = start.kind === 'day' ? { kind: 'day', date: on } : { ...start, wall: on.toPlainDateTime(start.wall.toPlainTime()) }
-      // Done early, the next can land on a date that already has a time; it's the one after.
-      let date = nextDate(rule, from, on.add({ days: 1 }))
-      while (date && times.some((t) => t.data.occurrence === date!.toString())) date = nextDate(rule, from, date.add({ days: 1 }))
+      // Walked afresh from the day it was done, the rule's COUNT would count that day and the dates
+      // skipped; the times written are what's counted, above. Done early, the next can land on a date
+      // that already has a time; it's the one after.
+      const walk = withoutCount(rule)
+      let date = nextDate(walk, from, on.add({ days: 1 }))
+      while (date && times.some((t) => t.data.occurrence === date!.toString())) date = nextDate(walk, from, date.add({ days: 1 }))
       return date
     }
     // On schedule, one time ahead: while the last one written is today or later, it's the one ahead.
@@ -107,7 +111,7 @@ export class Repeats {
   private async write(series: Item, date: Temporal.PlainDate) {
     const start = readTime(series.data.start, 'deadline')!
     const scheduled = start.kind === 'zoned' ? place(date.toString(), start.wall.toPlainTime().toString({ smallestUnit: 'minute' }), start.zone).value : null
-    const due = dueOn(date, start, typeof series.data.due_after === 'string' ? series.data.due_after : undefined, scheduled, this.zone())
+    const due = dueOn(date, start, typeof series.data.due_after === 'string' ? series.data.due_after : undefined, scheduled, typeof series.data.due_zone === 'string' ? series.data.due_zone : this.zone())
     const steps = Array.isArray(series.data.steps) ? (series.data.steps as { text: string }[]).map((s) => ({ text: s.text, done: false })) : undefined
     const fields: Fields = {
       id: occurrenceId(series.id, date.toString()),

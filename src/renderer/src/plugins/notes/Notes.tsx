@@ -9,7 +9,7 @@ import type { Note, Session, SortItem } from '@/data/types'
 import { easeOut } from '@/lib/motion'
 import { dayTime } from '@/lib/time'
 import { offerUndo } from '@/lib/undo'
-import { liveItems, SortCard } from './SortCard'
+import { liveItems, proposalKey, SortCard } from './SortCard'
 
 /** Notes enter and leave the list like cards in the backlog. */
 const rowMotion = {
@@ -89,21 +89,19 @@ export function Notes() {
 }
 
 /**
- * The newest proposal to show on the page: until every note in it is decided,
- * and after that until the user puts it away, so each decision can still be
- * taken back.
+ * The proposal to show on the page: one with notes still to decide, and after
+ * that until the user puts it away, so each decision can still be taken back.
  */
 function pendingProposal(sessions: Session[], notes: Note[], closed: string[]) {
-  // Wherever it was asked for, 交給 agent 整理 or a chat; in a conversation that proposed more than once, the latest first.
-  for (const session of sessions) {
-    for (let index = session.messages.length - 1; index >= 0; index--) {
-      const message = session.messages[index]
-      if (message.kind !== 'plugin' || message.plugin !== 'notes' || message.type !== 'sort') continue
-      const data = message.data as { items: SortItem[] }
-      if (liveItems(data.items, notes, session.id).some((i) => !i.decision) || !closed.includes(session.id)) return { sessionId: session.id, index, data: message.data }
-    }
-  }
-  return null
+  // Wherever it was asked for, 交給 agent 整理 or a chat, and every one in a conversation that proposed more than once.
+  const proposals = sessions.flatMap((session) =>
+    session.messages.flatMap((message, index) =>
+      message.kind === 'plugin' && message.plugin === 'notes' && message.type === 'sort' ? [{ sessionId: session.id, index, data: message.data }] : [],
+    ),
+  )
+  const undecided = (p: (typeof proposals)[number]) => liveItems((p.data as { items: SortItem[] }).items, notes, p.sessionId).some((i) => !i.decision)
+  // One still waiting on the user comes first, so one decided and not yet put away doesn't hide a new one.
+  return proposals.find(undecided) ?? proposals.find((p) => !closed.includes(proposalKey(p.sessionId, p.index))) ?? null
 }
 
 /** The box to jot into. Enter adds the note, Shift+Enter starts a new line. */
@@ -114,8 +112,8 @@ function Composer() {
     const note = text.trim()
     if (!note) return
     setText('')
-    // Not saved: the words come back to the box, unless something new was typed there.
-    void useStore.getState().addNote(note, 'page').then((saved) => saved || setText((now) => now || note))
+    // Not saved: the words come back to the box, in front of anything typed since.
+    void useStore.getState().addNote(note, 'page').then((saved) => saved || setText((now) => (now ? `${note}\n${now}` : note)))
   }
   return (
     <div className="rounded-2xl border border-card-border bg-card px-4 pt-3 pb-2 shadow-[0_1px_2px_var(--card-border)] focus-within:ring-3 focus-within:ring-ring/25">

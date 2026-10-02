@@ -171,26 +171,36 @@ export const todayIn = (zone: Zone, at: Temporal.Instant = now()) => at.toZonedD
  * todos"): its `start`, the `date` of the todo as its first time, and its deadline
  * as `dueAfter`. The start is the planned time, a clock in a zone, or else a day:
  * the deadline's, or today. A length of days alone (P2D) is a day deadline that
- * many days after; one with a time part (PT8H) is a time that long after the
- * planned time, or after the day begins for a series on a day.
+ * many days after; one with a time part (PT8H, P1DT0S) is a time that long after
+ * the planned time, or, for a series on a day, after that day begins in
+ * `dueZone`, the deadline's own zone.
  */
-export function seriesFrom(scheduled: string | undefined, due: string | undefined, zone: Zone): { start: string; date: Temporal.PlainDate; dueAfter?: string } {
-  const plan = readTime(scheduled)
+export function seriesFrom(scheduled: string | undefined, due: string | undefined, zone: Zone): { start: string; date: Temporal.PlainDate; dueAfter?: string; dueZone?: Zone } {
+  const read = readTime(scheduled)
   const deadline = readTime(due, 'deadline')
+  // A moment, or a clock with no zone, repeats as the clock it is where the user is.
+  const plan: TimeValue | null = read && read.kind !== 'day' && read.kind !== 'zoned' ? { kind: 'zoned', wall: resolve(read, zone)!.at.toPlainDateTime(), zone } : read
   if (plan?.kind === 'zoned') {
+    const start = formatTime(plan)
     const date = plan.wall.toPlainDate()
-    if (!deadline) return { start: scheduled!, date }
-    if (deadline.kind === 'day') return { start: scheduled!, date, dueAfter: `P${Math.max(0, date.until(deadline.date).days)}D` }
-    const from = plan.wall.toZonedDateTime(plan.zone)
-    const length = from.until(resolve(deadline, plan.zone)!.at, { largestUnit: 'day' })
-    return { start: scheduled!, date, dueAfter: (length.sign < 0 ? Temporal.Duration.from('PT0S') : length).toString() }
+    if (!deadline) return { start, date }
+    if (deadline.kind === 'day') return { start, date, dueAfter: `P${Math.max(0, date.until(deadline.date).days)}D` }
+    // From the planned moment itself, so a clock that happens twice keeps the one it was.
+    const length = resolve(plan, plan.zone)!.at.until(resolve(deadline, plan.zone)!.at, { largestUnit: 'day' })
+    return { start, date, dueAfter: timeLength(length.sign < 0 ? new Temporal.Duration() : length) }
   }
   if (!deadline) return { start: todayIn(zone).toString(), date: todayIn(zone) }
   if (deadline.kind === 'day') return { start: deadline.date.toString(), date: deadline.date }
   // A clock on the deadline's day, as it reads where the deadline is.
-  const wall = deadline.kind === 'moment' ? deadline.at.withTimeZone(zone).toPlainDateTime() : deadline.wall
-  const date = wall.toPlainDate()
-  return { start: date.toString(), date, dueAfter: date.toPlainDateTime().until(wall).toString() }
+  const at = deadline.kind === 'zoned' ? { wall: deadline.wall, zone: deadline.zone } : { wall: resolve(deadline, zone)!.at.toPlainDateTime(), zone }
+  const date = at.wall.toPlainDate()
+  return { start: date.toString(), date, dueAfter: timeLength(date.toPlainDateTime().until(at.wall)), dueZone: at.zone }
+}
+
+/** A length written with its time part even when it has none (P1DT0S), so it reads as a time deadline, not a day one. */
+const timeLength = (length: Temporal.Duration) => {
+  const text = length.toString()
+  return text.includes('T') ? text : `${text}T0S`
 }
 
 /** What placing a clock on a date gives, and whether that clock was real. */

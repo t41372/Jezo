@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto'
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 
 export const hashOf = (content: string | Uint8Array) => createHash('sha256').update(content).digest('hex')
@@ -27,12 +27,18 @@ export async function readContent(path: string): Promise<Content | null> {
 /** Temporary files end in this, so the watcher can skip them. */
 export const TEMP_SUFFIX = '.jezo-tmp'
 
-/** Writes a temporary file next to the target and renames it over, so a crash never leaves half a file. */
-export async function writeAtomic(path: string, text: string | Uint8Array) {
+/**
+ * Writes a temporary file next to the target and renames it over, so a crash
+ * never leaves half a file. The file keeps its permissions, so a script stays
+ * runnable after an edit; `mode` sets them for a new one.
+ */
+export async function writeAtomic(path: string, text: string | Uint8Array, mode?: number) {
   await mkdir(dirname(path), { recursive: true })
   const temp = `${path}.${randomBytes(4).toString('hex')}${TEMP_SUFFIX}`
   try {
-    await writeFile(temp, text)
+    const kept = mode ?? (await stat(path).then((s) => s.mode & 0o777, () => undefined))
+    await writeFile(temp, text, kept === undefined ? {} : { mode: kept })
+    if (kept !== undefined) await chmod(temp, kept)
     await rename(temp, path)
   } catch (error) {
     await rm(temp, { force: true })

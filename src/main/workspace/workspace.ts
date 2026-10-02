@@ -43,6 +43,16 @@ export interface Kind {
 /** A file changed since the caller read it. The caller should reload and try again. */
 export class StaleError extends Error {}
 
+function decodeLink(link: string) {
+  try {
+    return decodeURI(link)
+  } catch {
+    return link
+  }
+}
+
+const sameContent = (a: Content | null, b: Content | null) => (a === null || b === null ? a === b : hashOf(a) === hashOf(b))
+
 const ITEM = /^([^/]+)\/items\/[^/]+\.md$/
 const MANIFEST = /^([^/]+)\/manifest\.yaml$/
 
@@ -103,7 +113,8 @@ export class Workspace {
     const links = new Set<string>()
     const dir = item.path.split('/').slice(0, -1)
     for (const match of item.body.matchAll(/\[[^\]]*\]\(<?([^)\s>]+\.md)>?(?:#[^)]*)?\)/g)) {
-      const target = resolvePath(dir, decodeURI(match[1]))
+      // A link that isn't valid percent-encoding, like 100%.md, is read as written.
+      const target = resolvePath(dir, decodeLink(match[1]))
       const id = target && this.byPath.get(target)
       if (id && id !== item.id) links.add(id)
     }
@@ -203,7 +214,9 @@ export class Workspace {
       this.afterWrite(write)
       this.drop(item.path)
     })
-    this.emit({ changed: [], removed: [id] })
+    const changes: ItemChanges = { changed: [], removed: [id] }
+    for (const change of await this.claimants(id)) merge(changes, change)
+    this.emit(changes)
   }
 
   /** Deletes any file in the workspace, recorded like a write. */
@@ -217,18 +230,24 @@ export class Workspace {
       this.afterWrite(write)
       for (const listener of this.fileListeners) listener(path)
       const id = this.drop(path)
-      if (id) this.emit({ changed: [], removed: [id] })
+      if (!id) return
+      const changes: ItemChanges = { changed: [], removed: [id] }
+      for (const change of await this.claimants(id)) merge(changes, change)
+      this.emit(changes)
     })
   }
 
   /**
    * Writes any file in the workspace. The agent's `write` and `edit` tools come
    * through here, so their changes are recorded and indexed like any other.
-   * `before` is what the caller read; pass undefined to read it here.
+   * `before` is what the caller read (null: no file), checked once the writes
+   * queued ahead of this one are done: if the file holds something else by then,
+   * it throws StaleError and writes nothing. Undefined writes whatever is there.
    */
   async writeFile(path: string, text: Content, actor: Actor, before?: Content | null) {
     await this.serial(path, async () => {
-      const current = before === undefined ? await readContent(this.abs(path)) : before
+      const current = await readContent(this.abs(path))
+      if (before !== undefined && !sameContent(current, before)) throw new StaleError(`${path} changed since it was read.`)
       await this.writeNow(path, text, actor, current)
     })
   }
@@ -317,7 +336,8 @@ export class Workspace {
   }
 
   /** Reads every item again. Catches changes the watcher missed. */
-  async rescan() {
+  /** Reads every item file again. `recheck` checks unchanged files too, after a manifest changed. */
+  async rescan(recheck = false) {
     const seen = new Set<string>()
     const changes: ItemChanges = { changed: [], removed: [] }
     for (const kind of this.kinds.values()) {
@@ -331,31 +351,36 @@ export class Workspace {
         if (!name.endsWith('.md')) continue
         const path = `${kind.dir}/items/${name}`
         seen.add(path)
-        const change = await this.reread(path)
+        const change = await this.reread(path, undefined, recheck)
         if (change) merge(changes, change)
       }
     }
     for (const path of [...this.byPath.keys()]) {
       if (seen.has(path)) continue
       const id = this.drop(path)
-      if (id) changes.removed.push(id)
+      if (!id) continue
+      changes.removed.push(id)
+      for (const change of await this.claimants(id)) merge(changes, change)
     }
     if (changes.changed.length || changes.removed.length) this.emit(changes)
   }
 
   /** Reads one item file into the index. Returns what changed, or null if nothing did. */
-  private async reread(path: string, known?: string): Promise<ItemChanges | null> {
+  private async reread(path: string, known?: string, recheck = false): Promise<ItemChanges | null> {
     // Only `<plugin>/items/<id>.md` is an item; a plugin's AGENTS.md or skills aren't.
     const kind = ITEM.test(path) ? this.kindForDir(path.split('/')[0]) : undefined
     if (!kind) return null
     const text = known ?? (await readIfExists(this.abs(path)))
     if (text === null) {
       const id = this.drop(path)
-      return id ? { changed: [], removed: [id] } : null
+      if (!id) return null
+      const changes: ItemChanges = { changed: [], removed: [id] }
+      for (const change of await this.claimants(id)) merge(changes, change)
+      return changes
     }
     const hash = hashOf(text)
     const existing = this.byPath.get(path)
-    if (existing && this.items.get(existing)?.hash === hash) return null
+    if (!recheck && existing && this.items.get(existing)?.hash === hash) return null
 
     const removed: string[] = []
     let item: Item
@@ -387,6 +412,21 @@ export class Workspace {
     return { changed: [item], removed }
   }
 
+  /**
+   * Files that claimed an id another file held, read again once that file is
+   * gone, so one of them takes it: a file renamed while Jezo runs can be read
+   * at its new path before its old one is dropped.
+   */
+  private async claimants(id: string) {
+    const changes: ItemChanges[] = []
+    for (const [path, held] of [...this.byPath]) {
+      if (!held.startsWith('?') || this.items.get(held)?.data.id !== id) continue
+      const change = await this.reread(path, undefined, true)
+      if (change) changes.push(change)
+    }
+    return changes
+  }
+
   private drop(path: string) {
     const id = this.byPath.get(path)
     this.byPath.delete(path)
@@ -399,7 +439,7 @@ export class Workspace {
     if (path.endsWith(TEMP_SUFFIX) || path.startsWith('sessions/') || path.startsWith('.')) return
     for (const listener of this.fileListeners) listener(path)
     if (MANIFEST.test(path)) {
-      void this.loadKinds().then(() => this.rescan())
+      void this.loadKinds().then(() => this.rescan(true))
       return
     }
     if (!ITEM.test(path)) return

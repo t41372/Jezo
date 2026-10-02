@@ -15,6 +15,8 @@
 // 12. Deleting a key leaves a blank line or eats the next one.
 // 13. A body that itself starts with `---` (a markdown rule) is mistaken for frontmatter's end.
 // 14. Local times like 2026-09-29T09:30 or 09:30 read back as dates or numbers.
+// 15. Fields written as one flow mapping ({name: A, description: B}) are cut in half by a
+//     line-based edit, or get a block field added after the closing brace (code review, 2026-10-02).
 
 import { describe, expect, test } from 'bun:test'
 import { FrontmatterError, parse, patch } from './frontmatter'
@@ -132,5 +134,15 @@ describe('patch', () => {
 
   test('refuses to edit frontmatter that does not parse', () => {
     expect(() => patch('---\na: 1\na: 2\n---\n', { b: 1 })).toThrow(FrontmatterError) // 9
+  })
+})
+
+describe('flow-style frontmatter', () => {
+  test('a change keeps every field and writes them one per line', () => { // 15
+    const text = '---\n{name: My-Method, description: A method}\n---\nBody\n'
+    const once = patch(text, { name: 'my-method' })
+    expect(parse(once)).toEqual({ data: { name: 'my-method', description: 'A method' }, body: 'Body\n' })
+    expect(parse(patch(once, { off: true })).data).toEqual({ name: 'my-method', description: 'A method', off: true })
+    expect(parse(patch(text, { off: true })).data).toEqual({ name: 'My-Method', description: 'A method', off: true })
   })
 })

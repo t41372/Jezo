@@ -148,7 +148,8 @@ interface State {
   /** Takes a decision back: removes what accepting created, and the proposal waits again. */
   undoNoteDecision(sessionId: string, index: number, noteId: string): void
   /** Puts away a fully decided proposal on the 隨手記 page. It stays in the conversation. */
-  closeNoteProposal(sessionId: string): void
+  /** Puts a proposal away, by its key (SortCard.tsx, proposalKey). */
+  closeNoteProposal(key: string): void
   /** Proposals put away on the 隨手記 page, by session. Kept in this window's storage. */
   closedProposals: string[]
 
@@ -529,7 +530,7 @@ export const useStore = create<State>()((set, get) => ({
         return
       }
       // A new series from this todo, which becomes its first time.
-      const { start, date: first, dueAfter } = seriesFrom(todo.times?.scheduled, todo.times?.due, zone())
+      const { start, date: first, dueAfter, dueZone } = seriesFrom(todo.times?.scheduled, todo.times?.due, zone())
       const date = first.toString()
       const created = await workspace().create('repeat', {
         title: todo.title,
@@ -543,6 +544,7 @@ export const useStore = create<State>()((set, get) => ({
         ...(todo.amount !== undefined && { amount: todo.amount }),
         ...(todo.subtasks?.length && { steps: todo.subtasks.map((s) => ({ text: s.text })) }),
         ...(dueAfter && { due_after: dueAfter }),
+        ...(dueZone && { due_zone: dueZone }),
         last: date,
         created: stamp(zone()),
       }, todo.notes)
@@ -710,8 +712,8 @@ export const useStore = create<State>()((set, get) => ({
     set((s) => ({ notes: s.notes.map((n) => (n.id === noteId ? { ...n, state: 'sorting', proposal: reopened, became: undefined } : n)) }))
     writeNote(noteId, { state: 'sorting', proposal: reopened, became: null })
   },
-  closeNoteProposal: (sessionId) => {
-    const closedProposals = [...get().closedProposals, sessionId].slice(-50)
+  closeNoteProposal: (key) => {
+    const closedProposals = [...get().closedProposals, key].slice(-50)
     try {
       localStorage.setItem(CLOSED_KEY, JSON.stringify(closedProposals))
     } catch {

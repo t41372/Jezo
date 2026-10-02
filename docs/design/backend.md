@@ -41,9 +41,9 @@ A watcher on the workspace (`fs.watch`, recursive) tells the index when a file c
 
 Every write the GUI makes goes through one write service, and so do the agent's file tools (below). A write:
 
-1. reads the file and checks its hash against the one the caller last saw; if the file changed since, the write fails and the caller reloads;
-2. changes only what it was asked to: frontmatter fields are replaced one top-level key at a time, and every other line stays byte for byte;
-3. writes a temporary file and renames it over the old one.
+1. reads the file and checks its hash against the one the caller last saw; if the file changed since, the write fails and the caller reloads. The check runs when the write's turn comes, after the writes queued ahead of it on the same file, so one that was waiting can't put back what another just changed;
+2. changes only what it was asked to: frontmatter fields are replaced one top-level key at a time, and every other line stays byte for byte (frontmatter written as one `{…}` mapping has no lines to keep, so it's written out again one field per line);
+3. writes a temporary file, with the old file's permissions so a script stays runnable, and renames it over the old one.
 
 **Why key by key.** The `yaml` package's Document API keeps comments but, measured on 2026-09-29, it still rewrites lines nobody touched: `[a, b,   c]` became `[ a, b, c ]`, `0x1F` became `0x1f`, and spacing before comments collapsed. So a write parses the frontmatter to find where each top-level key starts and ends, and replaces only the changed keys' text. A changed nested value (a todo's `steps`) replaces its whole top-level key. A file whose frontmatter doesn't parse is never written; the check reports it instead.
 

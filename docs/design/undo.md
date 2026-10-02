@@ -53,7 +53,7 @@ Follow Hermes' model, with storage outside the workspace. Built on 2026-09-29 (`
 
 **Jezo's own records aren't undoable.** Writes with the writer `jezo`, like the automation history in `automations/history/`, are never recorded. The shell's before-and-after snapshot skips that folder, so a scheduler write during a shell command isn't blamed on the agent.
 
-Skill installations and removals go through the workspace, bytes included. A file that isn't text is kept in the history as a blob named by its hash, in `history-blobs/` beside `history.json`, and dropped when no kept run refers to it; like the rest of the history, it's safe to lose. Its diff in 修改紀錄 is one line, `(binary)`. Files a shell command changes are compared as text only, so bytes it writes aren't in the history. Neither is a file larger than 1 MiB, nor one that becomes text from bytes or from over 1 MiB: what it held before wasn't kept, so undo couldn't put it back, and recording it as new would make undo delete it.
+Skill installations and removals go through the workspace, bytes included. A file that isn't text is kept in the history as a blob named by its hash, in `history-blobs/` beside `history.json`, and dropped when no kept run refers to it; like the rest of the history, it's safe to lose. Its diff in 修改紀錄 is one line, `(binary)`. A file that was runnable, like a method's script, is made runnable again when undo puts it back. Files a shell command changes are compared as text only, so bytes it writes aren't in the history. Neither is a file larger than 1 MiB, nor one that becomes text from bytes or from over 1 MiB: what it held before wasn't kept, so undo couldn't put it back, and recording it as new would make undo delete it.
 
 ## Open questions
 

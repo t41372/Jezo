@@ -5,12 +5,13 @@
 // Files that aren't text, like a method's image, are kept beside the history as
 // blobs named by their hash, so undo covers them too.
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { chmod } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { diffLines } from 'diff'
 import type { DiffLine, HistoryEntry, Trigger, UndoResult } from '../../shared/session'
 import { type Content, hashOf, newId, readContent, writeAtomic } from '../workspace/files'
-import type { Workspace, Write } from '../workspace/workspace'
+import { StaleError, type Workspace, type Write } from '../workspace/workspace'
 import { acting } from './acting'
 
 /** A file's content in the history: its text, or the blob its bytes are kept in. */
@@ -30,6 +31,8 @@ interface FileChange {
   pending?: { content: Kept | null }
   /** Someone else changed the file between two of the run's writes; undo leaves it alone rather than take their change back too. */
   mixed?: boolean
+  /** It was a runnable script before the run, like a method's, so putting it back makes it runnable again. */
+  executable?: boolean
 }
 
 interface Run {
@@ -244,7 +247,7 @@ export class UndoLog {
       if (!holds(write.before, existing.after) && !(existing.pending && holds(write.before, existing.pending.content))) existing.mixed = true
       existing.pending = pending
     }
-    else run.files.push({ path: write.path, before: this.keep(write.before), after: this.keep(write.before), pending })
+    else run.files.push({ path: write.path, before: this.keep(write.before), after: this.keep(write.before), pending, ...(isExecutable(this.workspace.abs(write.path)) && { executable: true }) })
     return this.save()
   }
 
@@ -272,7 +275,16 @@ export class UndoLog {
       }
       // Through the workspace, so an undo is an ordinary change by the user: indexed, and seen by whatever follows writes.
       if (change.before === null) await this.workspace.removeFile(change.path, { by: 'user' })
-      else await this.workspace.writeFile(change.path, this.content(change.before), { by: 'user' }, current)
+      else {
+        try {
+          await this.workspace.writeFile(change.path, this.content(change.before), { by: 'user' }, current)
+          if (change.executable) await chmod(this.workspace.abs(change.path), 0o755)
+        } catch (error) {
+          // Changed again while the undo waited its turn: left alone, like a file changed before it.
+          if (!(error instanceof StaleError)) throw error
+          kept.push(change.path)
+        }
+      }
     }
     run.undone = true
     await this.save()
@@ -315,6 +327,14 @@ export class UndoLog {
     ])
     if (existsSync(this.blobs)) for (const blob of readdirSync(this.blobs)) if (!used.has(blob)) rmSync(join(this.blobs, blob), { force: true })
     for (const listener of this.listeners) listener()
+  }
+}
+
+const isExecutable = (path: string) => {
+  try {
+    return (statSync(path).mode & 0o111) !== 0
+  } catch {
+    return false
   }
 }
 

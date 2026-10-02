@@ -72,6 +72,12 @@ export function patch(text: string, changes: Record<string, unknown>, body?: str
   const doc = parseYaml(s.yaml)
   const pairs = isMap(doc.contents) ? (doc.contents.items as Pair[]) : []
   const current = (doc.toJS() ?? {}) as Record<string, unknown>
+  // Fields written as one {…} have no lines of their own to replace: they're written out again, one per line.
+  if (isMap(doc.contents) && doc.contents.flow) {
+    const fields = Object.entries({ ...current, ...changes }).filter(([, v]) => v !== undefined)
+    const yaml = fields.map(([k, v]) => render(k, v, s.eol)).join('')
+    return text.slice(0, s.start) + yaml + text.slice(s.start + s.yaml.length, s.bodyStart) + (body ?? text.slice(s.bodyStart))
+  }
   let yaml = s.yaml
   const edits: { from: number; to: number; text: string }[] = []
   const added: string[] = []

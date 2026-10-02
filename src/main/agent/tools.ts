@@ -23,8 +23,8 @@ import { installer } from '../install/installer'
 import { shellOperations } from './shell'
 import type { CommandCheckpoints } from './undo'
 import { listSkills } from '../workspace/skills'
-import { insideWorkspace, type Workspace } from '../workspace/workspace'
-import { hashOf, readContent } from '../workspace/files'
+import { insideWorkspace, StaleError, type Workspace } from '../workspace/workspace'
+import type { Content } from '../workspace/files'
 import { dateOf, deadlineEnd, epochOf, formatTime, moveTo, place, readTime, seriesFrom, stamp, todayIn, type Zone } from '../../shared/time'
 import { deviceZone } from '../clock'
 import { dueWords, whenText } from './prompt'
@@ -220,15 +220,16 @@ export function createTools(
   }
 
   /**
-   * Each workspace file as the agent last read or wrote it, by hash. A whole-file
-   * write made from an older read would undo whatever changed since, like the
-   * user's edit in the GUI (docs/design/backend.md, "Writing"); edit reads first.
+   * Each workspace file as the agent last read or wrote it. A whole-file write
+   * made from an older read would undo whatever changed since, like the user's
+   * edit in the GUI (docs/design/backend.md, "Writing"), so the write service
+   * checks it against what the file holds when the write's turn comes.
    */
-  const seen = new Map<string, string>()
+  const seen = new Map<string, Content>()
   const sawRead = async (absolute: string) => {
     const content = await readFile(absolute)
     const path = insideWorkspace(root, absolute)
-    if (path) seen.set(path, hashOf(content))
+    if (path) seen.set(path, new Uint8Array(content))
     return content
   }
 
@@ -236,16 +237,14 @@ export function createTools(
     writeFile: async (absolute: string, content: string) => {
       const path = writable(absolute)
       check(path, content)
-      const last = seen.get(path)
-      if (last) {
-        const current = await readContent(absolute)
-        if (current !== null && hashOf(current) !== last) {
-          seen.delete(path)
-          throw new Error(`Not written: ${path} changed since you last read it, by the user or the app. Read it again and make your change on what it holds now.`)
-        }
+      try {
+        await workspace.writeFile(path, content, actor(), seen.get(path))
+      } catch (error) {
+        // What it last saw stays, so the same write sent again is refused again until the file is read.
+        if (!(error instanceof StaleError)) throw error
+        throw new Error(`Not written: ${path} changed since you last read it, by the user or the app. Read it again and make your change on what it holds now.`)
       }
-      await workspace.writeFile(path, content, actor())
-      seen.set(path, hashOf(content))
+      seen.set(path, content)
     },
     mkdir: async () => {
       // The workspace creates directories as it writes.
@@ -371,7 +370,7 @@ export function createTools(
         // A repeating one: its series, which writes each next time once this first one is accepted.
         let repeats = ''
         if (todo.repeat && !draft) {
-          const { start, date, dueAfter } = seriesFrom(time?.text, dues[index] ?? undefined, here())
+          const { start, date, dueAfter, dueZone } = seriesFrom(time?.text, dues[index] ?? undefined, here())
           const series = await workspace.create('repeat', {
             title: todo.title,
             state: 'draft',
@@ -381,6 +380,7 @@ export function createTools(
             ...(todo.goal && { goal: todo.goal }),
             ...(todo.cue && { cue: todo.cue }),
             ...(dueAfter && { due_after: dueAfter }),
+            ...(dueZone && { due_zone: dueZone }),
             last: date.toString(),
             created: stamp(deviceZone()),
           }, '', actor())

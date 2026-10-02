@@ -28,6 +28,9 @@ export function nextDate(rule: string, start: TimeValue, from: Temporal.PlainDat
   return null
 }
 
+/** The rule without its COUNT, for walking it afresh from a day that isn't its start; the count is kept by who walks it. */
+export const withoutCount = (rule: string) => rule.split(';').filter((part) => !part.startsWith('COUNT=')).join(';')
+
 /** How many times the rule has in all, or null when it doesn't say. */
 export const ruleCount = (rule: string) => ICAL.Recur.fromString(rule).count ?? null
 

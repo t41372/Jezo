@@ -33,6 +33,9 @@ export function liveItems(items: SortItem[], notes: Note[], sessionId: string): 
   })
 }
 
+/** Each proposal is put away on its own, so a later one in the same conversation still shows. */
+export const proposalKey = (sessionId: string, index: number) => `${sessionId}#${index}`
+
 /**
  * The agent's proposal for a batch of notes: what each one becomes, or a
  * question when it can't tell. Every row is a draft until the user says yes,
@@ -79,7 +82,7 @@ export function SortCard({ data, sessionId, index, onPage }: { data: unknown; se
             </button>
           )}
           {onPage && !open.length && (
-            <Button size="sm" variant="secondary" className="bg-muted" onClick={() => closeNoteProposal(sessionId)}>
+            <Button size="sm" variant="secondary" className="bg-muted" onClick={() => closeNoteProposal(proposalKey(sessionId, index))}>
               {t('card.close')}
             </Button>
           )}

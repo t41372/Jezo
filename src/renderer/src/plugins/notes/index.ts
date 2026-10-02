@@ -1,5 +1,6 @@
 import type { Plugin } from '@/app/registry'
 import en from './locales/en.json'
+import zhCN from './locales/zh-CN.json'
 import zhTW from './locales/zh-TW.json'
 import { Notes } from './Notes'
 import page from './page.yaml?raw'
@@ -14,6 +15,6 @@ export const notes: Plugin = {
   id: 'notes',
   widgets: { notes: Notes },
   pages: [page],
-  locales: { 'zh-TW': zhTW, en },
+  locales: { 'zh-CN': zhCN, 'zh-TW': zhTW, en },
   messages: { sort: SortCard },
 }
