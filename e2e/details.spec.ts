@@ -64,11 +64,17 @@ test('the drawer edits every field, the notes keep their markdown, and files go 
   // The notes, as the agent wrote them; one word added changes one line of the file.
   const editor = drawer.locator('[data-editor] .ProseMirror')
   await expect(editor.locator('li')).toHaveCount(7)
-  // At the end of the paragraph's last line, however it wraps (End goes to the end of a line on screen).
+  // At the end of the paragraph, however it wraps and wherever the drawer is in sliding in:
+  // the caret is put there the way a click does, through the selection the editor follows.
   const paragraph = editor.locator('p').first()
-  const box = (await paragraph.boundingBox())!
-  await paragraph.click({ position: { x: box.width - 2, y: box.height - 4 } })
-  await page.keyboard.press('End')
+  await paragraph.click()
+  await paragraph.evaluate((p) => {
+    const range = document.createRange()
+    range.selectNodeContents(p)
+    range.collapse(false)
+    document.getSelection()!.removeAllRanges()
+    document.getSelection()!.addRange(range)
+  })
   await page.keyboard.type('今天')
   await drawer.getByRole('textbox', { name: '標題' }).click()
   await expect.poll(() => read('todos/items/t-1.md').body).toBe(NOTES.replace('再開始寫。', '再開始寫。今天'))
