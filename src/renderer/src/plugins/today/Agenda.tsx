@@ -31,7 +31,7 @@ export function Agenda() {
 
   const todos = all.filter((x) => x.slot?.date === date).sort((a, b) => a.slot!.at - b.slot!.at)
   const drafts = todos.filter((x) => x.state === 'draft')
-  const accepted = todos.filter((x) => x.state !== 'draft')
+  const accepted = todos.filter((x) => x.state === 'open' || x.state === 'done')
   const open = accepted.filter((x) => x.state === 'open')
   const done = accepted.filter((x) => x.state === 'done')
   const [current, ...later] = open

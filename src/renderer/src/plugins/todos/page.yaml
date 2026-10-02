@@ -1,0 +1,10 @@
+id: todos
+title: page.title
+icon: list-checks
+# Right after 今天: the whole list, where 今天 is one day of it.
+order: 22
+layout:
+  row:
+    - widget: todos.list
+      props: { group: time }
+    - widget: todos.detail

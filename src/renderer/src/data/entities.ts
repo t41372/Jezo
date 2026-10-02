@@ -38,13 +38,14 @@ export function toTodo(item: Item, zone: Zone): Todo {
   const completed = readTime(d.completed, 'record')
   const startedAt = epochOf(started, zone)
   const completedAt = epochOf(completed, zone)
+  const dropped = readTime(d.dropped, 'record')
   return {
     id: item.id,
     title: str(d.title) ?? '',
     notes: item.body,
     path: item.path,
     goalId: str(d.goal) ?? null,
-    state: d.state === 'draft' || d.state === 'done' ? d.state : 'open',
+    state: d.state === 'draft' || d.state === 'done' || d.state === 'dropped' ? d.state : 'open',
     cue: str(d.cue),
     estimateMinutes: typeof d.estimate === 'number' ? d.estimate : 30,
     slot: toSlot(d.scheduled, zone, d.proposed === true),
@@ -54,8 +55,9 @@ export function toTodo(item: Item, zone: Zone): Todo {
     rank: str(d.rank),
     amount: typeof d.amount === 'number' ? d.amount : undefined,
     completedAt,
+    droppedAt: epochOf(dropped, zone),
     elapsedMinutes: startedAt !== undefined && completedAt !== undefined ? Math.round((completedAt - startedAt) / 60_000) : undefined,
-    times: { scheduled: str(d.scheduled), started: str(d.started), completed: str(d.completed) },
+    times: { scheduled: str(d.scheduled), started: str(d.started), completed: str(d.completed), dropped: str(d.dropped) },
     links: item.links,
   }
 }
@@ -107,6 +109,7 @@ export function todoFields(change: Partial<Omit<Todo, 'slot'>> & { slot?: SlotIn
   if ('rank' in change) f.rank = change.rank ?? null
   if ('amount' in change) f.amount = change.amount ?? null
   if ('completedAt' in change) f.completed = change.completedAt ? recordText(change.completedAt, zone, before?.completedAt, before?.times?.completed) : null
+  if ('droppedAt' in change) f.dropped = change.droppedAt ? recordText(change.droppedAt, zone, before?.droppedAt, before?.times?.dropped) : null
   return f
 }
 
@@ -139,7 +142,8 @@ function recordText(at: number, zone: Zone, previousAt?: number, previous?: stri
 export function toGoal(item: Item, todos: Todo[], today: ISODate): Goal {
   const d = item.data
   const measure = (d.measure ?? {}) as { unit?: string; total?: number; start?: number }
-  const mine = todos.filter((t) => t.goalId === item.id && t.state !== 'draft')
+  // A todo the user dropped is neither progress nor a try of a rule.
+  const mine = todos.filter((t) => t.goalId === item.id && t.state !== 'draft' && t.state !== 'dropped')
   const amount = (t: Todo) => t.amount ?? 1
   const done = mine.filter((t) => t.state === 'done')
   const [monday, sunday] = weekOf(today)

@@ -60,6 +60,8 @@ interface State {
   composer: string
   /** The todo open in the detail panel on 今天. */
   todayDetail: string | null
+  /** The todo open beside the list on 待辦. */
+  listDetail: string | null
   /** The todo or event open in the panel on 行事曆. */
   calendarDetail: string | null
   /** What the calendar shows: a day in the period, and whether that's a day, a week, or a month. */
@@ -74,6 +76,16 @@ interface State {
   pickChoice(sessionId: string, option: string): void
 
   setDone(id: string, done: boolean): void
+  /** 不做了: the user decided not to do it. It stays, under 不做了, and false brings it back. */
+  setDropped(id: string, dropped: boolean): void
+  /** Deletes a todo's file, as a change in 修改紀錄. Resolves to that change, to take it back, or null if it failed. */
+  deleteTodo(id: string): Promise<string | null>
+  /**
+   * Does the same to several todos as one change in 修改紀錄: schedules them
+   * today at the same clock time, puts them in the backlog, marks them done, or
+   * drops them. Resolves to that change, to take it back, or null if it failed.
+   */
+  changeTodos(ids: string[], action: TodosAction): Promise<string | null>
   accept(ids: string[]): void
   unaccept(ids: string[]): void
   /** Drops a draft todo the user doesn't want. */
@@ -96,7 +108,7 @@ interface State {
   /** Fixes a todo's time to another zone, keeping its clock (docs/design/time.md). */
   setTimeMeaning(todoId: string, to: Zone): void
   /** Changes a todo's own fields from its detail: title, cue, how long. Times go through moveTodo. */
-  editTodo(todoId: string, change: Pick<Partial<Todo>, 'title' | 'cue' | 'estimateMinutes'>): void
+  editTodo(todoId: string, change: Pick<Partial<Todo>, 'title' | 'cue' | 'estimateMinutes' | 'goalId'>): void
   /** Saves a todo's notes, its markdown body. */
   setNotes(todoId: string, notes: string): void
   toggleSubtask(todoId: string, index: number): void
@@ -132,6 +144,7 @@ interface State {
   closedProposals: string[]
 
   setTodayDetail(id: string | null): void
+  setListDetail(id: string | null): void
   setCalendarDetail(id: string | null): void
   setCalendarDate(date: ISODate): void
   setCalendarView(view: CalendarViewName): void
@@ -185,6 +198,14 @@ function failed(error: unknown) {
   toast.error(i18n.t('workspace.writeFailed'))
   void loadWorkspace()
 }
+
+/** A change for 修改紀錄 that didn't go through: the files are read again, so the screen shows what they hold. */
+function recordFailed(error: unknown) {
+  failed(error)
+  return null
+}
+
+export type TodosAction = 'today' | 'backlog' | 'done' | 'dropped'
 
 /** The backlog's order is the todos' ranks; todos without one go last, oldest first. */
 const byRank = (a: Todo, b: Todo) =>
@@ -329,6 +350,12 @@ function writeTodo(id: string, change: TodoChange, at?: Zone) {
 
 /** Shows a todo's change and writes its fields. */
 function writeFields(id: string, change: Partial<Omit<Todo, 'slot'>> & { slot?: unknown }, fields: Fields) {
+  showFields(id, change, fields)
+  workspace().update(id, fields).catch(failed)
+}
+
+/** Shows a todo's change until its file comes back. */
+function showFields(id: string, change: Partial<Omit<Todo, 'slot'>> & { slot?: unknown }, fields: Fields) {
   useStore.setState((s) => {
     const { slot: _, ...rest } = change
     const todos = mapTodo(s.todos, id, (t) => ({
@@ -340,12 +367,34 @@ function writeFields(id: string, change: Partial<Omit<Todo, 'slot'>> & { slot?: 
         ...('scheduled' in fields && { scheduled: (fields.scheduled as string | null) ?? undefined }),
         ...('started' in fields && { started: (fields.started as string | null) ?? undefined }),
         ...('completed' in fields && { completed: (fields.completed as string | null) ?? undefined }),
+        ...('dropped' in fields && { dropped: (fields.dropped as string | null) ?? undefined }),
       },
     })).sort(byRank)
     return { todos, goals: deriveGoals(todos, s.now.date) }
   })
-  workspace().update(id, fields).catch(failed)
 }
+
+/** What one action does to one todo, for changeTodos. */
+function actionChange(todo: Todo, action: TodosAction, today: ISODate, rank: () => string): TodoChange | null {
+  switch (action) {
+    case 'today':
+      return todo.slot ? { slot: { date: today, start: todo.slot.start }, ...(todo.state === 'draft' && { state: 'open' }) } : null
+    case 'backlog':
+      // As when one is moved: taking a draft off the calendar is accepting it.
+      return { slot: null, rank: rank(), ...(todo.state === 'draft' && todo.slot && { state: 'open' }) }
+    case 'done':
+      return { state: 'done', completedAt: Date.now(), droppedAt: undefined }
+    case 'dropped':
+      return { state: 'dropped', droppedAt: Date.now(), startedAt: undefined }
+  }
+}
+
+/** Clears the todo out of every detail panel showing it. */
+const closeDetails = (id: string) => (s: State) => ({
+  todayDetail: s.todayDetail === id ? null : s.todayDetail,
+  calendarDetail: s.calendarDetail === id ? null : s.calendarDetail,
+  listDetail: s.listDetail === id ? null : s.listDetail,
+})
 
 function writeNote(id: string, fields: Fields, body?: string) {
   workspace().update(id, fields, body === undefined ? {} : { body }).catch(failed)
@@ -369,11 +418,12 @@ const lastRank = (todos: Todo[]) => todos.reduce<string | null>((max, t) => (t.r
 const allTodoFields = (todo: Todo): Fields => ({
   title: todo.title,
   state: todo.state,
-  ...todoFields({ goalId: todo.goalId, cue: todo.cue, estimateMinutes: todo.estimateMinutes, subtasks: todo.subtasks, why: todo.why, rank: todo.rank }, timeContext(), todo),
+  ...todoFields({ goalId: todo.goalId, cue: todo.cue, estimateMinutes: todo.estimateMinutes, subtasks: todo.subtasks, why: todo.why, rank: todo.rank, amount: todo.amount }, timeContext(), todo),
   scheduled: todo.times?.scheduled ?? null,
   proposed: todo.slot?.proposed ? true : null,
   started: todo.times?.started ?? null,
   completed: todo.times?.completed ?? null,
+  dropped: todo.times?.dropped ?? null,
 })
 
 export const useStore = create<State>()((set, get) => ({
@@ -398,6 +448,7 @@ export const useStore = create<State>()((set, get) => ({
   closedProposals: storedClosed(),
   composer: '',
   todayDetail: null,
+  listDetail: null,
   calendarDetail: null,
   calendarDate: localDate(startZone),
   calendarView: 'week',
@@ -423,7 +474,29 @@ export const useStore = create<State>()((set, get) => ({
 
   // A done todo keeps when it was started, so how long it took can be counted against its estimate.
   setDone: (id, done) => {
-    writeTodo(id, done ? { state: 'done', completedAt: Date.now() } : { state: 'open', startedAt: undefined, completedAt: undefined })
+    writeTodo(id, done ? { state: 'done', completedAt: Date.now(), droppedAt: undefined } : { state: 'open', startedAt: undefined, completedAt: undefined, droppedAt: undefined })
+  },
+  setDropped: (id, dropped) => {
+    writeTodo(id, dropped ? { state: 'dropped', droppedAt: Date.now(), startedAt: undefined } : { state: 'open', droppedAt: undefined })
+  },
+  deleteTodo: async (id) => {
+    const todo = get().todos.find((t) => t.id === id)
+    set((s) => ({ todos: s.todos.filter((t) => t.id !== id), ...closeDetails(id)(s) }))
+    return window.jezo.workspace.recorded(i18n.t('todo.deleted', { title: todo?.title ?? id }), [{ id, remove: true }]).catch(recordFailed)
+  },
+  changeTodos: async (ids, action) => {
+    const { todos, now } = get()
+    let last = lastRank(todos)
+    const rank = () => (last = generateKeyBetween(last, null))
+    const changes = todos.flatMap((todo) => {
+      if (!ids.includes(todo.id)) return []
+      const change = actionChange(todo, action, now.date, rank)
+      if (!change) return []
+      const fields = todoFields(change, timeContext(), todo)
+      showFields(todo.id, change, fields)
+      return [{ id: todo.id, fields }]
+    })
+    return window.jezo.workspace.recorded(i18n.t(`todo.changed.${action}`, { count: changes.length }), changes).catch(recordFailed)
   },
   accept: (ids) => {
     for (const t of get().todos) {
@@ -436,11 +509,7 @@ export const useStore = create<State>()((set, get) => ({
   discard: (id) => {
     const todo = get().todos.find((t) => t.id === id)
     if (todo?.state !== 'draft') return
-    set((s) => ({
-      todos: s.todos.filter((t) => t.id !== id),
-      todayDetail: s.todayDetail === id ? null : s.todayDetail,
-      calendarDetail: s.calendarDetail === id ? null : s.calendarDetail,
-    }))
+    set((s) => ({ todos: s.todos.filter((t) => t.id !== id), ...closeDetails(id)(s) }))
     workspace().remove(id).catch(failed)
   },
   // Moving a todo yourself settles it: the time is yours, and a draft becomes a real todo.
@@ -451,7 +520,8 @@ export const useStore = create<State>()((set, get) => ({
     writeTodo(id, {
       slot,
       ...(minutes !== undefined && { estimateMinutes: minutes }),
-      ...(todo.state === 'draft' && { state: 'open' }),
+      // Moving a draft is accepting it; reordering it within the backlog isn't.
+      ...(todo.state === 'draft' && (slot || todo.slot) && { state: 'open' }),
       ...(rank && { rank }),
     }, at)
     if (!slot) set((s) => ({ calendarDetail: s.calendarDetail === id ? null : s.calendarDetail }))
@@ -489,10 +559,11 @@ export const useStore = create<State>()((set, get) => ({
   setStarted: (todoId, startedAt) => writeTodo(todoId, { startedAt: startedAt ?? undefined }),
   restoreTodo: (todo) => {
     if (get().todos.some((t) => t.id === todo.id)) writeFields(todo.id, todo, allTodoFields(todo))
-    else workspace().create('todo', { id: todo.id, ...allTodoFields(todo) }).catch(failed)
+    else workspace().create('todo', { id: todo.id, ...allTodoFields(todo) }, todo.notes).catch(failed)
   },
 
   setTodayDetail: (todayDetail) => set({ todayDetail }),
+  setListDetail: (listDetail) => set({ listDetail }),
   setCalendarDetail: (calendarDetail) => set({ calendarDetail }),
   setCalendarDate: (calendarDate) => set({ calendarDate }),
   setCalendarView: (calendarView) => set({ calendarView }),

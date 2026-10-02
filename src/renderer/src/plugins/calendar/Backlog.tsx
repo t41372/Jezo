@@ -1,4 +1,4 @@
-import { useDndContext, useDndMonitor, type ClientRect } from '@dnd-kit/core'
+import { useDndContext, useDndMonitor } from '@dnd-kit/core'
 import { cn } from 'cn'
 import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { useDragItem, useDropTarget, type DragItem } from '@/app/Dnd'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { insertionAt, pointerY, type Insertion } from '@/components/todo/reorder'
 import { goalById, useStore } from '@/data/store'
 import type { Todo } from '@/data/types'
 import { goalStyle } from '@/lib/goal-color'
@@ -15,7 +16,7 @@ import { duration } from '@/lib/time'
 /** Todos without a time. Drag one onto the week to schedule it, or drag it back here. */
 export function Backlog() {
   const { t } = useTranslation('calendar')
-  const todos = useStore((s) => s.todos).filter((x) => !x.slot && x.state !== 'done')
+  const todos = useStore((s) => s.todos).filter((x) => !x.slot && (x.state === 'open' || x.state === 'draft'))
   const { proposeSlots, setCalendarDate, setCalendarView, moveTodo, openSession } = useStore.getState()
   // The conversation the agent is finding times in, and whether it still is.
   const finding = useStore((s) => s.sessions.find((x) => x.id === s.findingTimes))
@@ -28,7 +29,7 @@ export function Backlog() {
 
   const { setNodeRef, isOver } = useDropTarget('backlog', {
     onDrop: (item, rect) => {
-      const at = insertionAt(list.current, item.id, pointerY(rect))
+      const at = insertionAt(list.current, ROW, item.id, pointerY(rect), GAP)
       setInsert(null)
       // A card dragged from this list starts from where its chip was; a block from the grid, centered on the pointer.
       setLanding({ id: item.id, x: rect.left, y: rect.top, center: !rect.width, at: performance.now() })
@@ -41,14 +42,14 @@ export function Backlog() {
     onDragMove: ({ active, over }) => {
       const rect = active.rect.current.translated
       const id = (active.data.current as { item: DragItem }).item.id
-      setInsert(over?.id === 'backlog' && rect ? insertionAt(list.current, id, pointerY(rect)) : null)
+      setInsert(over?.id === 'backlog' && rect ? insertionAt(list.current, ROW, id, pointerY(rect), GAP) : null)
     },
     onDragEnd: () => setInsert(null),
     onDragCancel: () => setInsert(null),
   })
   // ...and a block moved on the calendar grid, which has its own drag engine and marks the body while it moves.
   const followGridDrag = (e: React.PointerEvent) => {
-    if (document.body.hasAttribute('data-ec-moving')) setInsert(insertionAt(list.current, null, e.clientY))
+    if (document.body.hasAttribute('data-ec-moving')) setInsert(insertionAt(list.current, ROW, null, e.clientY, GAP))
   }
 
   useEffect(() => {
@@ -199,12 +200,6 @@ function BacklogCard({ todo, flyFrom }: { todo: Todo; flyFrom?: Landing }) {
   )
 }
 
-/** Where in the list a dragged todo would go: in front of a card, or at the end (null); `y` is the gap's middle. */
-interface Insertion {
-  before: string | null
-  y: number
-}
-
 /** A todo just dropped on the list, and the screen point its card starts from: its top-left corner, or with `center` its middle. */
 interface Landing {
   id: string
@@ -216,30 +211,7 @@ interface Landing {
 
 /** The gap between cards (gap-2). */
 const GAP = 8
-
-/** The height the drop is judged at: the drag chip's middle for cards from this list, the pointer for blocks from the grid. */
-const pointerY = (rect: ClientRect) => (rect.height ? rect.top + 14 : rect.top)
-
-/**
- * The slot at a screen height among the cards other than the one moving. Null
- * when dropping there wouldn't change anything: the card is already there.
- */
-function insertionAt(list: HTMLElement | null, moving: string | null, y: number): Insertion | null {
-  if (!list) return null
-  const all = [...list.querySelectorAll<HTMLElement>('[data-backlog-id]')]
-  const others = all.filter((el) => el.dataset.backlogId !== moving)
-  const top = list.getBoundingClientRect().top
-  const next = others.find((el) => {
-    const r = el.getBoundingClientRect()
-    return y < r.top + r.height / 2
-  })
-  const before = next?.dataset.backlogId ?? null
-  const own = all.findIndex((el) => el.dataset.backlogId === moving)
-  if (own >= 0 && (all[own + 1]?.dataset.backlogId ?? null) === before) return null
-  const last = others.at(-1)
-  const at = next ? next.getBoundingClientRect().top - GAP / 2 : last ? last.getBoundingClientRect().bottom + GAP / 2 : top
-  return { before, y: at - top }
-}
+const ROW = 'data-backlog-id'
 
 function NewTodo() {
   const { t } = useTranslation('calendar')

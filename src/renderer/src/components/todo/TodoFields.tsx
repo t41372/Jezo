@@ -5,8 +5,9 @@ import { Button } from '@/components/ui/button'
 import { Calendar } from '@/components/ui/calendar'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { useStore, withMeaning } from '@/data/store'
+import { goalById, useStore, withMeaning } from '@/data/store'
 import { ZonePicker } from '@/components/ZonePicker'
+import { goalStyle } from '@/lib/goal-color'
 import { cityOf } from '@/lib/zones'
 import { epochOf, now, readTime, todayIn } from '../../../../shared/time'
 import { meaningLabel } from './format'
@@ -225,6 +226,45 @@ export function ZoneField({ todo }: { todo: Todo }) {
             onPick={(zone) => zone && zone !== current && setPicked(zone)}
           />
         )}
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+/** The goal it serves, as a chip in the goal's color; choosing another (or none) moves it. */
+export function GoalField({ todo }: { todo: Todo }) {
+  const { t } = useTranslation()
+  const [open, setOpen] = useState(false)
+  const goals = useStore((s) => s.goals)
+  const goal = goalById(goals, todo.goalId)
+  const choose = (goalId: string | null) => {
+    if (goalId !== todo.goalId) useStore.getState().editTodo(todo.id, { goalId })
+    setOpen(false)
+  }
+  const option = (id: string | null, name: string, hue?: number) => (
+    <button
+      key={id ?? 'none'}
+      onClick={() => choose(id)}
+      style={goalStyle(hue)}
+      className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] transition-colors duration-150 hover:bg-muted aria-pressed:font-medium"
+      aria-pressed={id === todo.goalId}
+    >
+      <span className={hue === undefined ? 'size-2 rounded-full border border-foreground/30' : 'size-2 rounded-full bg-goal'} />
+      {name}
+    </button>
+  )
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        className="rounded-md bg-goal-tint px-2.5 py-0.5 text-[11.5px] font-medium text-goal-deep transition-[filter] duration-150 hover:brightness-95"
+        aria-label={`${t('todo.goal')}: ${goal?.name ?? t('todo.noGoal')}`}
+        data-goal-field
+      >
+        {goal?.name ?? t('todo.noGoal')}
+      </PopoverTrigger>
+      <PopoverContent side="bottom" align="start" className="flex w-56 flex-col p-1.5">
+        {goals.filter((g) => g.state === 'active' || g.id === todo.goalId).map((g) => option(g.id, g.name, g.hue))}
+        {option(null, t('todo.noGoal'))}
       </PopoverContent>
     </Popover>
   )

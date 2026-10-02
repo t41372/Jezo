@@ -7,7 +7,7 @@ schema:
   properties:
     id: { type: string, pattern: "^t-" }
     title: { type: string, minLength: 1 }
-    state: { enum: [draft, open, done] }
+    state: { enum: [draft, open, done, dropped] }
     goal: { type: string }
     cue: { type: string }
     estimate: { type: integer, minimum: 1 }
@@ -26,4 +26,5 @@ schema:
     why: { type: string }
     started: { type: string, format: jezo-record }
     completed: { type: string, format: jezo-record }
+    dropped: { type: string, format: jezo-record }
     created: { type: string, format: jezo-record }

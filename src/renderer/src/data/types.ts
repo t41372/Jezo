@@ -46,7 +46,7 @@ export interface Finding {
  * A todo the agent proposed is a draft until the user accepts it. Drafts never
  * count as progress, because a plan is not the same as doing the work.
  */
-export type TodoState = 'draft' | 'open' | 'done'
+export type TodoState = 'draft' | 'open' | 'done' | 'dropped'
 
 export interface Todo {
   id: string
@@ -80,10 +80,12 @@ export interface Todo {
   amount?: number
   /** When it was done, in milliseconds since the epoch. */
   completedAt?: number
+  /** When the user decided not to do it (state `dropped`), in milliseconds since the epoch. */
+  droppedAt?: number
   /** How long it took, from two exact records; not for records written before they carried a zone. */
   elapsedMinutes?: number
   /** The time fields as written, so a change keeps what it doesn't touch (docs/design/time.md). */
-  times?: { scheduled?: string; started?: string; completed?: string }
+  times?: { scheduled?: string; started?: string; completed?: string; dropped?: string }
   /** Items it links to (docs/design/backend.md, "Links"). */
   links?: string[]
 }

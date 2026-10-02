@@ -126,7 +126,7 @@ export function digest(items: Item[], now: Temporal.ZonedDateTime, device: Zone 
     return value !== null && dateOf(value, zone).toString() === today
   })
   todayTodos.sort((a, b) => (epochOf(scheduled(a), zone) ?? 0) - (epochOf(scheduled(b), zone) ?? 0))
-  const backlog = todos.filter((t) => !t.data.scheduled && t.data.state !== 'done')
+  const backlog = todos.filter((t) => !t.data.scheduled && (t.data.state === 'open' || t.data.state === 'draft'))
   const waitingNotes = items.filter((i) => i.kind === 'note' && i.data.state === 'new').length
   const goals = items.filter((i) => i.kind === 'goal' && i.data.state === 'active')
   const goalLine = (g: Item) => {

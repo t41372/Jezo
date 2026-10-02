@@ -136,6 +136,31 @@ Decided on 2026-09-30, after Tim: the drawer's details couldn't be edited, and a
 - **The calendar header names its zone,** with a switch to show another zone. Switching moves fixed times and changes nothing on disk.
 - **An automation's page** shows its state in words: waiting for a model, running, waiting for you, interrupted, the catch-up window, and the history, with Skip, Stop, Continue and Run now as [automations.md](automations.md) describes.
 
+## The todo list
+
+Decided on 2026-10-01 (GitHub #4: the list form traditional todo apps have). Jezo never had one: 今天 shows today, 行事曆 shows times and the todos without one, and a goal's page shows counts. A todo whose day passed without being done showed nowhere but on the calendar's past weeks, and a todo done without a time nowhere at all. Codex reviewed the first draft; what changed because of it is noted below.
+
+- **待辦 is a page of its own,** right after 今天 in the rail, made the way every page is (principle 7): the plugin `todos` registers a `todos.list` widget and a detail widget, and its `page.yaml` places them. The calendar keeps its backlog column, which is where dragging onto the grid starts.
+- **One list, grouped by time,** in this order:
+  - 之前排的，還沒做 (below);
+  - 今天, then 明天;
+  - 沒排時間, the backlog in its own order, where a todo just added lands, so it never sinks below the future;
+  - 之後, by day for the next week, then 更之後, folded;
+  - 做完了 and 不做了, folded, newest first.
+
+  Time is the grouping every methodology shares. Grouping by priority or context is a methodology, which comes as skills and layouts; the widget takes its grouping from the layout, so another can be added without a new page.
+- **Finding things:** a search field matches titles in every group, the closed ones included, and a row of the user's goals narrows the list to one (review: goals are the user's own data, not a methodology). A todo's goal can be changed in its details.
+- **Drafts show in their place, marked as drafts,** and don't count, as everywhere else. Reordering a draft within the backlog doesn't accept it; moving it onto the calendar or off it still does.
+- **What wasn't done in time is folded at the top, without red:** 「之前排的，還沒做 · 3」. Someone back after two weeks sees one quiet line, not a wall of overdue items; nothing is called late, and nothing moves on its own when a day passes, since the time the user gave is a record of the plan.
+  - Each one offers 排到今天 (the same clock time, today), 放回待排, 做完了 and 不做了.
+  - The group offers the same for all of them at once, and 請 Jezo 幫我重排, which opens a conversation that hands them to the agent. The agent proposes times the usual way: a proposed time replaces the old one at once, marked as proposed, and turning it down puts the todo in 沒排時間. For a time already past, that's where it would go anyway.
+  - The first draft left out "move all to today", since that rebuilds the pile tomorrow. The review pointed out that this decides for the user; the group actions are there, and each is one change in 修改紀錄 with a toast that takes it back.
+- **不做了 is a state, `dropped`** (review: deleting would lose the notes and what the user decided). A dropped todo keeps its file and notes, shows under 不做了, comes back with one click, and counts neither as done nor as a try of its goal's rule. The file says when (`dropped`), like `completed`. The agent can drop a todo too, when the user says so.
+- **刪除** in a todo's details removes its file, as a change in 修改紀錄 with a toast that undoes it, the way removing a skill is. Files in its notes stay where they are.
+- **Adding** is one field at the top; what's typed becomes a todo in 沒排時間. **Checking** a todo off works in every group. **Dragging** reorders 沒排時間, as on the calendar; times are set in the details or on the calendar. Rows are buttons, so Tab and Enter reach everything; moving a todo up or down without dragging isn't there yet.
+- **Choosing a todo** opens its details beside the list, as on 今天.
+- No deadline field was added. Grouping by due date needs one, and whether Jezo needs one apart from the scheduled time is Tim's call (handoff.md).
+
 ## Slash commands
 
 Decided on 2026-09-30. Typing "/" at the start of the box, in the chat or the ⌥X window, opens a menu of what can be run from a message, narrowed by any part of a name, title or description. Arrows move, Enter or Tab picks, Escape closes it until the user types on.

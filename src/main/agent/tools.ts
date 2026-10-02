@@ -256,7 +256,7 @@ export function createTools(
       // A kept draft is moved, not placed anew, so it keeps its zone: a New York call given back as 22:00 in Tokyo stays 09:00 New York.
       const times = params.todos.map((todo) => (todo.date || todo.time ? scheduleText(todo, here(), draftFor(todo)?.data.scheduled) : null))
       // Asked to schedule a todo from the backlog, a small model proposed a new one with the same name.
-      const open = workspace.list().filter((i) => i.kind === 'todo' && i.data.state !== 'done' && !drafts.some((d) => d.id === i.id))
+      const open = workspace.list().filter((i) => i.kind === 'todo' && i.data.state !== 'done' && i.data.state !== 'dropped' && !drafts.some((d) => d.id === i.id))
       const existing = params.todos.flatMap((t) => open.filter((i) => same(i.data.title) === same(t.title)))
       // Revising, a model listed a todo from another plan alongside this plan's: that one is left as it is, and the rest goes ahead.
       const skipped = revised ? existing : []
@@ -392,7 +392,7 @@ export function createTools(
     annotations: { readOnlyHint: true },
     label: 'List todos',
     description:
-      'Lists todos in one compact table, instead of reading their files one by one: everything not done, plus what was done in the given days. Read a todo file only when you need its steps or notes.',
+      'Lists todos in one compact table, instead of reading their files one by one: everything not done or dropped, plus what was done in the given days. Read a todo file only when you need its steps or notes.',
     parameters: Type.Object({
       doneSince: Type.Optional(Type.String({ description: 'Also list todos done on or after this date, like 2026-09-22.' })),
     }),
@@ -400,7 +400,7 @@ export function createTools(
       const rows = workspace
         .list()
         .filter((i) => i.kind === 'todo')
-        .filter((i) => i.data.state !== 'done' || (params.doneSince && doneOn(i, here()) >= params.doneSince))
+        .filter((i) => (i.data.state !== 'done' && i.data.state !== 'dropped') || (i.data.state === 'done' && params.doneSince && doneOn(i, here()) >= params.doneSince))
         // By when they happen, not by how their time is spelled; the backlog last.
         .sort((a, b) => (epochOf(readTime(a.data.scheduled), deviceZone()) ?? Infinity) - (epochOf(readTime(b.data.scheduled), deviceZone()) ?? Infinity))
         .map((i) => {

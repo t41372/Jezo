@@ -1,0 +1,28 @@
+{
+  "page": { "title": "Todos" },
+  "heading": "Todos",
+  "open_one": "{{count}} to do",
+  "open_other": "{{count}} to do",
+  "add": "Add a todo and press Enter",
+  "search": "Find a todo",
+  "allGoals": "All",
+  "noGoal": "No goal",
+  "past": {
+    "title": "Planned earlier, not done yet · {{count}}",
+    "ask": "Ask Jezo to replan these",
+    "askMessage": "These were planned earlier and aren't done yet. Help me work out how to replan them; propose first, and change them once I agree:\n{{titles}}",
+    "all": "All of them:"
+  },
+  "today": "Today",
+  "tomorrow": "Tomorrow",
+  "backlog": "No time yet",
+  "backlogEmpty": "Nothing without a time.",
+  "further": "Further out · {{count}}",
+  "closed": "Done and dropped · {{count}}",
+  "droppedTag": "Dropped",
+  "more": "Show {{count}} more",
+  "nothing": "No todos. Add one in the field above.",
+  "noMatch": "No todos match.",
+  "draft": "Draft",
+  "undoAction": "Undo"
+}

@@ -1,0 +1,27 @@
+{
+  "page": { "title": "待辦" },
+  "heading": "待辦",
+  "open_other": "還有 {{count}} 件",
+  "add": "加一件待辦，按 Enter",
+  "search": "找待辦",
+  "allGoals": "全部",
+  "noGoal": "沒有目標",
+  "past": {
+    "title": "之前排的，還沒做 · {{count}}",
+    "ask": "請 Jezo 幫我重排",
+    "askMessage": "這幾件之前排了，還沒做。幫我看看要怎麼重新安排，先提議，我確認了再改：\n{{titles}}",
+    "all": "全部："
+  },
+  "today": "今天",
+  "tomorrow": "明天",
+  "backlog": "沒排時間",
+  "backlogEmpty": "沒有沒排時間的待辦。",
+  "further": "更之後 · {{count}}",
+  "closed": "做完了、不做了 · {{count}}",
+  "droppedTag": "不做了",
+  "more": "再顯示 {{count}} 件",
+  "nothing": "沒有待辦。上面那格可以加一件。",
+  "noMatch": "沒有符合的待辦。",
+  "draft": "草稿",
+  "undoAction": "撤銷"
+}

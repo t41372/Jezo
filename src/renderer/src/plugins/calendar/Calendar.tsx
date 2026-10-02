@@ -154,7 +154,8 @@ function toBlocks(
       data: { kind: 'event' as const },
     })),
     ...todos
-      .filter((todo) => todo.slot)
+      // A todo the user dropped leaves the calendar; 待辦 keeps it under 不做了.
+      .filter((todo) => todo.slot && todo.state !== 'dropped')
       .map((todo) => {
         const draft = isDraft(todo)
         const done = todo.state === 'done'

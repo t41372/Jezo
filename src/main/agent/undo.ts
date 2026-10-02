@@ -190,7 +190,8 @@ export class UndoLog {
   }
 
   /** Skill removal is an explicit GUI action the user can undo in history. */
-  async userChange(summary: string, work: () => Promise<void>) {
+  /** Resolves to the change's id in 修改紀錄, to undo it from a toast. */
+  async userChange(summary: string, work: () => Promise<void>): Promise<string> {
     const id = newId('r')
     const now = new Date()
     const pad = (n: number) => String(n).padStart(2, '0')
@@ -201,6 +202,7 @@ export class UndoLog {
     } finally {
       await this.finish(id, summary)
     }
+    return id
   }
 
   private change(write: Write) {

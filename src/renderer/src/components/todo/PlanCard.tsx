@@ -65,12 +65,13 @@ export function PlanCard({
         {todos.map((todo) => (
           <li key={todo.id} className="flex items-center gap-2.5 text-[13.5px]" style={goalStyle(goals.find((g) => g.id === todo.goalId)?.hue)}>
             <span className="size-2 shrink-0 rounded-[3px] bg-goal" />
-            <span className="flex-1">{todo.title}</span>
+            <span className={todo.state === 'dropped' ? 'flex-1 text-muted-foreground' : 'flex-1'}>{todo.title}</span>
+            {todo.state === 'dropped' && <span className="text-xs text-muted-foreground">{t('todo.drop')}</span>}
             {changes?.added.includes(todo.id) && <span className="text-xs text-muted-foreground">{t('plan.added')}</span>}
             {changes?.changed.includes(todo.id) && <span className="text-xs text-muted-foreground">{t('plan.changed')}</span>}
             <span className="text-xs text-muted-foreground">
               {/* Moved to another day since the plan was made. */}
-              {todo.slot && (todo.slot.date === today ? clock(todo.slot.start) : `${weekday(todo.slot.date)} ${clock(todo.slot.start)}`)}
+              {todo.slot && todo.state !== 'dropped' && (todo.slot.date === today ? clock(todo.slot.start) : `${weekday(todo.slot.date)} ${clock(todo.slot.start)}`)}
             </span>
           </li>
         ))}

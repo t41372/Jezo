@@ -30,3 +30,10 @@ export interface ItemChanges {
 
 /** Changes to one item's fields. A field set to null is removed. */
 export type Fields = Record<string, unknown>
+
+/** One item's part in a change the user can take back from 修改紀錄: new field values, or removing it. */
+export interface RecordedChange {
+  id: string
+  fields?: Fields
+  remove?: boolean
+}

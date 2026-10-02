@@ -22,6 +22,7 @@ const bridge: JezoBridge = {
     create: (kind, data, body = '') => ipcRenderer.invoke('workspace:create', kind, data, body),
     update: (id, fields, options = {}) => ipcRenderer.invoke('workspace:update', id, fields, options),
     remove: (id) => ipcRenderer.invoke('workspace:remove', id),
+    recorded: (summary, changes) => ipcRenderer.invoke('workspace:recorded', summary, changes),
     attach: (id, name, bytes) => ipcRenderer.invoke('workspace:attach', id, name, bytes),
     openFile: (path) => ipcRenderer.invoke('workspace:open-file', path),
     onChange: (listener) => listen<ItemChanges>('workspace:changed', listener),

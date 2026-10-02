@@ -15,14 +15,23 @@ import { offerUndo } from '@/lib/undo'
 import { attachmentsIn, fileUrl, isImage, linkedPath } from '@/lib/files'
 import { whenLabel } from './format'
 import { Related } from './Related'
-import { CueField, EstimateField, SlotField, TitleField, ZoneField } from './TodoFields'
+import { CueField, EstimateField, GoalField, SlotField, TitleField, ZoneField } from './TodoFields'
 
 /** Everything about one todo, and what you can do with it. */
 /** `zone` is the zone the calendar shows, when the details open from it: times are picked in it. */
 export function TodoDetail({ todo, onClose, zone }: { todo: Todo; onClose: () => void; zone?: string }) {
   const { t } = useTranslation()
   const goal = useStore((s) => goalById(s.goals, todo.goalId))
-  const { accept, discard, confirmSlot, moveTodo, setDone, openSession, restoreTodo, toggleSubtask, setNotes } = useStore.getState()
+  const { accept, discard, confirmSlot, moveTodo, setDone, setDropped, deleteTodo, openSession, restoreTodo, toggleSubtask, setNotes } = useStore.getState()
+  const drop = () => {
+    setDropped(todo.id, true)
+    offerUndo(t('todo.dropped', { title: todo.title }), () => restoreTodo(todo))
+  }
+  const remove = async () => {
+    const change = await deleteTodo(todo.id)
+    if (!change) return
+    offerUndo(t('todo.deleted', { title: todo.title }), () => void window.jezo.history.undo(change))
+  }
   const discardDraft = () => {
     discard(todo.id)
     offerUndo(t('undo.discarded', { title: todo.title }), () => restoreTodo(todo))
@@ -37,9 +46,7 @@ export function TodoDetail({ todo, onClose, zone }: { todo: Todo; onClose: () =>
   return (
     <div className="flex h-full flex-col gap-4" style={goalStyle(goal?.hue)}>
       <div className="flex items-center gap-2">
-        <span className="rounded-md bg-goal-tint px-2.5 py-0.5 text-[11.5px] font-medium text-goal-deep">
-          {goal?.name ?? t('todo.noGoal')}
-        </span>
+        <GoalField todo={todo} />
         <span className="flex-1" />
         <CloseButton onClick={onClose} />
       </div>
@@ -106,9 +113,19 @@ export function TodoDetail({ todo, onClose, zone }: { todo: Todo; onClose: () =>
       <div className="flex-1" />
 
       <div className="flex flex-wrap gap-1.5">
-        {!draftTodo && (
+        {!draftTodo && todo.state !== 'dropped' && (
           <Button size="sm" onClick={() => setDone(todo.id, todo.state !== 'done')}>
             {todo.state === 'done' ? t('todo.markUndone') : t('todo.markDone')}
+          </Button>
+        )}
+        {todo.state === 'open' && (
+          <Button size="sm" variant="outline" onClick={drop}>
+            {t('todo.drop')}
+          </Button>
+        )}
+        {todo.state === 'dropped' && (
+          <Button size="sm" onClick={() => setDropped(todo.id, false)}>
+            {t('todo.undrop')}
           </Button>
         )}
         {todo.slot && !todo.fromCalendar && (
@@ -119,6 +136,11 @@ export function TodoDetail({ todo, onClose, zone }: { todo: Todo; onClose: () =>
         <Button size="sm" variant="outline" onClick={() => openSession(null, t('todo.askPrefill', { title: todo.title }))}>
           {t('todo.ask')}
         </Button>
+        {!draftTodo && (
+          <Button size="sm" variant="ghost" className="ml-auto text-muted-foreground hover:text-destructive" onClick={() => void remove()}>
+            {t('todo.delete')}
+          </Button>
+        )}
       </div>
     </div>
   )

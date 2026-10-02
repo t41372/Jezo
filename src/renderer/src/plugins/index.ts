@@ -8,5 +8,6 @@ import { more } from './more'
 import { notes } from './notes'
 import { settings } from './settings'
 import { today } from './today'
+import { todos } from './todos'
 
-for (const plugin of [chat, today, notes, calendar, goals, more, settings]) registerPlugin(plugin)
+for (const plugin of [chat, today, todos, notes, calendar, goals, more, settings]) registerPlugin(plugin)

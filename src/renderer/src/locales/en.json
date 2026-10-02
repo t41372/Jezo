@@ -101,6 +101,24 @@
       "search": "Find a city or zone",
       "device": "This device’s zone ({{city}})",
       "cancel": "Keep it"
+    },
+    "drop": "Drop",
+    "undrop": "Do it after all",
+    "delete": "Delete",
+    "deleted": "Deleted “{{title}}”",
+    "dropped": "Dropped “{{title}}”",
+    "toToday": "Do today",
+    "toBacklog": "Unschedule",
+    "goal": "Goal",
+    "changed": {
+      "today_one": "Moved {{count}} todo to today",
+      "today_other": "Moved {{count}} todos to today",
+      "backlog_one": "Unscheduled {{count}} todo",
+      "backlog_other": "Unscheduled {{count}} todos",
+      "done_one": "Marked {{count}} todo done",
+      "done_other": "Marked {{count}} todos done",
+      "dropped_one": "Dropped {{count}} todo",
+      "dropped_other": "Dropped {{count}} todos"
     }
   },
   "event": {

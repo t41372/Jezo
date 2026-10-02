@@ -6,7 +6,8 @@ import type { UndoLog } from '../agent/undo'
 import { attach, openFile } from './attachments'
 import { skillInstaller } from './skill-install'
 import { installer as resourceInstaller } from '../install/installer'
-import type { Fields } from '../../shared/workspace'
+import { currentActing } from '../agent/acting'
+import type { Fields, RecordedChange } from '../../shared/workspace'
 import { listSkills, setSkillEnabled } from './skills'
 import type { Workspace } from './workspace'
 
@@ -17,6 +18,16 @@ export function serveWorkspace(workspace: Workspace, undo: UndoLog) {
   ipcMain.handle('workspace:create', (_, kind: string, data: Fields, body: string) => workspace.create(kind, data, body, user))
   ipcMain.handle('workspace:update', (_, id: string, fields: Fields, options: { body?: string }) => workspace.update(id, fields, user, options))
   ipcMain.handle('workspace:remove', (_, id: string) => workspace.remove(id, user))
+  // A change of the user's that 修改紀錄 keeps, to take back later: deleting a todo, moving many at once.
+  ipcMain.handle('workspace:recorded', (_, summary: string, changes: RecordedChange[]) =>
+    undo.userChange(summary, async () => {
+      const { actor } = currentActing()
+      for (const change of changes) {
+        if (change.remove) await workspace.remove(change.id, actor)
+        else await workspace.update(change.id, change.fields ?? {}, actor)
+      }
+    }),
+  )
   ipcMain.handle('workspace:attach', (_, id: string, name: string, bytes: Uint8Array) => attach(workspace, id, name, bytes))
   ipcMain.handle('workspace:open-file', (_, path: string) => openFile(workspace, path))
   ipcMain.handle('skills:list', () => listSkills(workspace.root))

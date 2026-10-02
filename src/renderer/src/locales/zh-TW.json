@@ -100,6 +100,20 @@
       "search": "找城市或時區",
       "device": "這台裝置的時區（{{city}}）",
       "cancel": "不改"
+    },
+    "drop": "不做了",
+    "undrop": "還是要做",
+    "delete": "刪除",
+    "deleted": "刪掉了「{{title}}」",
+    "dropped": "「{{title}}」不做了",
+    "toToday": "排到今天",
+    "toBacklog": "放回待排",
+    "goal": "目標",
+    "changed": {
+      "today_other": "把 {{count}} 件排到今天",
+      "backlog_other": "把 {{count}} 件放回待排",
+      "done_other": "把 {{count}} 件標成做完了",
+      "dropped_other": "{{count}} 件不做了"
     }
   },
   "event": {

@@ -2,7 +2,7 @@
 
 import type { CalendarEvent, CalendarSource, CalendarStatus } from './calendar'
 import type { ArgumentSuggestion, HistoryEntry, SessionView, SlashCommand, Trigger, UndoResult } from './session'
-import type { Fields, Item, ItemChanges } from './workspace'
+import type { Fields, Item, ItemChanges, RecordedChange } from './workspace'
 import type { SkillInfo, SkillInstallResult, SkillPreview } from './skills'
 import type { ExtensionNotice, InstallPreview, InstallResult, InstalledResources } from './install'
 import type { ChatBridge } from './chat'
@@ -138,6 +138,11 @@ export interface JezoBridge {
     /** A field set to null is removed. */
     update(id: string, fields: Fields, options?: { body?: string }): Promise<Item>
     remove(id: string): Promise<void>
+    /**
+     * Makes several changes as one change of the user's in 修改紀錄, which can be
+     * taken back there. Resolves to its id, for `history.undo`.
+     */
+    recorded(summary: string, changes: RecordedChange[]): Promise<string>
     /** Stores a file for an item's notes; resolves to the link from the item's file, like `../attachments/t-1/photo.png`. */
     attach(id: string, name: string, bytes: Uint8Array): Promise<string>
     /** Opens a workspace file in the app the system uses for it. */
