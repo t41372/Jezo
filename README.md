@@ -10,7 +10,7 @@ The name comes from 節奏 (jiézòu), Chinese for rhythm.
 
 You set the direction. Jezo's agent plans your days, keeps the list current and follows up. You do the work.
 
-Jezo is built for people with ADHD who have given up on todo app after todo app. Those apps didn't fail on features. They failed because gathering context and keeping the list current took more energy than the tasks did, and after a week away the list was stale. Jezo's agent does that upkeep. Your data stays on your computer, in plain files you can read, back up, move and delete.
+Jezo's agent is [pi](https://github.com/earendil-works/pi), a full open-source coding agent, working in your workspace instead of a code repository. It can do anything pi can, and it grows with the skills, MCP servers and pi extensions you add: connect your email, a browser or any other source, and the more of your life it can see, the less you have to explain ([Built on pi](#built-on-pi)). Your data stays on your computer, in plain files you can read, back up, move and delete.
 
 <p align="center"><img src="docs/screenshots/en/chat.jpg" alt="A conversation: the agent's thinking folded away, and the plan it proposed for the day, waiting to be accepted"></p>
 
@@ -26,7 +26,6 @@ Jezo is built for people with ADHD who have given up on todo app after todo app.
 - **Experiments.** Want to know if doing the hardest thing first helps? Jezo can run an A/B over a few weeks and tell you what your own data says.
 - **Memory.** It remembers what you tell it, and forgets what you delete.
 - **Undo.** Every change the agent makes is listed in **Change history**, and can be taken back.
-- **Your methods, not ours.** Every planning method is a skill you can turn off, edit or replace, and Jezo can install skills, MCP servers and pi packages.
 
 <p align="center">
   <img src="docs/screenshots/en/today.jpg" width="49%" alt="Today, in the dark theme: what's now, what's next, and what's done">
@@ -35,6 +34,27 @@ Jezo is built for people with ADHD who have given up on todo app after todo app.
 <p align="center"><img src="docs/screenshots/en/calendar.jpg" alt="The week on the calendar, in the dark theme, with the backlog beside it"></p>
 
 The app is in English, Simplified Chinese and Traditional Chinese, and follows your system's language.
+
+## Built on pi
+
+Jezo's agent is pi with nothing taken out. It runs in your workspace folder with the tools it has in a code repository: it reads and edits files, runs commands, and checks its own work. Whatever extends pi extends Jezo.
+
+- **Skills.** Every planning method Jezo comes with is a skill you can turn off, edit or replace. Install others, or ask Jezo to write one.
+- **MCP servers.** Connect your email, a browser for Jezo to use (Playwright's MCP server, for one), your notes, or any other service that has an MCP server. Jezo reads from it and acts through it.
+- **pi packages and extensions**, from npm or GitHub.
+
+To add one, paste its GitHub address, `npm:` name, MCP URL or MCP JSON into the chat. What's installed is listed under **More → Installed**, where you can turn it off or remove it. Your Mac's calendars, Google Calendar and ICS feeds are built in.
+
+Text other people wrote, like email, web pages and calendar invites, comes in marked as outside content and is checked on the way in. Jezo treats it as information for you, never as instructions.
+
+## Privacy
+
+Jezo has no telemetry, and we don't collect anything about you. pi's own telemetry is turned off too. Nothing leaves your computer unless you set up something that goes online:
+
+- a model provider in the cloud, such as Anthropic or OpenAI, which gets what the agent sends it. A local model in LM Studio or Ollama stays on your computer.
+- a skill, MCP server or pi extension that reaches the internet, and installing one from GitHub or npm.
+- Google Calendar or an ICS feed, which Jezo downloads your events from.
+- speech recognition, which downloads its packages and model when you install it, and when Jezo updates them. What you say is recognized on your computer.
 
 ## Install
 
