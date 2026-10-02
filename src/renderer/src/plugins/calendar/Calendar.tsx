@@ -5,10 +5,10 @@
 
 import { useDndMonitor } from '@dnd-kit/core'
 import { cn } from 'cn'
-import { enUS, zhTW } from 'date-fns/locale'
 import { Check, ChevronLeft, ChevronRight, Flag, Globe } from 'lucide-react'
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { dateLocale } from '@/i18n'
 import type { CalendarSource } from '../../../../shared/calendar'
 import { dropAtPoint, useDropTarget } from '@/app/Dnd'
 import {
@@ -90,7 +90,7 @@ export function Calendar() {
         timeZone={viewZone}
         date={dayStart(date, viewZone)}
         onDateChange={(d) => setCalendarDate(inZone(+d, viewZone).date)}
-        locale={i18n.language === 'zh-TW' ? zhTW : enUS}
+        locale={dateLocale()}
         weekStartsOn={1}
         dayStartHour={0}
         dayEndHour={24}
@@ -615,7 +615,7 @@ function useGridLabels(): EventCalendarProps<Block>['i18n'] {
         timeGutter: 'HH:mm',
         timeGutterMinute: 'HH:mm',
         eventTime: 'HH:mm',
-        moreDayHeader: i18n.language === 'zh-TW' ? 'M月d日 EEEE' : 'EEEE, MMMM d',
+        moreDayHeader: i18n.language.startsWith('zh') ? 'M月d日 EEEE' : 'EEEE, MMMM d',
       },
     }),
     [t, i18n.language],

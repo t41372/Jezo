@@ -1,0 +1,67 @@
+{
+  "page": {
+    "title": "聊天"
+  },
+  "newChat": "新对话",
+  "empty": "想做什么？",
+  "suggestions": {
+    "planNextWeek": "帮我安排下周",
+    "newGoal": "我想开始一个新目标",
+    "badDay": "今天不太顺"
+  },
+  "placeholder": "跟我说想做什么，或按住 ⌥X 说话",
+  "attach": "加附件",
+  "voice": "语音输入",
+  "steps": {
+    "looked_other": "看了 {{count}} 个文件",
+    "changed_other": "改了 {{count}} 个文件",
+    "lookedAndChanged": "看了 {{looked}} 个文件，改了 {{changed}} 个",
+    "did_other": "做了 {{count}} 件事",
+    "refused": "检查没过",
+    "tool": {
+      "read": "读",
+      "ls": "看目录",
+      "write": "写",
+      "edit": "改",
+      "todos_propose": "提议待办",
+      "todos_update": "改待办",
+      "notes_propose": "提议怎么整理",
+      "ask_user": "问你",
+      "todos_list": "看待办",
+      "item_links": "看链接",
+      "install_from_address": "安装方法"
+    }
+  },
+  "working": "正在想…",
+  "stop": "停下来",
+  "error": {
+    "noModel": "找不到可以用的模型。打开 LM Studio 或 Ollama 并加载一个模型，或到设置换成云端模型。",
+    "failed": "这次没回答成功：{{text}}",
+    "cutOff": "模型想太久，还没写完就停了。按 ↻ 再试一次。"
+  },
+  "send": "发送",
+  "actions": {
+    "copy": "复制消息",
+    "edit": "编辑消息",
+    "retry": "重新回答",
+    "previous": "上一个版本",
+    "next": "下一个版本",
+    "cancel": "取消",
+    "save": "保存并发送",
+    "latest": "跳到最新消息"
+  },
+  "held": {
+    "title_other": "有 {{count}} 段外来的内容读起来像是写给 AI 的指令，Jezo 没让 agent 看。"
+  },
+  "unchanged": {
+    "text": "这轮没有改动",
+    "nudge": "请它动手"
+  },
+  "work": {
+    "thought": "想了一下",
+    "thoughtAnd": "想了一下 · {{steps}}",
+    "thinking": "正在想",
+    "doing": "正在{{step}}",
+    "run": "这轮{{steps}}"
+  }
+}

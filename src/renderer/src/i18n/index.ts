@@ -3,24 +3,23 @@
 // built-in ones do. Strings shared by the shell and shared components live in
 // the "common" namespace.
 
+import { enUS, zhCN as dateZhCN, zhTW as dateZhTW, type Locale } from 'date-fns/locale'
 import i18n from 'i18next'
+import { type Language, LANGUAGES, languageOf } from '../../../shared/language'
 import { initReactI18next } from 'react-i18next'
 import en from '@/locales/en.json'
+import zhCN from '@/locales/zh-CN.json'
 import zhTW from '@/locales/zh-TW.json'
 
-export const LANGUAGES = ['zh-TW', 'en'] as const
-export type Language = (typeof LANGUAGES)[number]
+export { LANGUAGES, type Language }
 export type LanguageSetting = Language | 'system'
 
-/** Each language by its own name, so anyone can find theirs. */
-export const LANGUAGE_NAMES: Record<Language, string> = { 'zh-TW': '繁體中文', en: 'English' }
+export const LANGUAGE_NAMES: Record<Language, string> = { 'zh-CN': '简体中文', 'zh-TW': '繁體中文', en: 'English' }
 
 const LANGUAGE_KEY = 'jezo.language'
 
-/** The OS language, narrowed to one Jezo has. Other languages fall back to English. */
-function systemLanguage(): Language {
-  return navigator.language.toLowerCase().startsWith('zh') ? 'zh-TW' : 'en'
-}
+/** The OS language, narrowed to one Jezo has. */
+const systemLanguage = () => languageOf(navigator.language)
 
 export function storedLanguage(): LanguageSetting {
   try {
@@ -49,12 +48,15 @@ i18n.use(initReactI18next).init({
   fallbackLng: 'en',
   defaultNS: 'common',
   ns: ['common'],
-  resources: { 'zh-TW': { common: zhTW }, en: { common: en } },
+  resources: { 'zh-CN': { common: zhCN }, 'zh-TW': { common: zhTW }, en: { common: en } },
   interpolation: { escapeValue: false }, // React escapes already.
   returnNull: false,
 })
 document.documentElement.lang = i18n.language
 window.jezo.setLanguage(i18n.language)
+
+/** date-fns's words for the app's language, for the date pickers and the calendar. */
+export const dateLocale = (): Locale => ({ 'zh-CN': dateZhCN, 'zh-TW': dateZhTW })[i18n.language] ?? enUS
 
 /** Adds a plugin's strings, one file per language, under the plugin's id. */
 export function addPluginStrings(pluginId: string, locales: Record<string, object>) {

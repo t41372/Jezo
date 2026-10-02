@@ -1,6 +1,6 @@
-import { enUS, zhTW } from 'date-fns/locale'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { dateLocale } from '@/i18n'
 import { Button } from '@/components/ui/button'
 import { Calendar } from '@/components/ui/calendar'
 import { Input } from '@/components/ui/input'
@@ -74,7 +74,7 @@ export function CueField({ todo }: { todo: Todo }) {
  * device's unless it shows another), the same as dragging on the grid.
  */
 export function SlotField({ todo, zone: shown }: { todo: Todo; zone?: string }) {
-  const { t, i18n } = useTranslation()
+  const { t } = useTranslation()
   const { moveTodo } = useStore.getState()
   const device = useStore((s) => s.zone)
   const zone = shown ?? device
@@ -98,7 +98,7 @@ export function SlotField({ todo, zone: shown }: { todo: Todo; zone?: string }) 
           selected={slot ? parseDate(slot.date) : undefined}
           defaultMonth={parseDate(slot?.date ?? today)}
           onSelect={(day) => day && place(toISODate(day), time)}
-          locale={i18n.language.startsWith('zh') ? zhTW : enUS}
+          locale={dateLocale()}
           className="bg-transparent"
         />
         <div className="flex items-center gap-2 border-t px-1 pt-2">
@@ -275,7 +275,7 @@ export function GoalField({ todo }: { todo: Todo }) {
  * the zone that time is in (this device's unless picked), or none.
  */
 export function DueField({ todo }: { todo: Todo }) {
-  const { t, i18n } = useTranslation()
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [picking, setPicking] = useState(false)
   const today = useStore((s) => s.now.date)
@@ -311,7 +311,7 @@ export function DueField({ todo }: { todo: Todo }) {
               selected={own ? parseDate(own.date) : undefined}
               defaultMonth={parseDate(own?.date ?? today)}
               onSelect={(day) => day && set(toISODate(day), own?.start)}
-              locale={i18n.language.startsWith('zh') ? zhTW : enUS}
+              locale={dateLocale()}
               className="bg-transparent"
             />
             <div className="flex items-center gap-2 border-t px-1 pt-2">

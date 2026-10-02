@@ -214,7 +214,7 @@ export function createTools(
     if (added.length) {
       context().refused()
       throw new Error(
-        `Not written, because ${manifest.dir}/manifest.yaml has no such field, so the app would never show it:\n${added.map((u) => `- ${u.field}: the fields there are ${u.known.join(', ')}`).join('\n')}\nUse one of those (${manifest.dir}/AGENTS.md says what each holds), put it in the body, or add the field to the manifest first.`,
+        `Not written, because ${manifest.dir}/manifest.yaml has no such field, so the app would never show it:\n${added.map((u) => `- ${u.field}: the fields there are ${u.known.join(', ')}`).join('\n')}\nRead ${manifest.dir}/AGENTS.md before writing again: it says what each field holds and which are the user's to set. Then use the right one, put it in the body, or add the field to the manifest first.`,
       )
     }
   }

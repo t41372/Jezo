@@ -557,7 +557,9 @@ export class Schedule {
     if (inBackground) return true
     const body = language === 'zh-TW'
       ? (name ? `「${name}」好了，看一下再決定。` : `Jezo 補做了 ${count} 件事，看一下再決定。`)
-      : (name ? `“${name}” is ready for you to look at.` : `Jezo caught up on ${count} things for you to look at.`)
+      : language === 'zh-CN'
+        ? (name ? `「${name}」好了，看一下再决定。` : `Jezo 补做了 ${count} 件事，看一下再决定。`)
+        : (name ? `“${name}” is ready for you to look at.` : `Jezo caught up on ${count} things for you to look at.`)
     const notification = new Notification({ title: 'Jezo', body })
     notification.on('click', () => this.openSession(session))
     notification.show()

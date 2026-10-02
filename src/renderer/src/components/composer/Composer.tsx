@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { traditional } from '@/lib/chinese'
+import { inAppScript } from '@/lib/chinese'
 import { useDictation } from '@/lib/mic'
 import type { SlashCommand } from '../../../../shared/session'
 import { ModelChip } from './ModelChip'
@@ -88,7 +88,7 @@ export function Composer({
   // What was said goes into the box, after what was typed; the user sends it.
   const stopListening = async () => {
     setListening(false)
-    const said = traditional((await window.jezo.speech.end()).trim()) || heard
+    const said = inAppScript((await window.jezo.speech.end()).trim()) || heard
     setHeard('')
     if (said) onChange(value ? `${value.trimEnd()} ${said}` : said)
     input.current?.focus()
@@ -188,7 +188,7 @@ export function Composer({
 function Listening({ session, onHeard, onStop, onUnavailable }: { session?: string | null; onHeard: (text: string) => void; onStop: () => void; onUnavailable: () => void }) {
   const { t } = useTranslation()
   const mic = useDictation(3, session)
-  useEffect(() => window.jezo.speech.onText((text) => onHeard(traditional(text))), [onHeard])
+  useEffect(() => window.jezo.speech.onText((text) => onHeard(inAppScript(text))), [onHeard])
   // Another window took the microphone (⌥X held while dictating here): stop, keeping what was heard.
   useEffect(() => window.jezo.speech.onReplaced(onStop), [onStop])
   useEffect(() => {

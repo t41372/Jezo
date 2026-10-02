@@ -1,0 +1,347 @@
+{
+  "page": {
+    "title": "更多"
+  },
+  "heading": "更多",
+  "intro": "不用管这里也能正常用。想知道 agent 怎么运作、或想调整它，再来看。",
+  "back": "← 更多",
+  "sections": {
+    "memory": {
+      "title": "它记住的事",
+      "description": "你说过的、它猜的，都可以删"
+    },
+    "skills": {
+      "title": "已安装",
+      "description": "方法、pi 包和 MCP 服务器"
+    },
+    "experiments": {
+      "title": "小实验",
+      "description": "试试某个做法对你有没有用"
+    },
+    "history": {
+      "title": "修改记录",
+      "description": "每次 agent 动过什么，都能撤销"
+    },
+    "connections": {
+      "title": "连接",
+      "description": "日历"
+    },
+    "automations": {
+      "title": "自动化",
+      "description": "Jezo 自己定时开的对话，像早上安排"
+    },
+    "problems": {
+      "title": "有问题的文件",
+      "description": "Jezo 读不懂的地方，交给它修"
+    }
+  },
+  "counts": {
+    "skills_other": "{{count}} 个开着",
+    "experiments_other": "{{count}} 个进行中",
+    "automations_other": "{{count}} 个开着"
+  },
+  "memory": {
+    "intro": "你说过的和它猜的分开放。猜错了就删掉，它不会再用。",
+    "stated": "你说过的",
+    "inferred": "它猜的（有证据才会猜）",
+    "statedIn": "{{day}} · {{where}}",
+    "evidence_other": "根据 {{count}} 次记录 · 把握：{{confidence}}",
+    "confidence": {
+      "low": "低",
+      "medium": "中",
+      "high": "高"
+    },
+    "delete": "删掉"
+  },
+  "skills": {
+    "intro": "方法、包和服务器都在这里。想换做法或工具，可以安装，也能禁用或移除。",
+    "tip": "想改细节，直接跟 agent 说，例如「估时间的时候，把通勤也算进去」。",
+    "back": "← 已安装",
+    "proposalBadge": "有修改提案",
+    "reviewed": "你看过",
+    "proposal": "agent 想改这个方法",
+    "basedOn": "根据",
+    "apply": "应用",
+    "reject": "不要",
+    "file": "内容",
+    "add": "添加方法",
+    "addHint": "从 GitHub、方法的压缩包，或这台电脑加入，也可以自己写。",
+    "choices": {
+      "url": "从网址",
+      "local": "从这台电脑",
+      "write": "自己写"
+    },
+    "url": "网址",
+    "name": "名称",
+    "description": "一句话说明",
+    "content": "内容",
+    "find": "找方法",
+    "reading": "读取中⋯",
+    "pick": "选择文件夹或压缩包",
+    "install": "安装",
+    "working": "处理中⋯",
+    "replace": "替换",
+    "replaceQuestion": "替换「{{title}}」？",
+    "modified": "你改过这个方法，更新会覆盖你的修改。",
+    "update": "更新",
+    "updateTitle": "更新「{{title}}」",
+    "remove": "移除",
+    "removeQuestion": "移除「{{title}}」？",
+    "removeHint": "可以在「修改记录」撤销。",
+    "builtin": "Jezo 内置",
+    "written": "你写的",
+    "localSource": "来自这台电脑",
+    "from": "来自 {{source}}",
+    "agentSource": "agent 装的 · {{source}}",
+    "programs": "这个方法附了程序，Jezo 的 agent 会在需要时运行它。",
+    "skipped_other": "跳过 {{count}} 个文件：{{reason}}",
+    "installed_other": "已安装「{{title}}」，共 {{count}} 个文件。方法已打开。",
+    "nextConversation": "下一个对话开始就会用到。",
+    "done": "完成"
+  },
+  "experiments": {
+    "intro": "想知道某个做法对你有没有用？agent 会一周一周轮流排两种做法，照你的记录算数字，最后告诉你结果。",
+    "add": "添加",
+    "addPrefill": "我想试试这个做法有没有用：",
+    "none": "还没有小实验。",
+    "starts": "{{date}} 开始",
+    "waiting": "跑完了，等周回顾算结果",
+    "running": "第 {{week}} / {{weeks}} 周",
+    "thisWeek": "这周：{{label}}，{{condition}}",
+    "measure": "比的是：{{measure}}",
+    "finished_other": "{{count}} 周 · 结束了",
+    "tellJezo": "跟 Jezo 说",
+    "choices": {
+      "adopt": {
+        "label": "采用",
+        "reply": "记下了：采用这个做法。",
+        "prefill": "小实验「{{title}}」我决定采用，帮我把它放进每天的安排。"
+      },
+      "rerun": {
+        "label": "再试一次",
+        "reply": "记下了：再试一次。",
+        "prefill": "小实验「{{title}}」想再试一轮，帮我排。"
+      },
+      "drop": {
+        "label": "不用了",
+        "reply": "记下了：不用这个做法。结果还是留着。"
+      }
+    }
+  },
+  "history": {
+    "intro": "agent 的修改和你移除的方法都在这里，可以撤销。",
+    "source": {
+      "morning": "早上安排",
+      "evening": "晚上 check-in",
+      "weekly": "每周回顾",
+      "hotkey": "⌥X",
+      "user": "对话",
+      "you": "你自己改的",
+      "notes": "整理随手记",
+      "automation": "自动化",
+      "backlog": "帮待办找时间"
+    },
+    "retried_other": "重试了 {{count}} 次才写对格式",
+    "undo": "撤销",
+    "undone": "已撤销",
+    "files_other": "改了 {{count}} 个文件",
+    "kept_other": "撤销了。有 {{count}} 个文件你后来改过，那些没动。",
+    "interrupted": "没跑完",
+    "interruptedSummary": "跑到一半，Jezo 就关掉或崩溃了。下面是它已经改的。",
+    "foundSummary": "agent 跑的指令做到一半，Jezo 就关掉或崩溃了。下面是开回来时跟指令开始前不一样的地方，也可能包含 Jezo 关着时在别处做的修改。",
+    "continue": "接着做",
+    "continuePrefill": "上次做到一半被打断了。看一下现在的文件，接着把它做完；已经做过的不要重做。"
+  },
+  "connections": {
+    "intro": "连上之后，日历上的事会出现在「日历」页，agent 排事情时也看得到。",
+    "connected": "已连接",
+    "connect": "连接",
+    "outside": "外面进来的内容会标上来源，跟你自己说的分开，不会直接变成 agent 的指令。",
+    "cancel": "先不要",
+    "others": "其他服务，像 Gmail 或 Strava，用 MCP 服务器或 pi 包接上：",
+    "toInstalled": "到「已安装」加"
+  },
+  "calendars": {
+    "title": "日历",
+    "mac": "这台 Mac 的日历",
+    "macDetail": "iCloud、Google、Exchange⋯⋯加在这台 Mac 上的账号都会一起出现。",
+    "macDenied": "macOS 没让 Jezo 读日历。到「系统设置 → 隐私与安全性 → 日历」打开 Jezo。",
+    "openSettings": "打开系统设置",
+    "disconnect": "不用了",
+    "synced": "{{ago}}同步",
+    "syncing": "同步中⋯",
+    "failed": "读不到，先显示上次的：{{error}}",
+    "retry": "再试一次",
+    "remove": "移除",
+    "show": "显示「{{name}}」",
+    "subscribe": "订阅日历",
+    "subscribeHint": "粘贴日历的网址，Jezo 会定时去读。",
+    "url": "网址",
+    "name": "名称",
+    "namePlaceholder": "不填就用日历自己的名字",
+    "google": "Google 日历",
+    "subscribeFailed": "这个网址读不到日历：{{error}}",
+    "checking": "读取中⋯",
+    "add": "订阅",
+    "readOnly": "Jezo 只会读，不会改你的日历。",
+    "macLive": "跟这台 Mac 实时同步",
+    "googleAnother": "再加一个 Google 账号",
+    "googleDetail": "直接连你的 Google 账号，不经过这台 Mac 的日历。第一次要花大约 5 分钟，在 Google 那边建一组自己的钥匙。",
+    "googleReady": "用你自己在 Google 建的钥匙连接，数据直接从 Google 到这台电脑。",
+    "googleSetUp": "设置",
+    "googleChangeClient": "换一组钥匙",
+    "googleTitle": "连接 Google 日历",
+    "googleIntro": "Jezo 不经过任何中间的服务，所以要用你自己在 Google 建的一组钥匙（OAuth 客户端）。只要做一次，大约 5 分钟。每一步都点链接，在 Google 那边做：",
+    "googleSteps": {
+      "project": {
+        "link": "创建一个项目",
+        "then": "，名字随意，例如 Jezo。"
+      },
+      "api": {
+        "link": "打开 Google Calendar API",
+        "then": "，按「启用」。"
+      },
+      "consent": {
+        "link": "设置 OAuth 同意屏幕",
+        "then": "：按「开始」，应用程序名称填 Jezo，对象选「外部」，邮箱填你自己的。"
+      },
+      "publish": {
+        "link": "发布应用程序",
+        "then": "：在「目标对象」按「发布应用程序」，改成「正式版」。不改的话，每 7 天就要重新连一次。不需要提交审核。"
+      },
+      "client": {
+        "link": "创建 OAuth 客户端",
+        "then": "：类型选「桌面应用」，创建后把客户端 ID 和密钥贴到下面。"
+      }
+    },
+    "googleClientId": "客户端 ID",
+    "googleClientSecret": "客户端密钥",
+    "googleUnverified": "接着会打开浏览器。Google 会说「这个应用程序未经验证」：这是你自己的应用程序，按「高级」→「前往 Jezo」就好。钥匙和登录都只存在这台 Mac 的钥匙串。",
+    "googleConnect": "连接 Google 账号",
+    "googleReconnect": "重新连接",
+    "googleWaiting": "等浏览器⋯",
+    "googleSignedOut": "要重新连接：{{error}}",
+    "googleDone": "已经连好了，可以关掉这个标签页，回到 Jezo。",
+    "googleFailedPage": "没有连上。回到 Jezo 看看发生了什么。",
+    "unknownZone": "有些活动用的时区「{{zone}}」这份日历没有说明，Jezo 照写的时间显示，不管你在哪里。"
+  },
+  "install": {
+    "add": "安装",
+    "hint": "粘贴网址、指令或 MCP 设置，也可以选文件夹、压缩包，或自己写方法。",
+    "paste": "粘贴",
+    "source": "网址、指令或 JSON",
+    "find": "查看内容",
+    "installed": "已安装「{{name}}」。",
+    "from": "来自 {{source}}",
+    "destination": "安装到 {{path}}",
+    "suggestions": "也可以从这些开始。",
+    "options": {
+      "browser": "浏览器 · Playwright",
+      "files": "工作区文件"
+    },
+    "kinds": {
+      "package": "pi 包",
+      "mcp": "MCP 服务器"
+    },
+    "packages": "pi 包",
+    "servers": "MCP 服务器",
+    "methods": "它用的方法",
+    "enabled": "已启用",
+    "disabled": "禁用",
+    "toggle": "启用「{{name}}」",
+    "byAgent": "agent 装的",
+    "resources_other": "{{count}} 个附带资源",
+    "tools_other": "{{count}} 个工具",
+    "showTools": "查看工具",
+    "states": {
+      "connecting": "连接中",
+      "connected": "已连接",
+      "disconnected": "已断开",
+      "needs-auth": "需要登录",
+      "failed": "连接失败",
+      "closed": "已关闭",
+      "disabled": "禁用"
+    },
+    "signIn": "登录",
+    "signInTitle": "登录「{{name}}」",
+    "signInHint": "在浏览器完成登录后，会自动回到这里。如果没有回来，可以粘贴浏览器最后的网址。",
+    "redirect": "登录后的网址（可选）",
+    "openBrowser": "打开浏览器",
+    "reconnect": "重新连接",
+    "send": "发送",
+    "allow": "同意",
+    "decline": "不同意",
+    "remaining": "{{seconds}} 秒后关闭",
+    "removeHint": "移除后可以重新安装。已打开的对话仍使用原本的资源。",
+    "sessionTools": "这个对话的工具",
+    "configuration": "查看设置",
+    "configure": "设置",
+    "installOption": "安装「{{name}}」"
+  },
+  "automations": {
+    "intro": "Jezo 会在这些时间自己开一个对话。每一个都是一个文件，内容就是它要 agent 做的事，你可以直接改。",
+    "add": "添加",
+    "addPrefill": "帮我添加一个自动化：",
+    "none": "还没有自动化。",
+    "inZone": "{{words}}（{{city}}时间）",
+    "daily": "每天 {{time}}",
+    "weekly": "每{{day}} {{time}}",
+    "range": "{{from}}到{{to}} {{time}}",
+    "and": "、",
+    "never": "还没跑过",
+    "last": "上次：{{when}}",
+    "back": "← 自动化",
+    "time": "时间",
+    "runNow": "现在跑一次",
+    "remove": "删掉",
+    "removed": "删掉了「{{name}}」",
+    "request": "要 agent 做的事",
+    "requestHint": "到时候 agent 收到的就是这段。改完离开输入框就存好，下次跑就用新的。",
+    "window": {
+      "no": "错过了就不补跑",
+      "for": "若 {{time}} 错过，{{minutes}} 分钟内补跑一次",
+      "until": "若 {{time}} 错过，当天 {{until}} 前补跑一次",
+      "untilPick": "这个时间前补跑一次",
+      "untilNextDay": "若 {{time}} 错过，隔天 {{until}} 前补跑一次",
+      "endOfDay": "若 {{time}} 错过，当天结束前补跑一次",
+      "next": "若 {{time}} 错过，下一次之前都会补跑一次",
+      "forAny": "错过排定时间时，{{minutes}} 分钟内补跑一次，下一次到了就不补",
+      "untilAny": "错过排定时间时，当天 {{until}} 前补跑一次",
+      "endOfDayAny": "错过排定时间时，当天结束前补跑一次",
+      "nextAny": "错过排定时间时，下一次之前都会补跑一次"
+    },
+    "history": {
+      "title": "最近的记录",
+      "onTime": "{{slot}} 的那次",
+      "late": "{{slot}} 的那次，晚了补跑",
+      "manual": "{{at}} 手动跑的",
+      "open": "看对话",
+      "expired": "{{slot}} 错过了，过了补跑的时间，没跑",
+      "replaced_other": "{{count}} 次错过了（{{slot}} 起），由后面那次代替",
+      "moved_other": "{{count}} 次在换时区时没算到（{{slot}} 起）",
+      "waiting": "{{slot}} 的那次在等模型，时限内都还能开始",
+      "skipped": "{{slot}} 那次跳过了",
+      "skip": "跳过这次",
+      "damaged": "运行记录有读不懂的地方，看不出哪些时间跑过了，所以先不自己跑，免得重复。修好文件就会恢复。",
+      "fix": "请 Jezo 修",
+      "outcome": {
+        "completed": "跑完了",
+        "waiting": "在等你回答",
+        "failed": "出错了",
+        "unreachable": "连不到模型",
+        "stopped": "被停下了",
+        "interrupted": "没跑完，Jezo 关掉或崩溃了",
+        "running": "正在跑"
+      }
+    }
+  },
+  "problems": {
+    "intro": "这些文件有地方跟它们的格式不合，或 id 被改掉了。它们还是会出现在该出现的地方，但有些字段可能读不到。",
+    "count_other": "{{count}} 个问题",
+    "history": "自动化的运行记录",
+    "line": "第 {{line}} 行：{{message}}",
+    "fix": "请 Jezo 修",
+    "fixPrefill": "帮我修好 {{path}} 的问题。",
+    "none": "没有有问题的文件。"
+  }
+}

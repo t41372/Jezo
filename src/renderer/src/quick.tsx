@@ -26,7 +26,7 @@ import type { QuickCommand } from '../../shared/bridge'
 import type { SessionView } from '../../shared/session'
 import { markPlatform, useDarkClass } from './app/theme'
 import { stamp } from '../../shared/time'
-import { traditional } from './lib/chinese'
+import { inAppScript } from './lib/chinese'
 import { useDictation } from './lib/mic'
 
 const SUGGESTIONS = ['quick.planTomorrow', 'quick.badDay', 'quick.freeEvenings'] as const
@@ -113,10 +113,10 @@ function Quick() {
         if (command.kind === 'voice-end') {
           setMode({ kind: 'type' })
           // The engine finishes the last words after the audio ends, which takes a moment.
-          const partial = traditional(heard.current.trim())
+          const partial = inAppScript(heard.current.trim())
           setAsked(partial || null)
           window.jezo.speech.end().then((final) => {
-            const said = traditional(final.trim()) || partial
+            const said = inAppScript(final.trim()) || partial
             if (said) ask(said)
             else window.jezo.quick.hide()
           })
@@ -313,7 +313,7 @@ function Voice({ context, session }: { context: string | null; session: string |
   const { t } = useTranslation()
   const mic = useDictation(24, session)
   const [heard, setHeard] = useState('')
-  useEffect(() => window.jezo.speech.onText((said) => setHeard(traditional(said))), [])
+  useEffect(() => window.jezo.speech.onText((said) => setHeard(inAppScript(said))), [])
   return (
     <>
       <div className="flex min-h-[54px] items-center gap-3 rounded-[26px] border border-card-border bg-card py-2 pr-2 pl-4">

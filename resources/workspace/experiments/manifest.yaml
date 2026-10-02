@@ -30,4 +30,5 @@ schema:
           value: { type: string }
           basis: { type: string }
     conclusion: { type: string }
+    # The user's, picked on the experiment's page once it's finished. Never write it yourself.
     decision: { enum: [adopt, rerun, drop] }

@@ -1,0 +1,66 @@
+{
+  "page": {
+    "title": "日历"
+  },
+  "backlog": {
+    "title": "Backlog",
+    "subtitle": "还没排时间",
+    "hint": "拖到日历上就排好了；日历上的也可以拖回来。",
+    "add": "＋ 加一件事，Enter",
+    "dropHere": "放在这里 = 先不排时间",
+    "empty": "都排好了。",
+    "findTime": "让 agent 帮我找时间",
+    "card": "{{goal}} · 大约 {{duration}}",
+    "finding": "agent 在找时间…",
+    "whatItSaid": "看 agent 怎么说"
+  },
+  "legend": {
+    "events": "日历上的事",
+    "todos": "待办，颜色是目标",
+    "drafts": "agent 的草稿"
+  },
+  "week": {
+    "this": "这周",
+    "last": "上周",
+    "next": "下周",
+    "later_other": "{{count}} 周后",
+    "earlier_other": "{{count}} 周前"
+  },
+  "nav": {
+    "previous": "往前",
+    "next": "往后",
+    "today": "今天",
+    "view": "显示范围"
+  },
+  "views": {
+    "day": "日",
+    "week": "周",
+    "month": "月"
+  },
+  "synced": "{{source}} · {{ago}}同步",
+  "noTodos": "还没排待办",
+  "askToPlan": "请 agent 帮我排",
+  "planNextWeek": "帮我安排下周",
+  "planWeekOf": "帮我安排 {{date}} 那周",
+  "grid": {
+    "allDay": "全天",
+    "more_other": "还有 {{count}} 件",
+    "noEvents": "没有事",
+    "dropNotAllowed": "不能放这里",
+    "continues": "跨日",
+    "events_other": "{{count}} 件事",
+    "newTodo": "要做什么？Enter 加上"
+  },
+  "syncFailed": "{{source}} 读不到",
+  "sourcesMore": "{{first}} 和另外 {{count}} 个",
+  "mac": "Mac 日历",
+  "manage": "管理日历",
+  "connect": "＋ 连接日历",
+  "zone": {
+    "here": "{{city}}时间",
+    "preview": "预览：{{city}}时间",
+    "device": "这台设备的时区（{{city}}）",
+    "search": "找城市或时区"
+  },
+  "due": "截止 · {{title}}"
+}

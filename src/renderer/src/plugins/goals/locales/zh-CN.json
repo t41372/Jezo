@@ -1,0 +1,48 @@
+{
+  "page": {
+    "title": "目标"
+  },
+  "heading": "目标",
+  "back": "← 目标",
+  "new": "新目标",
+  "newHint": "跟 agent 聊聊就好",
+  "newPrefill": "我想开始一个新目标：",
+  "progress": "{{goal}}的进度",
+  "sections": {
+    "rules": "它怎么帮你排的",
+    "estimates": "时间估得准不准",
+    "report": "周报"
+  },
+  "rulesCount_other": "{{count}} 条规则",
+  "ruleRecord": "{{tries}} 次做到 {{hits}} 次",
+  "basis": {
+    "stated": "你说的",
+    "records_other": "根据 {{count}} 次"
+  },
+  "legendDone": "实心：做了",
+  "legendPlanned": "斜线：这周排了，还没做",
+  "proposal": "提案",
+  "proposalHint": "有提案",
+  "acceptRule": "改成这样",
+  "rejectRule": "不要",
+  "estimated": "你估的",
+  "actual": "实际花的",
+  "minutes": "分钟",
+  "ideas": "还在想的目标",
+  "ideasHint": "从随手记来的。点一个，跟 agent 聊聊怎么变成目标。",
+  "ideaPrefill": "我想把「{{title}}」变成目标",
+  "weekShort": "这周 {{done}} / {{total}} {{unit}}",
+  "weekLong": "这周：做了 {{done}} {{unit}}，还有 {{planned}} {{unit}}排着",
+  "due": {
+    "days_other": "还有 {{count}} 天",
+    "weeks_other": "还有 {{count}} 周",
+    "past": "已经过了"
+  },
+  "estimates": {
+    "few": "记录还太少",
+    "under": "常少估 {{percent}}%",
+    "over": "常高估 {{percent}}%",
+    "close": "估得差不多",
+    "none": "做完几件有按「开始」的待办之后，这里会比较你估的和实际花的时间。"
+  }
+}

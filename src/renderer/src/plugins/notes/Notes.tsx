@@ -96,12 +96,12 @@ function pendingProposal(sessions: Session[], notes: Note[], closed: string[]) {
   // Wherever it was asked for, 交給 agent 整理 or a chat, and every one in a conversation that proposed more than once.
   const proposals = sessions.flatMap((session) =>
     session.messages.flatMap((message, index) =>
-      message.kind === 'plugin' && message.plugin === 'notes' && message.type === 'sort' ? [{ sessionId: session.id, index, data: message.data }] : [],
+      message.kind === 'plugin' && message.plugin === 'notes' && message.type === 'sort' ? [{ sessionId: session.id, index, data: message.data, key: proposalKey(session.id, message, index) }] : [],
     ),
   )
   const undecided = (p: (typeof proposals)[number]) => liveItems((p.data as { items: SortItem[] }).items, notes, p.sessionId).some((i) => !i.decision)
   // One still waiting on the user comes first, so one decided and not yet put away doesn't hide a new one.
-  return proposals.find(undecided) ?? proposals.find((p) => !closed.includes(proposalKey(p.sessionId, p.index))) ?? null
+  return proposals.find(undecided) ?? proposals.find((p) => !closed.includes(p.key)) ?? null
 }
 
 /** The box to jot into. Enter adds the note, Shift+Enter starts a new line. */

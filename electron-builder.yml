@@ -38,3 +38,5 @@ extraResources:
     to: workspace
   - from: resources/workspace.en
     to: workspace.en
+  - from: resources/workspace.zh-CN
+    to: workspace.zh-CN

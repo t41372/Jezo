@@ -1,6 +1,6 @@
 // Types the translation keys, so a mistyped key fails the typecheck.
-// The Traditional Chinese files are the reference; en.json must have the same keys
-// (bun run check:i18n).
+// The Traditional Chinese files are the reference; en.json and zh-CN.json must have
+// the same keys (bun run check:i18n).
 
 import type common from '@/locales/zh-TW.json'
 import type calendar from '@/plugins/calendar/locales/zh-TW.json'

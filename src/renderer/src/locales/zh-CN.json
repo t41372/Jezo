@@ -1,0 +1,272 @@
+{
+  "rail": {
+    "switchToLight": "浅色",
+    "switchToDark": "深色"
+  },
+  "layout": {
+    "missingWidget": "找不到组件「{{id}}」。可能是它的插件被关掉或移除了。",
+    "missingMessage": "这条消息来自「{{id}}」，但它的插件被关掉或移除了。"
+  },
+  "time": {
+    "minutes_other": "{{count}} 分",
+    "hours": "{{hours}} 小时",
+    "hoursMinutes": "{{hours}} 小时 {{minutes}} 分",
+    "today": "今天",
+    "yesterday": "昨天",
+    "tomorrow": "明天",
+    "dayTime": "{{day}} {{time}}",
+    "gap": "那天没有 {{asked}}（时钟往前拨），改成 {{placed}}。",
+    "moved": "现在用{{city}}时间了。固定在其他地方的时间已经换成这里的钟点。"
+  },
+  "timeField": {
+    "hours": "小时",
+    "minutes": "分钟"
+  },
+  "trigger": {
+    "morning": {
+      "title": "早上安排",
+      "short": "自动",
+      "started": "每天早上自动开始"
+    },
+    "evening": {
+      "title": "晚上 check-in",
+      "short": "自动",
+      "started": "每天晚上自动开始"
+    },
+    "weekly": {
+      "title": "这周回顾",
+      "short": "自动",
+      "started": "每周自动开始"
+    },
+    "hotkey": {
+      "title": "⌥X",
+      "short": "⌥X",
+      "started": ""
+    },
+    "user": {
+      "title": "新对话",
+      "short": "你开的",
+      "started": ""
+    },
+    "notes": {
+      "title": "整理随手记",
+      "short": "随手记",
+      "started": "从随手记交给 agent"
+    },
+    "automation": {
+      "title": "自动化",
+      "short": "自动",
+      "started": "自动开始"
+    },
+    "backlog": {
+      "title": "帮待办找时间",
+      "short": "找时间",
+      "started": "从 Backlog 交给 agent"
+    }
+  },
+  "todo": {
+    "noGoal": "没有目标",
+    "after": "{{cue}}之后",
+    "fromCalendar": "{{time}}（日历）",
+    "unscheduled": "还没排时间",
+    "draft": "草稿 · {{title}}",
+    "when": "什么时候",
+    "slot": "排在",
+    "estimate": "大约",
+    "estimateInline": "大约 {{duration}}",
+    "accept": "好",
+    "draftChip": "草稿",
+    "proposedChip": "提议的时间",
+    "acceptTime": "就这个时间",
+    "reject": "不要",
+    "why": "为什么这样排？",
+    "markDone": "做完了",
+    "markUndone": "标成没做",
+    "unschedule": "先不排时间",
+    "ask": "问 agent 这件事",
+    "askPrefill": "关于「{{title}}」，",
+    "close": "关闭",
+    "subtasks": "步骤",
+    "title": "标题",
+    "cuePlaceholder": "什么情境下做，例如：午餐回座位",
+    "at": "时间",
+    "minutes": "分钟",
+    "meaning": {
+      "here": "{{city}}时间",
+      "there": "{{city}}时间 {{time}}",
+      "moment": "固定的时刻，不跟任何时区",
+      "zone": "时区",
+      "will": "会变成{{city}}时间 {{own}}，在这里是 {{here}}",
+      "reading": "以{{city}}时间填写",
+      "keep": "确定",
+      "search": "找城市或时区",
+      "device": "这台设备的时区（{{city}}）",
+      "cancel": "不改"
+    },
+    "drop": "不做了",
+    "undrop": "还是要做",
+    "delete": "删除",
+    "deleted": "删掉了「{{title}}」",
+    "dropped": "「{{title}}」不做了",
+    "toToday": "排到今天",
+    "toBacklog": "放回待排",
+    "goal": "目标",
+    "changed": {
+      "today_other": "把 {{count}} 件排到今天",
+      "backlog_other": "把 {{count}} 件放回待排",
+      "done_other": "把 {{count}} 件标成做完了",
+      "dropped_other": "{{count}} 件不做了"
+    },
+    "due": "截止",
+    "noDue": "不设截止日",
+    "dueGap": "那个时刻当天不存在（时钟跳过了），换一个时间。",
+    "dueOn": "{{day}}截止",
+    "dueAt": "{{day}} {{time}} 截止",
+    "duePassed": "截止日已过 · {{day}}",
+    "pastDue": "排的时间在截止之后",
+    "dueTime": "时间（可不填）",
+    "repeat": {
+      "title": "重复",
+      "none": "不重复",
+      "daily": "每天",
+      "everyDays_other": "每 {{count}} 天",
+      "weekly": "每{{days}}",
+      "everyWeeks_other": "每 {{count}} 周的{{days}}",
+      "monthly": "每月 {{day}} 号",
+      "yearly": "每年",
+      "afterDone_other": "做完后 {{count}} 天",
+      "rule": "重复：{{rule}}",
+      "stop": "不再重复",
+      "days": "天"
+    }
+  },
+  "event": {
+    "readOnly": "来自 {{source}}，时间要在那边改。",
+    "whatNext": "结束之后想接着做点什么？",
+    "whatNextPrefill": "开完「{{title}}」之后，我想",
+    "allDay": "{{days}} · 全天",
+    "notes": "说明"
+  },
+  "plan": {
+    "pending_other": "{{count}} 件 · 草稿，你说好才算",
+    "accepted": "已放进今天",
+    "notStarted": "已放进今天 · 还没开始做",
+    "someDone_other": "已放进今天 · 做了 {{count}} 件",
+    "accept": "好，就这样",
+    "tweak": "改一下",
+    "tweakPrefill": "我想改：",
+    "goToday": "去今天 →",
+    "undo": "撤销",
+    "revised": "已更新，见下方",
+    "added": "新的",
+    "changed": "改过",
+    "removed": "拿掉了：{{titles}}"
+  },
+  "quick": {
+    "placeholder": "跟 Jezo 说…",
+    "noteFailed": "没记到随手记，字还在框里。",
+    "noted": "记到随手记了",
+    "planTomorrow": "帮我安排明天",
+    "badDay": "今天不太顺",
+    "freeEvenings": "这周哪天晚上有空？",
+    "continue": "在主窗口继续",
+    "close": "关闭",
+    "release": "松开发送",
+    "context": "正在看：{{page}}",
+    "contextNote": "会一起带进对话",
+    "micDenied": "没办法用麦克风。到「系统设置 → 隐私与安全性 → 麦克风」打开 Jezo。",
+    "thinking": "想一下…",
+    "noModel": "找不到可以用的模型。打开 LM Studio 或 Ollama，或到设置换成云端模型。",
+    "speechMissing": "语音识别还没装好。到设置按「安装」，之后就能用语音输入。",
+    "listening": "在听…",
+    "followUp": "接着说…",
+    "hintAsk": "问 Jezo",
+    "hintNote": "记到随手记"
+  },
+  "undo": {
+    "action": "撤销",
+    "discarded": "已拿掉「{{title}}」",
+    "unscheduled": "「{{title}}」放回 Backlog 了",
+    "memoryDeleted": "已删掉这条记忆"
+  },
+  "focus": {
+    "running": "进行中 · {{elapsed}}",
+    "pause": "停下来",
+    "done": "做完了"
+  },
+  "workspace": {
+    "writeFailed": "没存到，已经重新读一次文件。"
+  },
+  "thinking": {
+    "label": "思考强度",
+    "off": "不思考",
+    "minimal": "最少",
+    "low": "低",
+    "medium": "中",
+    "high": "高",
+    "xhigh": "极高",
+    "max": "最大",
+    "back": "回到思考强度",
+    "searchModels": "搜索模型",
+    "noModels": "没有符合的模型",
+    "slowest": "想得最久，回得最慢"
+  },
+  "composer": {
+    "attach": "加附件",
+    "voice": "语音输入",
+    "listening": "在听…",
+    "stopListening": "说完了",
+    "send": "发送",
+    "stop": "停下来",
+    "micDenied": "没办法用麦克风。到系统设置的「隐私与安全性」允许 Jezo 使用麦克风。",
+    "speechMissing": "语音识别还没装好。到设置按「安装」，之后就能用语音输入。",
+    "queue": "排在后面",
+    "steer": "先照这个做",
+    "queued": "接着问",
+    "steering": "先照这个做",
+    "takeBack": "撤回待发消息",
+    "commands": {
+      "label": "指令",
+      "new": "开新对话",
+      "model": "换模型",
+      "source": {
+        "skill": "方法",
+        "prompt": "模板",
+        "extension": "扩展",
+        "app": "Jezo"
+      }
+    }
+  },
+  "related": {
+    "title": "相关",
+    "linksTo": "它连到的",
+    "linkedFrom": "连到它的"
+  },
+  "editor": {
+    "upload": "上传",
+    "imageLink": "或粘贴图片网址",
+    "caption": "写说明…",
+    "confirm": "好",
+    "linkPlaceholder": "粘贴链接",
+    "notesPlaceholder": "写点笔记，打 / 插入标题、列表、图片…",
+    "menu": {
+      "text": "文字",
+      "paragraph": "正文",
+      "h1": "大标题",
+      "h2": "中标题",
+      "h3": "小标题",
+      "quote": "引言",
+      "divider": "分隔线",
+      "lists": "列表",
+      "bullets": "无序列表",
+      "numbers": "有序列表",
+      "tasks": "待办列表",
+      "more": "其他",
+      "image": "图片",
+      "code": "代码",
+      "table": "表格"
+    },
+    "attach": "加附件",
+    "files": "附件"
+  }
+}

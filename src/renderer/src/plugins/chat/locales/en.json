@@ -17,7 +17,7 @@
     "looked_other": "Looked at {{count}} files",
     "changed_one": "Changed {{count}} file",
     "changed_other": "Changed {{count}} files",
-    "lookedAndChanged": "Looked at {{looked}} files, changed {{changed}}",
+    "lookedAndChanged": "Files: {{looked}} read, {{changed}} changed",
     "did_one": "Did {{count}} thing",
     "did_other": "Did {{count}} things",
     "refused": "a check refused it",

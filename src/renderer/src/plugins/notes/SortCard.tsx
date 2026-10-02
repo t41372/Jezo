@@ -33,8 +33,12 @@ export function liveItems(items: SortItem[], notes: Note[], sessionId: string): 
   })
 }
 
-/** Each proposal is put away on its own, so a later one in the same conversation still shows. */
-export const proposalKey = (sessionId: string, index: number) => `${sessionId}#${index}`
+/**
+ * Each proposal is put away on its own, so a later one in the same conversation
+ * still shows. It's known by its entry's id in the conversation, which a restart
+ * keeps; its place in the list can shift when notices come and go.
+ */
+export const proposalKey = (sessionId: string, message: { id?: string } | undefined, index: number) => `${sessionId}#${message?.id ?? index}`
 
 /**
  * The agent's proposal for a batch of notes: what each one becomes, or a
@@ -82,7 +86,7 @@ export function SortCard({ data, sessionId, index, onPage }: { data: unknown; se
             </button>
           )}
           {onPage && !open.length && (
-            <Button size="sm" variant="secondary" className="bg-muted" onClick={() => closeNoteProposal(proposalKey(sessionId, index))}>
+            <Button size="sm" variant="secondary" className="bg-muted" onClick={() => closeNoteProposal(proposalKey(sessionId, useStore.getState().sessions.find((x) => x.id === sessionId)?.messages[index], index))}>
               {t('card.close')}
             </Button>
           )}

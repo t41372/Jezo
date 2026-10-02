@@ -1,0 +1,17 @@
+{
+  "page": {
+    "title": "今天"
+  },
+  "heading": "今天",
+  "done": "做了",
+  "drafts": "agent 排的草稿",
+  "now": "现在",
+  "later": "等一下",
+  "doneList_other": "做完了 {{count}}",
+  "start": "开始",
+  "details": "详情",
+  "badDay": "今天不太顺？跟我说，我帮你重排 →",
+  "badDayMessage": "今天不太顺",
+  "seeWeek": "在日历上看这周 →",
+  "due": "要截止的"
+}

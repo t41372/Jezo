@@ -9,6 +9,7 @@ import { serveAgent } from './agent/ipc'
 import { createMemory, serveMemory } from './agent/memory'
 import { Providers } from './agent/providers'
 import { appLanguage, Schedule, setLanguage } from './agent/schedule'
+import { languageOf } from '../shared/language'
 import { modelJudge, OutsideContent } from './agent/outside'
 import { snapshot } from './agent/shell'
 import { historyFile, UndoLog } from './agent/undo'
@@ -157,8 +158,7 @@ const speech = new Speech()
 /** Opens the workspace, creating it on first run. The seeded skills follow the OS language. */
 async function openWorkspace() {
   const { workspace: root } = getConfig()
-  const language = app.getLocale().startsWith('zh') ? 'zh-TW' : 'en'
-  await seedWorkspace(root, language)
+  await seedWorkspace(root, languageOf(app.getLocale()))
   workspace = new Workspace(root)
   await workspace.open()
   await installer(workspace).open()

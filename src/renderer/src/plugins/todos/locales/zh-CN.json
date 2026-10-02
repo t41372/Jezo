@@ -1,0 +1,35 @@
+{
+  "page": {
+    "title": "待办"
+  },
+  "heading": "待办",
+  "open_other": "还有 {{count}} 件",
+  "add": "加一件待办，按 Enter",
+  "search": "找待办",
+  "allGoals": "全部",
+  "noGoal": "没有目标",
+  "past": {
+    "title": "之前排的，还没做 · {{count}}",
+    "ask": "请 Jezo 帮我重排",
+    "askMessage": "这几件之前排了，还没做。帮我看看要怎么重新安排，先提议，我确认了再改：\n{{titles}}",
+    "all": "全部："
+  },
+  "today": "今天",
+  "tomorrow": "明天",
+  "backlog": "没排时间",
+  "backlogEmpty": "没有没排时间的待办。",
+  "further": "更之后 · {{count}}",
+  "closed": "做完了、不做了 · {{count}}",
+  "droppedTag": "不做了",
+  "more": "再显示 {{count}} 件",
+  "nothing": "没有待办。上面那格可以加一件。",
+  "noMatch": "没有符合的待办。",
+  "undoAction": "撤销",
+  "grouping": "分组",
+  "byTime": "按安排",
+  "byDue": "按截止日",
+  "due": {
+    "passed_other": "截止日已过 · {{count}}",
+    "none_other": "没有截止日 · {{count}}"
+  }
+}
