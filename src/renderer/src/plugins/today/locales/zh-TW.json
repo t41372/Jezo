@@ -1,5 +1,7 @@
 {
-  "page": { "title": "今天" },
+  "page": {
+    "title": "今天"
+  },
   "heading": "今天",
   "done": "做了",
   "drafts": "agent 排的草稿",
@@ -10,5 +12,6 @@
   "details": "細節",
   "badDay": "今天不太順？跟我說，我幫你重排 →",
   "badDayMessage": "今天不太順",
-  "seeWeek": "在行事曆上看這週 →"
+  "seeWeek": "在行事曆上看這週 →",
+  "due": "要截止的"
 }

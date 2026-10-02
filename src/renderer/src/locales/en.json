@@ -119,7 +119,15 @@
       "done_other": "Marked {{count}} todos done",
       "dropped_one": "Dropped {{count}} todo",
       "dropped_other": "Dropped {{count}} todos"
-    }
+    },
+    "due": "Due",
+    "noDue": "No deadline",
+    "dueGap": "That time doesn’t exist that day (the clocks skip it). Pick another.",
+    "dueOn": "Due {{day}}",
+    "dueAt": "Due {{day}} {{time}}",
+    "duePassed": "Deadline passed · {{day}}",
+    "pastDue": "Planned to end after the deadline",
+    "dueTime": "Time (optional)"
   },
   "event": {
     "readOnly": "From {{source}}. Change the time there.",

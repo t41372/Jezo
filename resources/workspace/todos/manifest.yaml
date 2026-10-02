@@ -13,6 +13,7 @@ schema:
     estimate: { type: integer, minimum: 1 }
     amount: { type: number, minimum: 0 }
     scheduled: { type: string, format: jezo-time }
+    due: { type: string, format: jezo-deadline }
     proposed: { type: boolean }
     rank: { type: string }
     steps:

@@ -12,7 +12,8 @@ export type Check = (data: unknown) => string[]
 const ajv = new Ajv({ allErrors: true, strict: false })
 
 // Time fields name their role as a format (docs/design/time.md): `jezo-time`
-// for a plan, like a todo's `scheduled`; `jezo-record` for what happened.
+// for a plan, like a todo's `scheduled`; `jezo-record` for what happened;
+// `jezo-deadline` for a todo's `due`, a day or a time.
 const valid = (role: Role) => (text: string) => {
   try {
     parseTime(text, role)
@@ -23,6 +24,7 @@ const valid = (role: Role) => (text: string) => {
 }
 ajv.addFormat('jezo-time', { type: 'string', validate: valid('plan') })
 ajv.addFormat('jezo-record', { type: 'string', validate: valid('record') })
+ajv.addFormat('jezo-deadline', { type: 'string', validate: valid('deadline') })
 
 // An automation's schedule, catch-up window and zone (docs/design/automations.md).
 const problemOf = (check: (text: string) => void) => (text: string) => {
@@ -66,9 +68,10 @@ export function compileSchema(schema: object): Check {
         const value = e.instancePath.slice(1).split('/').reduce<unknown>((at, key) => (at as Record<string, unknown>)?.[key], data)
         return `${field}: ${formats[format](String(value))}`
       }
-      if (e.keyword === 'format' && (format === 'jezo-time' || format === 'jezo-record')) {
+      const roles: Record<string, Role> = { 'jezo-time': 'plan', 'jezo-record': 'record', 'jezo-deadline': 'deadline' }
+      if (e.keyword === 'format' && format && roles[format]) {
         const value = e.instancePath.slice(1).split('/').reduce<unknown>((at, key) => (at as Record<string, unknown>)?.[key], data)
-        return `${field}: ${timeProblem(value, format === 'jezo-time' ? 'plan' : 'record')}`
+        return `${field}: ${timeProblem(value, roles[format])}`
       }
       if (e.keyword === 'required') return `${field === 'the item' ? '' : `${field}: `}missing the field "${(e.params as { missingProperty: string }).missingProperty}"`
       if (e.keyword === 'enum') return `${field} must be one of ${(e.params as { allowedValues: unknown[] }).allowedValues.join(', ')}`

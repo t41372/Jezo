@@ -1,5 +1,7 @@
 {
-  "page": { "title": "Today" },
+  "page": {
+    "title": "Today"
+  },
   "heading": "Today",
   "done": "done",
   "drafts": "The agent's draft",
@@ -11,5 +13,6 @@
   "details": "Details",
   "badDay": "Today not going well? Tell me and I'll rework it →",
   "badDayMessage": "Today isn't going well",
-  "seeWeek": "See this week on the calendar →"
+  "seeWeek": "See this week on the calendar →",
+  "due": "Due"
 }

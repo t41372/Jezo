@@ -114,7 +114,15 @@
       "backlog_other": "把 {{count}} 件放回待排",
       "done_other": "把 {{count}} 件標成做完了",
       "dropped_other": "{{count}} 件不做了"
-    }
+    },
+    "due": "截止",
+    "noDue": "不設截止日",
+    "dueGap": "那個時刻當天不存在（時鐘跳過了），換一個時間。",
+    "dueOn": "{{day}}截止",
+    "dueAt": "{{day}} {{time}} 截止",
+    "duePassed": "截止日已過 · {{day}}",
+    "pastDue": "排的時間在截止之後",
+    "dueTime": "時間（可不填）"
   },
   "event": {
     "readOnly": "來自 {{source}}，時間要在那邊改。",

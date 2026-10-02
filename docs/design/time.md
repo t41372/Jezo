@@ -19,8 +19,10 @@ A time field in a workspace file holds one string, quoted in YAML, and always sa
 |---|---|---|
 | A todo's `scheduled` | A time in a zone | `'2026-10-05T09:00[America/New_York]'` |
 | Records: `created`, `started`, `completed`, a memory's `recorded` | A moment with its offset, stamped by Jezo | `'2026-10-05T16:00:00+09:00'` |
+| A todo's `due` | A day, or a time in a zone | `'2026-10-09'`, `'2026-10-09T17:00[America/New_York]'` |
 
 - **A time in a zone** is the clock and the zone, under the zone's rules. If the rules change before then, the moment moves and the clock stays, which is what the person agreed to. A `scheduled` may also be a moment ("in two hours").
+- **A day is not a time.** A deadline like "by Friday" is a date, which belongs to its date wherever the user is (as an all-day event does, and as RFC 5545, Google Tasks and Todoist treat a due date), so `due` may be a bare day; it ends when that day ends where the user is. A deadline tied to a place is a time in that zone (frontend.md, "Deadlines").
 - **A time without a zone is an error,** whoever wrote it. The check says what to write: "it has no zone. Write a time with its zone, like '2026-10-05T09:00[Asia/Taipei]': the zone the time note names, or the one the user named." Nothing is ever read in "whatever zone the device happens to be in".
 - **Calendar events** come in whatever their source gives. That can also be a day (all-day events), or a floating clock with no zone (an ICS or EventKit event made that way). Those belong to the calendar; Jezo never writes one.
 

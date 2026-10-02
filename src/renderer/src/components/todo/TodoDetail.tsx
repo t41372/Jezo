@@ -13,9 +13,9 @@ import { easeDrawer, easeOut } from '@/lib/motion'
 import { addDays, clock, longDate, monthDay, weekday } from '@/lib/time'
 import { offerUndo } from '@/lib/undo'
 import { attachmentsIn, fileUrl, isImage, linkedPath } from '@/lib/files'
-import { whenLabel } from './format'
+import { endsPastDue, whenLabel } from './format'
 import { Related } from './Related'
-import { CueField, EstimateField, GoalField, SlotField, TitleField, ZoneField } from './TodoFields'
+import { CueField, DueField, EstimateField, GoalField, SlotField, TitleField, ZoneField } from './TodoFields'
 
 /** Everything about one todo, and what you can do with it. */
 /** `zone` is the zone the calendar shows, when the details open from it: times are picked in it. */
@@ -58,11 +58,20 @@ export function TodoDetail({ todo, onClose, zone }: { todo: Todo; onClose: () =>
         <dt className="text-muted-foreground">{t('todo.when')}</dt>
         <dd>{todo.fromCalendar ? whenLabel(todo) : <CueField todo={todo} />}</dd>
         <dt className="text-muted-foreground">{t('todo.slot')}</dt>
-        <dd><SlotField todo={todo} zone={zone} /></dd>
+        <dd>
+          <SlotField todo={todo} zone={zone} />
+          {endsPastDue(todo) && <div className="px-0.5 pb-1 text-[12px] text-warn" data-past-due>{t('todo.pastDue')}</div>}
+        </dd>
         {todo.slot && !todo.fromCalendar && (
           <>
             <dt className="text-muted-foreground">{t('todo.meaning.zone')}</dt>
             <dd><ZoneField todo={todo} /></dd>
+          </>
+        )}
+        {!todo.fromCalendar && (
+          <>
+            <dt className="text-muted-foreground">{t('todo.due')}</dt>
+            <dd><DueField todo={todo} /></dd>
           </>
         )}
         <dt className="text-muted-foreground">{t('todo.estimate')}</dt>

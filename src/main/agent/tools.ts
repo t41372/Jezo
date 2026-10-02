@@ -24,9 +24,9 @@ import { shellOperations } from './shell'
 import type { CommandCheckpoints } from './undo'
 import { listSkills } from '../workspace/skills'
 import { insideWorkspace, type Workspace } from '../workspace/workspace'
-import { dateOf, epochOf, formatTime, moveTo, place, readTime, stamp, todayIn, type Zone } from '../../shared/time'
+import { dateOf, deadlineEnd, epochOf, formatTime, moveTo, place, readTime, stamp, todayIn, type Zone } from '../../shared/time'
 import { deviceZone } from '../clock'
-import { whenText } from './prompt'
+import { dueWords, whenText } from './prompt'
 
 /** The run the tools are working for. The session updates it before each prompt. */
 export interface RunContext {
@@ -63,6 +63,43 @@ export interface CardDetails {
 // LM Studio able to send only null (seen on 2026-09-29). Formats are checked
 // when the tool runs instead, with a message the model can act on.
 const text = (s: string) => [{ type: 'text' as const, text: s }]
+
+const deadlineParam = Type.Optional(
+  Type.String({
+    description:
+      'The deadline the user gave, when it has to be done by: a day like 2026-10-09 ("by Friday"), or a day and a clock like 2026-10-09 17:00, plus a zone only when they named a place. It is not when to do it; that is date and time, which go before it. Leave it out to keep the deadline; "" removes it.',
+  }),
+)
+
+/**
+ * A deadline as a tool call gives it, as written to the file: a day alone, or a
+ * day and a clock fixed to the user's zone. Throws with real dates to copy.
+ */
+function dueText(input: string, here: Zone): string {
+  const today = todayIn(here)
+  const example = `deadline is a day like ${today.add({ days: 3 })}, or a day and a clock like ${today.add({ days: 3 })} 17:00, with a zone after it only when the user named a place.`
+  const [date, clock, zone] = input.trim().split(/[ T]+/)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date ?? '') || (clock && !/^\d{1,2}:\d{2}$/.test(clock)) || (zone && !clock)) throw new Error(example)
+  let placed
+  try {
+    Temporal.PlainDate.from(date)
+    if (!clock) return date
+    placed = place(date, clock.padStart(5, '0'), zone ?? here)
+  } catch (error) {
+    throw new Error(`${(error as Error).message} ${example}`)
+  }
+  if (placed.gap) throw new Error(`${date} ${clock} doesn't exist${zone ? ` in ${zone}` : ''}: the clocks skip it that day. ${formatTime(placed.value).slice(11, 16)} is the time after the gap.`)
+  return formatTime(placed.value)
+}
+
+/** Said when a todo's planned time ends after its deadline: a fact to act on, not a refusal (sometimes late is the plan). */
+function pastDue(data: Record<string, unknown>, zone: Zone) {
+  const scheduled = readTime(data.scheduled)
+  const due = readTime(data.due, 'deadline')
+  if (!scheduled || !due) return ''
+  const end = (epochOf(scheduled, zone) ?? 0) + (Number(data.estimate) || 30) * 60_000
+  return end > deadlineEnd(due, zone) ? `\n  It's planned to end after its deadline${dueWords(data.due, zone).replace(', deadline', '')}. Move it before then unless the user wants it late.` : ''
+}
 
 /** The time fields of the todo tools: a day and a clock, and a zone only when the user named a place. */
 const timeParams = (backlog: string) => ({
@@ -110,7 +147,7 @@ function scheduleText(input: { date?: string; time?: string; zone?: string }, he
 function describe(data: Record<string, unknown>, zone: Zone) {
   const value = readTime(data.scheduled)
   const when = value ? `scheduled ${value.kind === 'day' ? value.date : `${dateOf(value, zone)} ${whenText(data.scheduled, zone)}`}${data.proposed ? ' (proposed)' : ''}` : 'in the backlog'
-  return `${data.id} "${data.title}": ${data.state}, ${when}, ${data.estimate ?? '?'} min`
+  return `${data.id} "${data.title}": ${data.state}, ${when}, ${data.estimate ?? '?'} min${dueWords(data.due, zone)}`
 }
 
 /** Calendar events that overlap a todo's slot, described for the agent, and the calendars that couldn't be checked. */
@@ -216,6 +253,7 @@ export function createTools(
     title: Type.String({ description: 'What to do, starting with a verb.' }),
     estimate: Type.Integer({ minimum: 1, description: 'Minutes, based on how long similar todos actually took.' }),
     ...timeParams('Leave date and time out to put it in the backlog.'),
+    deadline: deadlineParam,
     goal: Type.Optional(Type.String({ description: 'The id of the goal it serves.' })),
     cue: Type.Optional(Type.String({ description: 'The situation it gets done in.' })),
     why: Type.Optional(Type.String({ description: 'Your reasoning for when and how long, in one sentence to the user.' })),
@@ -225,7 +263,7 @@ export function createTools(
     name: 'todos_propose',
     label: 'Propose todos',
     description:
-      'Proposes new todos as drafts, shown to the user as one plan they can accept, tweak, or turn down. Nothing counts until they accept. Returns the new ids. To change a plan you proposed, call it again with revise and the whole new list. Give each draft you keep its id. A draft you leave out of the list is deleted: that is how to drop one from the plan.',
+      'Proposes new todos as drafts, shown to the user as one plan they can accept, tweak, or turn down. Nothing counts until they accept. Returns the new ids. To change a plan you proposed, call it again with revise and the whole new list. Give each draft you keep its id. A draft you leave out of the list is deleted: that is how to drop one from the plan. When the user says when something has to be done by, give it as deadline on each todo for it, and date and time before then: the app shows what is due from the deadline, so one said only in your reply is lost.',
     parameters: Type.Object({
       title: Type.Optional(Type.String({ description: "The plan's name as the user would say it, like 今天的安排." })),
       revise: Type.Optional(Type.String({ description: 'One id: any one draft from the plan being changed.' })),
@@ -255,6 +293,8 @@ export function createTools(
       // Every time is checked before anything is written, so a bad one changes nothing.
       // A kept draft is moved, not placed anew, so it keeps its zone: a New York call given back as 22:00 in Tokyo stays 09:00 New York.
       const times = params.todos.map((todo) => (todo.date || todo.time ? scheduleText(todo, here(), draftFor(todo)?.data.scheduled) : null))
+      // Left out, a deadline stays as it was; "" removes it.
+      const dues = params.todos.map((todo) => (todo.deadline === undefined ? undefined : todo.deadline.trim() ? dueText(todo.deadline, here()) : null))
       // Asked to schedule a todo from the backlog, a small model proposed a new one with the same name.
       const open = workspace.list().filter((i) => i.kind === 'todo' && i.data.state !== 'done' && i.data.state !== 'dropped' && !drafts.some((d) => d.id === i.id))
       const existing = params.todos.flatMap((t) => open.filter((i) => same(i.data.title) === same(t.title)))
@@ -274,7 +314,7 @@ export function createTools(
       for (const [index, todo] of params.todos.entries()) {
         if (skipped.some((i) => same(i.data.title) === same(todo.title))) continue
         const time = times[index]
-        const fields: Fields = { title: todo.title, estimate: todo.estimate, scheduled: time?.text ?? null, proposed: time ? true : null }
+        const fields: Fields = { title: todo.title, estimate: todo.estimate, scheduled: time?.text ?? null, proposed: time ? true : null, ...(dues[index] !== undefined && { due: dues[index] }) }
         for (const key of ['goal', 'cue', 'why'] as const) fields[key] = todo[key] || null
         const draft = draftFor(todo)
         let item
@@ -287,7 +327,7 @@ export function createTools(
           changes.added.push(item.id)
         }
         ids.push(item.id)
-        lines.push(`- ${describe(item.data, here())}${time?.note ?? ''}${await overlaps(item.data)}${unknownFields(todo, Object.keys(todoInput.properties))}`)
+        lines.push(`- ${describe(item.data, here())}${time?.note ?? ''}${pastDue(item.data, here())}${await overlaps(item.data)}${unknownFields(todo, Object.keys(todoInput.properties))}`)
       }
       // Drafts are the agent's own proposals, so leaving one out removes it; undo brings it back.
       for (const draft of drafts.filter((d) => !ids.includes(d.id))) {
@@ -313,6 +353,7 @@ export function createTools(
     estimate: Type.Optional(Type.Integer({ minimum: 1, description: 'Minutes. Set it whenever the user says how long it takes.' })),
     ...timeParams('Give both to move it. To put it back in the backlog, set backlog to true instead.'),
     backlog: Type.Optional(Type.Boolean({ description: 'true takes it off the calendar, back to the backlog.' })),
+    deadline: deadlineParam,
     userAskedForThisTime: Type.Boolean({
       description:
         'true only when the user\'s own message named this exact time, like "排到明天晚上八點": then the time is theirs, not your proposal. false when you chose the time, even because the user asked you to find one, and when you are not changing the time.',
@@ -326,11 +367,11 @@ export function createTools(
     name: 'todos_update',
     label: 'Update a todo',
     description:
-      "Changes an existing todo. Give only the fields to change, plus userAskedForThisTime. Scheduling or moving it marks the time as your proposal until the user confirms it, unless they asked for that exact time. You can't accept a draft for the user or mark something done that they didn't do.",
+      "Changes an existing todo. Give only the fields to change, plus userAskedForThisTime. Scheduling or moving it marks the time as your proposal until the user confirms it, unless they asked for that exact time. When the user says when it has to be done by, set deadline: the app shows what's due from it, so one said only in your reply is lost. You can't accept a draft for the user or mark something done that they didn't do.",
     parameters: todosUpdateParams,
     async execute(_id, params) {
       const ignored = unknownFields(params, Object.keys(todosUpdateParams.properties))
-      const { id, userAskedForThisTime, date, time, zone, backlog, ...change } = Object.fromEntries(
+      const { id, userAskedForThisTime, date, time, zone, backlog, deadline, ...change } = Object.fromEntries(
         Object.entries(params).filter(([k]) => k in todosUpdateParams.properties),
       ) as typeof params
       const item = workspace.get(id)
@@ -338,12 +379,13 @@ export function createTools(
       const scheduled = backlog ? null : date || time || zone ? scheduleText({ date, time, zone }, here(), item.data.scheduled, true) : undefined
       // An empty string clears the field.
       const fields: Fields = Object.fromEntries(Object.entries(change).map(([k, v]) => [k, v === '' ? null : v]))
+      if (deadline !== undefined) fields.due = deadline.trim() ? dueText(deadline, here()) : null
       if (scheduled !== undefined) {
         fields.scheduled = scheduled?.text ?? null
         fields.proposed = scheduled && !userAskedForThisTime ? true : null
       }
       const updated = await workspace.update(id, fields, actor())
-      return { content: text(`Now: ${describe(updated.data, here())}${scheduled?.note ?? ''}${scheduled || change.estimate ? await overlaps(updated.data) : ''}${ignored}`), details: undefined }
+      return { content: text(`Now: ${describe(updated.data, here())}${scheduled?.note ?? ''}${pastDue(updated.data, here())}${scheduled || change.estimate ? await overlaps(updated.data) : ''}${ignored}`), details: undefined }
     },
   })
 

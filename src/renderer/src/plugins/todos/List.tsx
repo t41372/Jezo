@@ -6,7 +6,9 @@ import { useTranslation } from 'react-i18next'
 import { useDragItem, useDropTarget } from '@/app/Dnd'
 import { Disclosure } from '@/components/Disclosure'
 import { insertionAt, pointerY, type Insertion } from '@/components/todo/reorder'
+import { dueLabel } from '@/components/todo/format'
 import { TodoCheck } from '@/components/todo/TodoCheck'
+import { Segmented } from '@/components/Segmented'
 import { Input } from '@/components/ui/input'
 import { goalById, useStore, type TodosAction } from '@/data/store'
 import type { Goal, Todo } from '@/data/types'
@@ -27,8 +29,18 @@ const ROW = 'data-list-backlog-id'
  * the backlog, in its own order; the days after; and what's done or dropped,
  * folded. Grouping by time is the default the layout gives (`group: time`).
  */
-export function List() {
+export function List({ group: initial }: { group?: unknown }) {
   const { t } = useTranslation('todos')
+  // 依安排 or 依截止日: the layout's choice until the user picks one on this computer.
+  const [grouping, setGrouping] = useState<Grouping>(() => storedGrouping() ?? (initial === 'due' ? 'due' : 'time'))
+  const group = (next: Grouping) => {
+    setGrouping(next)
+    try {
+      localStorage.setItem(GROUPING_KEY, next)
+    } catch {
+      // Not remembering it is fine.
+    }
+  }
   const all = useStore((s) => s.todos)
   const goals = useStore((s) => s.goals)
   const today = useStore((s) => s.now.date)
@@ -64,8 +76,17 @@ export function List() {
       <div className="mx-auto flex max-w-[640px] flex-col gap-5">
         <header className="flex items-end gap-3">
           <h1 className="text-[30px] font-semibold tracking-tight">{t('heading')}</h1>
-          <span className="flex-1" />
           <span className="pb-1 text-[13px] text-muted-foreground">{t('open', { count: openCount })}</span>
+          <span className="flex-1" />
+          <Segmented
+            label={t('grouping')}
+            value={grouping}
+            onChange={group}
+            options={[
+              { value: 'time', label: t('byTime') },
+              { value: 'due', label: t('byDue') },
+            ]}
+          />
         </header>
 
         <div className="flex flex-col gap-2.5">
@@ -79,7 +100,9 @@ export function List() {
           </div>
         </div>
 
-        {past.length > 0 && (
+        {grouping === 'due' && <ByDeadline active={active} row={row} searching={searching} />}
+
+        {grouping === 'time' && past.length > 0 && (
           <Disclosure key={`past-${searching}`} defaultOpen={searching} label={t('past.title', { count: past.length })} triggerClassName="text-[13px]">
             <div className="mt-2 flex flex-col gap-2" data-group="past">
               <GroupActions ids={past.map((x) => x.id)} />
@@ -88,13 +111,17 @@ export function List() {
           </Disclosure>
         )}
 
-        <Group label={t('today')} name="today" todos={on(today)} row={row} />
-        <Group label={t('tomorrow')} name="tomorrow" todos={on(addDays(today, 1))} row={row} />
-        <Backlog todos={backlog} row={row} />
-        {week.map((date) => (
-          <Group key={date} label={dayLabel(date, today)} name={date} todos={on(date)} row={row} />
-        ))}
-        {further.length > 0 && (
+        {grouping === 'time' && (
+          <>
+            <Group label={t('today')} name="today" todos={on(today)} row={row} />
+            <Group label={t('tomorrow')} name="tomorrow" todos={on(addDays(today, 1))} row={row} />
+            <Backlog todos={backlog} row={row} />
+            {week.map((date) => (
+              <Group key={date} label={dayLabel(date, today)} name={date} todos={on(date)} row={row} />
+            ))}
+          </>
+        )}
+        {grouping === 'time' && further.length > 0 && (
           <Disclosure key={`further-${searching}`} defaultOpen={searching} label={t('further', { count: further.length })} triggerClassName="text-[13px]">
             <ul className="mt-2" data-group="further">{further.map((x) => row(x, { date: true }))}</ul>
           </Disclosure>
@@ -108,6 +135,72 @@ export function List() {
         {todos.length === 0 && <p className="text-[13px] text-muted-foreground">{all.length ? t('noMatch') : t('nothing')}</p>}
       </div>
     </div>
+  )
+}
+
+type Grouping = 'time' | 'due'
+const GROUPING_KEY = 'jezo.todos.grouping'
+
+function storedGrouping(): Grouping | null {
+  try {
+    const value = localStorage.getItem(GROUPING_KEY)
+    return value === 'time' || value === 'due' ? value : null
+  } catch {
+    return null
+  }
+}
+
+/** How many past deadlines show before 再顯示, so coming back doesn't open on a wall. */
+const PASSED_SHOWN = 5
+
+/**
+ * The same todos by when they have to be done: past deadlines first, a few at
+ * a time, then today, tomorrow, the week by day, later (folded), and the ones
+ * without a deadline (folded).
+ */
+function ByDeadline({ active, row, searching }: { active: Todo[]; row: RowOf; searching: boolean }) {
+  const { t } = useTranslation('todos')
+  const today = useStore((s) => s.now.date)
+  // The store's clock moves every half minute, which redraws this; the moment is read then.
+  useStore((s) => s.now)
+  const now = Date.now()
+  const [shown, setShown] = useState(PASSED_SHOWN)
+  const due = active.filter((x) => x.due).sort((a, b) => a.due!.at - b.due!.at)
+  const passed = due.filter((x) => x.due!.at <= now)
+  const coming = due.filter((x) => x.due!.at > now)
+  const on = (date: string) => coming.filter((x) => x.due!.date === date)
+  const week = Array.from({ length: 6 }, (_, i) => addDays(today, i + 2))
+  const later = coming.filter((x) => x.due!.date > week.at(-1)!)
+  const none = active.filter((x) => !x.due)
+  return (
+    <>
+      {passed.length > 0 && (
+        <section data-group="due-passed">
+          <h2 className="mb-1 text-xs text-muted-foreground">{t('due.passed', { count: passed.length })}</h2>
+          <ul>{passed.slice(0, shown).map((x) => row(x, { date: true }))}</ul>
+          {passed.length > shown && (
+            <button className="mt-1 px-1 text-[12.5px] text-muted-foreground hover:text-foreground" onClick={() => setShown(passed.length)}>
+              {t('more', { count: passed.length - shown })}
+            </button>
+          )}
+        </section>
+      )}
+      <Group label={t('today')} name="due-today" todos={on(today)} row={row} />
+      <Group label={t('tomorrow')} name="due-tomorrow" todos={on(addDays(today, 1))} row={row} />
+      {week.map((date) => (
+        <Group key={date} label={dayLabel(date, today)} name={`due-${date}`} todos={on(date)} row={row} />
+      ))}
+      {later.length > 0 && (
+        <Disclosure key={`due-later-${searching}`} defaultOpen={searching} label={t('further', { count: later.length })} triggerClassName="text-[13px]">
+          <ul className="mt-2" data-group="due-later">{later.map((x) => row(x, { date: true }))}</ul>
+        </Disclosure>
+      )}
+      {none.length > 0 && (
+        <Disclosure key={`due-none-${searching}`} defaultOpen={searching} label={t('due.none', { count: none.length })} triggerClassName="text-[13px]">
+          <ul className="mt-2" data-group="due-none">{none.map((x) => row(x, { date: true }))}</ul>
+        </Disclosure>
+      )}
+    </>
   )
 }
 
@@ -199,11 +292,14 @@ function Row({ todo, selected, date, actions, onMove }: { todo: Todo; selected: 
   const { t: tc } = useTranslation()
   const goal = useStore((s) => goalById(s.goals, todo.goalId))
   const today = useStore((s) => s.now.date)
+  // The store's clock moves every half minute, which redraws this; the moment is read then.
+  useStore((s) => s.now)
+  const now = Date.now()
   const { listeners, setNodeRef, isDragging } = useDragItem({ kind: 'todo', id: todo.id }, todo.state === 'done' || todo.state === 'dropped')
   const draft = todo.state === 'draft'
   const closed = todo.state === 'done' || todo.state === 'dropped'
   const when = todo.slot ? (date ? `${dayLabel(todo.slot.date, today)} ${clock(todo.slot.start)}` : clock(todo.slot.start)) : null
-  const meta = [when, goal?.name, duration(todo.estimateMinutes)].filter(Boolean).join(' · ')
+  const meta = [when, dueLabel(todo, today, now), goal?.name, duration(todo.estimateMinutes)].filter(Boolean).join(' · ')
 
   return (
     <div

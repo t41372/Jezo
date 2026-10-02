@@ -82,10 +82,16 @@ export interface Todo {
   completedAt?: number
   /** When the user decided not to do it (state `dropped`), in milliseconds since the epoch. */
   droppedAt?: number
+  /**
+   * When it has to be done by (docs/design/frontend.md, "Deadlines"): its date
+   * in the device's zone, its clock there when the deadline is a time, and the
+   * moment it's past, which for a day is when that day ends here.
+   */
+  due?: { date: ISODate; time?: number; at: number }
   /** How long it took, from two exact records; not for records written before they carried a zone. */
   elapsedMinutes?: number
   /** The time fields as written, so a change keeps what it doesn't touch (docs/design/time.md). */
-  times?: { scheduled?: string; started?: string; completed?: string; dropped?: string }
+  times?: { scheduled?: string; started?: string; completed?: string; dropped?: string; due?: string }
   /** Items it links to (docs/design/backend.md, "Links"). */
   links?: string[]
 }

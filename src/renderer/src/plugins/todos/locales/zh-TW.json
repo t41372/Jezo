@@ -1,5 +1,7 @@
 {
-  "page": { "title": "待辦" },
+  "page": {
+    "title": "待辦"
+  },
   "heading": "待辦",
   "open_other": "還有 {{count}} 件",
   "add": "加一件待辦，按 Enter",
@@ -23,5 +25,12 @@
   "nothing": "沒有待辦。上面那格可以加一件。",
   "noMatch": "沒有符合的待辦。",
   "draft": "草稿",
-  "undoAction": "撤銷"
+  "undoAction": "撤銷",
+  "grouping": "分組",
+  "byTime": "依安排",
+  "byDue": "依截止日",
+  "due": {
+    "passed_other": "截止日已過 · {{count}}",
+    "none_other": "沒有截止日 · {{count}}"
+  }
 }

@@ -1,7 +1,7 @@
 import type { Todo } from '@/data/types'
 import i18n from '@/i18n'
 import { cityOf } from '@/lib/zones'
-import { clock, inZone, weekday } from '@/lib/time'
+import { clock, dayLabel, inZone, weekday } from '@/lib/time'
 
 /** "到公司倒完咖啡之後", or the time when there's no cue. */
 export function whenLabel(todo: Todo) {
@@ -37,4 +37,17 @@ export function meaningLabel(todo: Todo, device: string) {
 /** True when anything about the todo is still the agent's proposal. */
 export function isDraft(todo: Todo) {
   return todo.state === 'draft' || !!todo.slot?.proposed
+}
+
+/** 「週五截止」, 「今天 17:00 截止」, or 「截止日已過 · 週三」 when it's past and not done; null without a deadline. */
+export function dueLabel(todo: Todo, today: string, now = Date.now()) {
+  if (!todo.due) return null
+  const day = dayLabel(todo.due.date, today)
+  if (todo.due.at <= now && (todo.state === 'open' || todo.state === 'draft')) return i18n.t('todo.duePassed', { day })
+  return todo.due.time === undefined ? i18n.t('todo.dueOn', { day }) : i18n.t('todo.dueAt', { day, time: clock(todo.due.time) })
+}
+
+/** Whether its planned time ends after its deadline. */
+export function endsPastDue(todo: Todo) {
+  return !!(todo.slot && todo.due && todo.slot.at + todo.estimateMinutes * 60_000 > todo.due.at)
 }

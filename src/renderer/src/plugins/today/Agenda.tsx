@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { Disclosure } from '@/components/Disclosure'
 import { PlanCard } from '@/components/todo/PlanCard'
 import { TodoCheck } from '@/components/todo/TodoCheck'
-import { whenLabel } from '@/components/todo/format'
+import { dueLabel, whenLabel } from '@/components/todo/format'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { goalById, useStore } from '@/data/store'
@@ -35,6 +35,12 @@ export function Agenda() {
   const open = accepted.filter((x) => x.state === 'open')
   const done = accepted.filter((x) => x.state === 'done')
   const [current, ...later] = open
+  // Due today or already past, not done, and not planned today: the planned ones say it on their own rows.
+  useStore((s) => s.now)
+  const endOfToday = Temporal.PlainDate.from(date).add({ days: 1 }).toZonedDateTime({ timeZone: useStore.getState().zone }).epochMilliseconds
+  const due = all
+    .filter((x) => (x.state === 'open' || x.state === 'draft') && x.due && x.due.at <= endOfToday && x.slot?.date !== date)
+    .sort((a, b) => a.due!.at - b.due!.at)
 
   // The conversation that proposed today's drafts, if there is one; otherwise a new one.
   const planSession = useStore(
@@ -91,6 +97,19 @@ export function Agenda() {
                   </motion.li>
                 ))}
               </AnimatePresence>
+            </ul>
+          </motion.section>
+        )}
+
+        {due.length > 0 && (
+          <motion.section layout="position" transition={rowMotion.transition} data-due-today>
+            <SectionLabel>{t('due')}</SectionLabel>
+            <ul>
+              {due.map((todo) => (
+                <li key={todo.id} className="border-b py-1">
+                  <Row todo={todo} selected={todo.id === selected} onOpen={() => setTodayDetail(todo.id)} />
+                </li>
+              ))}
             </ul>
           </motion.section>
         )}
@@ -202,7 +221,7 @@ function Row({ todo, selected, onOpen }: { todo: Todo; selected: boolean; onOpen
       <TodoCheck todo={todo} />
       <button onClick={onOpen} className="min-w-0 flex-1 text-left">
         <div className="text-[15px] font-medium">{todo.title}</div>
-        <div className="mt-0.5 text-[12.5px] text-muted-foreground">{whenLabel(todo)}</div>
+        <div className="mt-0.5 text-[12.5px] text-muted-foreground">{[todo.slot ? whenLabel(todo) : null, dueLabel(todo, useStore.getState().now.date)].filter(Boolean).join(' · ')}</div>
       </button>
       <span className="text-[12.5px] text-muted-foreground tabular-nums">{todo.slot && clock(todo.slot.start)}</span>
     </div>

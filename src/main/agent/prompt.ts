@@ -2,7 +2,7 @@
 // agent inside the app, not for whoever builds Jezo.
 
 import type { Item } from '../../shared/workspace'
-import { dateOf, epochOf, readTime, resolve, type Zone } from '../../shared/time'
+import { dateOf, deadlineEnd, epochOf, readTime, resolve, type Zone } from '../../shared/time'
 import type { Trigger } from '../../shared/session'
 
 export const SYSTEM_PROMPT = `You are Jezo, a personal agent that helps one person manage their life: their todos, goals, calendar and habits. The user sets the direction. You plan and follow up. The user does the work.
@@ -95,6 +95,14 @@ export function jumpNote(last: Temporal.ZonedDateTime, now: Temporal.ZonedDateTi
   return `${jumped ? 'Time jumped' : 'The date changed'} since your last step: it was ${weekday(last.toPlainDate(), 'short')} ${last.toPlainDate()} ${clock(last)}, it's now ${weekday(now.toPlainDate(), 'short')} ${now.toPlainDate()} ${clock(now)} ${now.timeZoneId}.${moved} Check that what you're doing still fits the time.\n${daysLine(now)}`
 }
 
+/** ", deadline Fri 2026-10-09" or ", deadline Fri 2026-10-09 17:00", in the device's zone; "" without one. */
+export function dueWords(due: unknown, zone: Zone) {
+  const value = readTime(due, 'deadline')
+  if (!value) return ''
+  const day = value.kind === 'day' ? value.date : dateOf(value, zone)
+  return `, deadline ${day.toLocaleString('en-US', { weekday: 'short' })} ${day}${value.kind === 'day' ? '' : ` ${whenText(due, zone)}`}`
+}
+
 /** How a todo's time reads from here: "09:00", or "22:00 (09:00 America/New_York)" for a time fixed elsewhere. */
 export function whenText(scheduled: unknown, zone: Zone) {
   const value = readTime(scheduled)
@@ -117,7 +125,7 @@ export function digest(items: Item[], now: Temporal.ZonedDateTime, device: Zone 
     const d = t.data
     const when = whenText(d.scheduled, zone) ?? 'no time'
     const flags = [d.state !== 'open' && d.state, d.proposed && 'time proposed'].filter(Boolean).join(', ')
-    return `- ${when} ${d.title} (${t.id}, ${d.estimate ?? '?'} min${flags ? `, ${flags}` : ''})`
+    return `- ${when} ${d.title} (${t.id}, ${d.estimate ?? '?'} min${dueWords(d.due, zone)}${flags ? `, ${flags}` : ''})`
   }
   // Today is where each time falls from here, not the date written in front of it (docs/design/time.md, "Days").
   const scheduled = (t: Item) => readTime(t.data.scheduled)
@@ -127,6 +135,16 @@ export function digest(items: Item[], now: Temporal.ZonedDateTime, device: Zone 
   })
   todayTodos.sort((a, b) => (epochOf(scheduled(a), zone) ?? 0) - (epochOf(scheduled(b), zone) ?? 0))
   const backlog = todos.filter((t) => !t.data.scheduled && (t.data.state === 'open' || t.data.state === 'draft'))
+  // Deadlines in the coming week or already past, whatever is planned: a deadline tomorrow on a todo planned last week would show nowhere else.
+  const weekAhead = now.toPlainDate().add({ days: 8 }).toZonedDateTime({ timeZone: zone }).epochMilliseconds
+  const deadlines = todos
+    .flatMap((t) => {
+      const due = readTime(t.data.due, 'deadline')
+      return due && (t.data.state === 'open' || t.data.state === 'draft') ? [{ t, end: deadlineEnd(due, zone) }] : []
+    })
+    .filter(({ end }) => end <= weekAhead)
+    .sort((a, b) => a.end - b.end)
+  const deadlineLine = ({ t, end }: { t: Item; end: number }) => `${line(t)}${end <= now.epochMilliseconds ? ' — its deadline has passed' : ''}`
   const waitingNotes = items.filter((i) => i.kind === 'note' && i.data.state === 'new').length
   const goals = items.filter((i) => i.kind === 'goal' && i.data.state === 'active')
   const goalLine = (g: Item) => {
@@ -151,6 +169,7 @@ export function digest(items: Item[], now: Temporal.ZonedDateTime, device: Zone 
     daysLine(now),
     '',
     todayTodos.length ? `Today's todos:\n${todayTodos.map(line).join('\n')}` : 'Nothing is scheduled today.',
+    ...(deadlines.length ? ['', `Deadlines in the coming week, and ones passed, not done (plan the work before them):\n${deadlines.map(deadlineLine).join('\n')}`] : []),
     // Right after today: it decides how today is planned. At the end, after the notes, a model planning the day never mentioned it.
     ...(experiments.length ? ['', `Running experiments: plan today by the condition of the arm today is in (experiments/AGENTS.md says more).\n${experiments.map(experimentLine).join('\n')}`] : []),
     '',

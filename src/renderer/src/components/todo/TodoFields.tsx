@@ -10,7 +10,7 @@ import { ZonePicker } from '@/components/ZonePicker'
 import { goalStyle } from '@/lib/goal-color'
 import { cityOf } from '@/lib/zones'
 import { epochOf, now, readTime, todayIn } from '../../../../shared/time'
-import { meaningLabel } from './format'
+import { dueLabel, meaningLabel } from './format'
 import type { Todo } from '@/data/types'
 import { clock, duration, inZone, monthDay, parseDate, toISODate, weekday } from '@/lib/time'
 import { slotLabel } from './format'
@@ -265,6 +265,59 @@ export function GoalField({ todo }: { todo: Todo }) {
       <PopoverContent side="bottom" align="start" className="flex w-56 flex-col p-1.5">
         {goals.filter((g) => g.state === 'active' || g.id === todo.goalId).map((g) => option(g.id, g.name, g.hue))}
         {option(null, t('todo.noGoal'))}
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+/** When it has to be done by: a day from the month view, a time if it has one, or none. */
+export function DueField({ todo }: { todo: Todo }) {
+  const { t, i18n } = useTranslation()
+  const [open, setOpen] = useState(false)
+  const today = useStore((s) => s.now.date)
+  const { setDue } = useStore.getState()
+  const label = dueLabel(todo, today) ?? t('todo.noDue')
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger className={`${row} w-full ${todo.due ? '' : 'text-muted-foreground'}`} data-due-field>
+        {label}
+      </PopoverTrigger>
+      <PopoverContent side="bottom" align="start" className="w-auto p-2">
+        <Calendar
+          mode="single"
+          selected={todo.due ? parseDate(todo.due.date) : undefined}
+          defaultMonth={parseDate(todo.due?.date ?? today)}
+          onSelect={(day) => day && setDue(todo.id, { date: toISODate(day), time: todo.due?.time })}
+          locale={i18n.language.startsWith('zh') ? zhTW : enUS}
+          className="bg-transparent"
+        />
+        <div className="flex items-center gap-2 border-t px-1 pt-2">
+          <span className="text-[12.5px] text-muted-foreground">{t('todo.dueTime')}</span>
+          <Input
+            type="time"
+            className="h-8 w-32"
+            value={todo.due?.time === undefined ? '' : clock(todo.due.time)}
+            onChange={(e) => {
+              const [h, m] = e.target.value.split(':').map(Number)
+              setDue(todo.id, { date: todo.due?.date ?? today, time: e.target.value ? h + m / 60 : undefined })
+            }}
+            aria-label={t('todo.dueTime')}
+          />
+          <span className="flex-1" />
+          {todo.due && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-muted-foreground"
+              onClick={() => {
+                setDue(todo.id, null)
+                setOpen(false)
+              }}
+            >
+              {t('todo.noDue')}
+            </Button>
+          )}
+        </div>
       </PopoverContent>
     </Popover>
   )

@@ -31,9 +31,10 @@ export type TimeValue =
 /**
  * What a time is for, which decides what it may be: a todo's `scheduled` is a
  * time in a zone or a moment; a record (created, completed) is a moment; a
- * calendar event can be anything its source sends.
+ * deadline (a todo's `due`) is a day or a time in a zone; a calendar event can
+ * be anything its source sends.
  */
-export type Role = 'plan' | 'record' | 'event'
+export type Role = 'plan' | 'record' | 'deadline' | 'event'
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/
 const WALL = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/
@@ -46,6 +47,7 @@ export class TimeError extends Error {}
 const forms: Record<Role, string> = {
   plan: "a time with its zone, like '2026-10-05T09:00[Asia/Taipei]': the zone the time note names, or the one the user named",
   record: "a moment with its offset, like '2026-10-05T16:00:00+09:00'",
+  deadline: "a day, like '2026-10-09', or a time with its zone, like '2026-10-09T17:00[Asia/Taipei]'",
   event: "a day, a time with its zone, a clock, or a moment",
 }
 
@@ -72,8 +74,10 @@ export function parseTime(text: string, role: Role = 'plan'): TimeValue {
   } catch (error) {
     throw new TimeError(`"${text}" isn't a real time: ${(error as Error).message}`)
   }
-  const allowed = role === 'event' || (role === 'plan' ? value?.kind === 'zoned' || value?.kind === 'moment' : value?.kind === 'moment')
-  if (!value || !allowed) throw new TimeError(`"${text}" isn't ${role === 'plan' && value?.kind === 'floating' ? 'a time Jezo can place: it has no zone' : 'a time Jezo reads here'}. Write ${forms[role]}.`)
+  const kinds: Record<Role, TimeValue['kind'][]> = { plan: ['zoned', 'moment'], record: ['moment'], deadline: ['day', 'zoned', 'moment'], event: ['day', 'zoned', 'floating', 'moment'] }
+  if (!value || !kinds[role].includes(value.kind)) {
+    throw new TimeError(`"${text}" isn't ${(role === 'plan' || role === 'deadline') && value?.kind === 'floating' ? 'a time Jezo can place: it has no zone' : 'a time Jezo reads here'}. Write ${forms[role]}.`)
+  }
   return value
 }
 
@@ -142,6 +146,15 @@ export function dateOf(value: TimeValue, zone: Zone): Temporal.PlainDate {
 export function epochOf(value: TimeValue | null, zone: Zone): number | undefined {
   if (!value) return undefined
   return resolve(value, zone)?.at.epochMilliseconds
+}
+
+/**
+ * When a deadline is past, in milliseconds since the epoch: a day's when that
+ * day ends in `zone`, where the user is; a time's at its moment.
+ */
+export function deadlineEnd(value: TimeValue, zone: Zone): number {
+  if (value.kind === 'day') return value.date.add({ days: 1 }).toZonedDateTime({ timeZone: zone }).epochMilliseconds
+  return resolve(value, zone)!.at.epochMilliseconds
 }
 
 /** A moment, written with the offset of `zone` at that moment: what records are stamped with. */

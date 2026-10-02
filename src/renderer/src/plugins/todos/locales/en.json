@@ -1,5 +1,7 @@
 {
-  "page": { "title": "Todos" },
+  "page": {
+    "title": "Todos"
+  },
   "heading": "Todos",
   "open_one": "{{count}} to do",
   "open_other": "{{count}} to do",
@@ -24,5 +26,14 @@
   "nothing": "No todos. Add one in the field above.",
   "noMatch": "No todos match.",
   "draft": "Draft",
-  "undoAction": "Undo"
+  "undoAction": "Undo",
+  "grouping": "Group",
+  "byTime": "By plan",
+  "byDue": "By deadline",
+  "due": {
+    "passed_one": "Deadline passed · {{count}}",
+    "passed_other": "Deadline passed · {{count}}",
+    "none_one": "No deadline · {{count}}",
+    "none_other": "No deadline · {{count}}"
+  }
 }

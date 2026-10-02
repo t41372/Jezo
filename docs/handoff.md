@@ -45,7 +45,6 @@ Google through EventKit won't be tested separately (Tim, 2026-09-30: every accou
 ### GitHub #1, #3, #4 (built 2026-10-01)
 
 Research, reviews and measurements are in `.claude/research/2026-10-01/issues/`. Decisions are in frontend.md ("Chat", "The todo list") and backend.md ("Speech"). Waiting on Tim:
-- **A deadline field** apart from the scheduled time. The list groups by when things are planned; grouping by when they're due needs one (frontend.md, "The todo list").
 
 Left over:
 - std-mlx-audio's own tests: four in `test_batch.py` fail on macOS before and after `474277b`, comparing `/var/...` with `/private/var/...`.
@@ -91,6 +90,7 @@ Left over:
   - an experiment's conclusion or decision written by the agent;
   - "一小時後我要打給媽" answered with ask_user when that hour has a todo, instead of a time to move;
   - a tool call with keys and values run together (`"date2026-10-07": 2026`), repeated until it runs out of tokens;
+  - a deadline the user said left out of the todo (4 of 6 set it; frontend.md, "Deadlines").
   - "每週一早上九點" written as a Sunday cron. The automations' instructions give a Monday example and say 0 is Sunday, and since 2026-10-02 the write's result reads the schedule back as dates with weekdays. It still happened in 2 of 6 runs on 2026-10-02: the model's first thought turned 週一 into 周日 before it read anything, once explaining that "it's Sunday evening now" with Friday in its time note, and it went on past the read-back that said Sun. Not caused by what it's given; a check would have to read the user's words.
 
   Each passes on a rerun. Read the trace before changing anything for them.

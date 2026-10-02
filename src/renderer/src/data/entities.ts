@@ -1,7 +1,7 @@
 // Turns workspace items into the entities the UI draws, and UI changes back into
 // fields to write. The file formats are in docs/design/backend.md.
 
-import { dateOf, epochOf, formatTime, moveTo, place, readTime, resolve, stamp, todayIn, type TimeValue, type Zone } from '../../../shared/time'
+import { dateOf, deadlineEnd, epochOf, formatTime, moveTo, place, readTime, resolve, stamp, todayIn, type TimeValue, type Zone } from '../../../shared/time'
 import type { Fields, Item } from '../../../shared/workspace'
 import type { Experiment, Goal, ISODate, Memory, Note, SlotInput, Todo } from './types'
 
@@ -32,6 +32,16 @@ const str = (v: unknown) => (typeof v === 'string' ? v : undefined)
 
 // ─── Todos ───
 
+/** A deadline, seen from `zone`. A day is past once it ends there; a time, at its moment. */
+export function toDue(text: unknown, zone: Zone): Todo['due'] {
+  const value = readTime(text, 'deadline')
+  if (!value) return undefined
+  const at = deadlineEnd(value, zone)
+  if (value.kind === 'day') return { date: value.date.toString(), at }
+  const here = Temporal.Instant.fromEpochMilliseconds(at).toZonedDateTimeISO(zone)
+  return { date: here.toPlainDate().toString(), time: here.hour + here.minute / 60, at }
+}
+
 export function toTodo(item: Item, zone: Zone): Todo {
   const d = item.data
   const started = readTime(d.started, 'record')
@@ -56,8 +66,9 @@ export function toTodo(item: Item, zone: Zone): Todo {
     amount: typeof d.amount === 'number' ? d.amount : undefined,
     completedAt,
     droppedAt: epochOf(dropped, zone),
+    due: toDue(d.due, zone),
     elapsedMinutes: startedAt !== undefined && completedAt !== undefined ? Math.round((completedAt - startedAt) / 60_000) : undefined,
-    times: { scheduled: str(d.scheduled), started: str(d.started), completed: str(d.completed), dropped: str(d.dropped) },
+    times: { scheduled: str(d.scheduled), started: str(d.started), completed: str(d.completed), dropped: str(d.dropped), due: str(d.due) },
     links: item.links,
   }
 }
@@ -111,6 +122,13 @@ export function todoFields(change: Partial<Omit<Todo, 'slot'>> & { slot?: SlotIn
   if ('completedAt' in change) f.completed = change.completedAt ? recordText(change.completedAt, zone, before?.completedAt, before?.times?.completed) : null
   if ('droppedAt' in change) f.dropped = change.droppedAt ? recordText(change.droppedAt, zone, before?.droppedAt, before?.times?.dropped) : null
   return f
+}
+
+/** A deadline as written: the day alone, or the day and a clock fixed to `zone`. Null when the clock doesn't exist that day. */
+export function dueTextFor(date: ISODate, time: number | undefined, zone: Zone): string | null {
+  if (time === undefined) return date
+  const placed = place(date, writeLocal(date, time).slice(11), zone)
+  return placed.gap ? null : formatTime(placed.value)
 }
 
 /**

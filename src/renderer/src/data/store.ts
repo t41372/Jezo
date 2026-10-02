@@ -12,7 +12,7 @@ import type { CalendarStatus } from '../../../shared/calendar'
 import type { Fields, Item, ItemChanges } from '../../../shared/workspace'
 import i18n, { applyLanguage, storedLanguage, type LanguageSetting } from '@/i18n'
 import { formatTime, now, place, readTime, stamp, type Zone } from '../../../shared/time'
-import { entities, localDate, toExperiment, toGoal, toMemory, toNote, toSlot, toTodo, todoFields, type TimeContext } from './entities'
+import { dueTextFor, entities, localDate, toDue, toExperiment, toGoal, toMemory, toNote, toSlot, toTodo, todoFields, type TimeContext } from './entities'
 import { connectCalendar } from './calendar'
 import { clock as clockText, inZone } from '@/lib/time'
 import { cityOf } from '@/lib/zones'
@@ -76,6 +76,8 @@ interface State {
   pickChoice(sessionId: string, option: string): void
 
   setDone(id: string, done: boolean): void
+  /** Sets when it has to be done by: a day, or a day and a clock in `zone` (the device's unless given); null removes it. */
+  setDue(id: string, due: { date: ISODate; time?: number; zone?: Zone } | null): void
   /** 不做了: the user decided not to do it. It stays, under 不做了, and false brings it back. */
   setDropped(id: string, dropped: boolean): void
   /** Deletes a todo's file, as a change in 修改紀錄. Resolves to that change, to take it back, or null if it failed. */
@@ -368,6 +370,7 @@ function showFields(id: string, change: Partial<Omit<Todo, 'slot'>> & { slot?: u
         ...('started' in fields && { started: (fields.started as string | null) ?? undefined }),
         ...('completed' in fields && { completed: (fields.completed as string | null) ?? undefined }),
         ...('dropped' in fields && { dropped: (fields.dropped as string | null) ?? undefined }),
+        ...('due' in fields && { due: (fields.due as string | null) ?? undefined }),
       },
     })).sort(byRank)
     return { todos, goals: deriveGoals(todos, s.now.date) }
@@ -424,6 +427,7 @@ const allTodoFields = (todo: Todo): Fields => ({
   started: todo.times?.started ?? null,
   completed: todo.times?.completed ?? null,
   dropped: todo.times?.dropped ?? null,
+  due: todo.times?.due ?? null,
 })
 
 export const useStore = create<State>()((set, get) => ({
@@ -475,6 +479,12 @@ export const useStore = create<State>()((set, get) => ({
   // A done todo keeps when it was started, so how long it took can be counted against its estimate.
   setDone: (id, done) => {
     writeTodo(id, done ? { state: 'done', completedAt: Date.now(), droppedAt: undefined } : { state: 'open', startedAt: undefined, completedAt: undefined, droppedAt: undefined })
+  },
+  setDue: (id, due) => {
+    const zone = get().zone
+    const text = due ? dueTextFor(due.date, due.time, due.zone ?? zone) : null
+    if (due && !text) return void toast(i18n.t('todo.dueGap'))
+    writeFields(id, { due: text ? toDue(text, zone) : undefined }, { due: text })
   },
   setDropped: (id, dropped) => {
     writeTodo(id, dropped ? { state: 'dropped', droppedAt: Date.now(), startedAt: undefined } : { state: 'open', droppedAt: undefined })

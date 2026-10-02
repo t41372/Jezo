@@ -11,6 +11,7 @@ One markdown file per todo, `items/<id>.md`. The body is the user's notes about 
 - `cue`: the situation it gets done in ("到公司倒完咖啡"), when there is one.
 - `estimate`: minutes. Base it on how long similar todos actually took, not on what sounds right.
 - `scheduled`: when it's planned. No `scheduled` means it's in the backlog. The tools write it for you; by hand, it's always a time with its zone, like `'2026-10-05T09:00[Asia/Taipei]'`: 09:00 by that zone's clock wherever the user is. Use the zone the time note names, or the one the user named for a call, a class or a deadline. A time without a zone is refused.
+- `due`: when it has to be done by, if it has to: a day, like `'2026-10-09'`, which ends when that day ends, or a time with its zone like `scheduled` when the user named a clock. It's not when to do it; plan the work (`scheduled`) before it, with room. Set it when the user says a deadline ("週五前要交"); the tools take it as `deadline`.
 - `proposed`: `true` when the time is your suggestion and the user hasn't accepted it. Set it whenever you schedule something the user didn't ask for at that time.
 - `rank`: the order in the backlog. Leave it to the app; tools set it.
 - `steps`: smaller steps, each `{ text, done }`.
