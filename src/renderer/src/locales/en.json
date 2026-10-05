@@ -67,7 +67,7 @@
   },
   "todo": {
     "noGoal": "No goal",
-    "after": "After {{cue}}",
+    "after": "{{cue}}",
     "fromCalendar": "{{time}} (calendar)",
     "unscheduled": "Not scheduled",
     "draft": "Draft · {{title}}",

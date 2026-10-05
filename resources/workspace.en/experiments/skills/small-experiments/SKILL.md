@@ -1,6 +1,6 @@
 ---
 name: small-experiments
-description: Runs a small experiment on the user's own days when they want to know whether a way of working helps them: alternating A/B weeks, numbers counted from their records, and a conclusion. Use it when the user wants to try a way of doing things, or asks whether one works.
+description: "Runs a small experiment on the user's own days when they want to know whether a way of working helps them: alternating A/B weeks, numbers counted from their records, and a conclusion. Use it when the user wants to try a way of doing things, or asks whether one works."
 metadata:
   title: Small experiments
 ---

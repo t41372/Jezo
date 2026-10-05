@@ -34,7 +34,7 @@ const ENGLISH: Record<string, string> = {
   '刷完牙': 'after brushing teeth',
   '這是你最穩的習慣：14 次做到 12 次。': 'Your steadiest habit: done 12 times out of 14.',
   '去健身房，只做 20 分鐘': 'Gym, just 20 minutes',
-  '下班走出大樓': 'walking out of the office',
+  '下班走出大樓': 'after walking out of the office',
   '只排 20 分鐘，因為短的比較容易開始。加上換衣服，我抓 30 分。這條規則過去 9 次你做到 7 次。': 'Only 20 minutes, because short is easier to start. With changing, I planned 30. You kept this rule 7 times out of 9.',
   '寫升等 doc 的「Impact」那段': 'Write the “Impact” section of the promo doc',
   '到公司倒完咖啡': 'after getting coffee at work',

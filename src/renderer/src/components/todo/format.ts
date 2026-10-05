@@ -3,7 +3,7 @@ import i18n from '@/i18n'
 import { cityOf } from '@/lib/zones'
 import { clock, dayLabel, inZone, weekday } from '@/lib/time'
 
-/** "到公司倒完咖啡之後", or the time when there's no cue. */
+/** "到公司倒完咖啡之後", or the time when there's no cue. In English the cue carries its own word for when ("after getting coffee at work"). */
 export function whenLabel(todo: Todo) {
   if (todo.fromCalendar && todo.slot) return i18n.t('todo.fromCalendar', { time: clock(todo.slot.start) })
   if (todo.cue) return i18n.t('todo.after', { cue: todo.cue })
