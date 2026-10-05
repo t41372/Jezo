@@ -177,7 +177,7 @@
     "micDenied": "没办法用麦克风。到「系统设置 → 隐私与安全性 → 麦克风」打开 Jezo。",
     "thinking": "想一下…",
     "noModel": "找不到可以用的模型。打开 LM Studio 或 Ollama，或到设置换成云端模型。",
-    "speechMissing": "语音识别还没装好。到设置按「安装」，之后就能用语音输入。",
+    "speechMissing": "语音识别尚未就绪，请到“设置 → 语音识别”检查。",
     "listening": "在听…",
     "followUp": "接着说…",
     "hintAsk": "问 Jezo",
@@ -219,7 +219,7 @@
     "send": "发送",
     "stop": "停下来",
     "micDenied": "没办法用麦克风。到系统设置的「隐私与安全性」允许 Jezo 使用麦克风。",
-    "speechMissing": "语音识别还没装好。到设置按「安装」，之后就能用语音输入。",
+    "speechMissing": "语音识别尚未就绪。",
     "queue": "排在后面",
     "steer": "先照这个做",
     "queued": "接着问",
@@ -235,7 +235,8 @@
         "extension": "扩展",
         "app": "Jezo"
       }
-    }
+    },
+    "speechSettings": "前往设置"
   },
   "related": {
     "title": "相关",

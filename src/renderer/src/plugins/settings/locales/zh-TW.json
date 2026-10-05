@@ -15,18 +15,6 @@
   "evening": "晚上 check-in",
   "eveningHint": "每天這個時間，聊聊今天怎麼樣",
   "hotkeyHintPressOnly": "按一下打字。這台電腦上沒辦法長按說話。",
-  "speech": "語音辨識",
-  "speechHint": "長按 ⌥X 說話要用。會在這台電腦上跑 {{engine}}，聲音不離開電腦。",
-  "speechReady": "{{engine}}，在這台電腦上跑",
-  "speechInstall": "安裝",
-  "speechRetry": "再試一次",
-  "speechFailed": "沒裝成功：{{error}}",
-  "speechNeedsUv": "需要先裝 uv（Python 的套件工具）。",
-  "speechStep": {
-    "environment": "正在準備 Python 環境…",
-    "packages": "正在安裝 Standard ASR…",
-    "model": "正在下載語音模型，可能要幾分鐘…"
-  },
   "models": {
     "main": "Jezo 用的模型",
     "mainHint": "你選的",
@@ -124,11 +112,304 @@
     "builtAt": "建置時間",
     "system": "系統",
     "copy": "複製",
-    "copied": "已複製"
+    "copied": "已複製",
+    "tagline": "本地優先的個人 agent，幫你把目標變成計畫，再一件件跟進，讓你專注在當下。",
+    "source": "原始碼",
+    "license": "授權",
+    "licenseHint": "開源軟體，可自由使用、修改與散布。",
+    "star": "喜歡 Jezo 嗎？",
+    "starHint": "到 GitHub 給它一顆星，讓更多需要的人找到它。",
+    "starButton": "點顆星",
+    "build": "版本資訊",
+    "notInstalled": "沒裝",
+    "unreadable": "讀不到"
   },
-  "speechUpdateFailed": "更新沒成功，先用已經裝好的版本：{{error}}",
   "reminders": {
     "title": "截止提醒",
     "hint": "截止日前一天晚上 6 點，或截止時刻前 3 小時，提醒一次。做完或不做了就不提醒。"
+  },
+  "speech": {
+    "title": "語音辨識",
+    "using": "{{model}} · {{engine}}",
+    "listSeparator": "、",
+    "installHint": "按住 ⌥X 語音輸入需要語音辨識（ASR）模型。安裝時會建立 Python 環境，並下載預設的引擎與模型。",
+    "needsUv": "需要先安裝 uv（Python 套件管理工具）。",
+    "installFailed": "安裝失敗：{{error}}",
+    "install": "安裝",
+    "retry": "重試",
+    "noModel": "尚未選擇模型，選擇後才能使用語音輸入",
+    "modelBroken": "{{model}} 無法載入，請檢查",
+    "intro": "選擇按住 ⌥X 語音輸入時使用的語音辨識（ASR）模型。模型由已安裝的 Standard ASR 引擎提供，安裝新引擎即可使用其模型。",
+    "checkUpdates": "檢查更新",
+    "more": "語音辨識的更多選項",
+    "refresh": "重新整理",
+    "search": "搜尋模型",
+    "addEngine": "安裝引擎",
+    "installOther": "安裝其他引擎",
+    "noEngines": "尚未安裝任何引擎。",
+    "unsaved": "未儲存",
+    "reading": "讀取中…",
+    "oldCore": "已安裝的 Standard ASR 版本較舊，缺少工作階段能力檢查（PR 107）。辨識仍可使用，建議與引擎一併更新。",
+    "configurationError": "目前的設定無法建立此模型：{{error}}",
+    "active": "使用中",
+    "use": "使用此模型",
+    "downloadAndUse": "下載並使用",
+    "nowUsing": "已切換為 {{model}}",
+    "useFailed": "切換失敗",
+    "downloadFailed": "下載失敗",
+    "declarations": "完整能力宣告（JSON）",
+    "facts": {
+      "title": "模型能力",
+      "mode": "辨識方式",
+      "live": "流式辨識",
+      "liveHint": "說話時即時輸出中間結果，文字會陸續出現。",
+      "liveNoPartials": "流式辨識（無中間結果）",
+      "liveNoPartialsHint": "音訊即時送入模型，但說完後才輸出文字。",
+      "afterwards": "批次辨識",
+      "afterwardsHint": "放開 ⌥X 後才辨識整段錄音，錄音期間不會出現文字。",
+      "guidance": "上下文",
+      "guidance_both": "支援提示詞與熱詞",
+      "guidance_prompt": "支援提示詞",
+      "guidance_hints": "支援熱詞",
+      "guidance_none": "不支援",
+      "guidedHint": "Jezo 會自動把你的待辦、目標與頁面名稱作為上下文傳給模型，提升專有名詞的準確度。",
+      "unguidedHint": "無法傳入上下文，專有名詞較容易辨識錯誤。",
+      "languages": "語言",
+      "languagesDetect_other": "{{count}} 種，支援自動偵測",
+      "languagesCount_other": "{{count}} 種",
+      "whichLanguages": "查看全部語言",
+      "audio": "輸入音訊",
+      "audioValue": "PCM 16-bit，{{rate}} kHz",
+      "audioStreamHint": "錄音時逐段送出。",
+      "audioBatchHint": "錄音結束後整段送出。",
+      "declared": "以上依引擎宣告。目前的設定無法建立模型，實際能力需待設定修正後才能確認。"
+    },
+    "files": {
+      "title": "模型檔案",
+      "none": "此模型不需要額外的檔案。",
+      "ready": "已下載。",
+      "readySize": "已下載，共 {{size}}。",
+      "needDownload": "尚未下載，下載完成後才能使用。",
+      "needDownloadSize": "尚未下載（約 {{size}}），下載完成後才能使用。",
+      "blocked": "缺少必要檔案，且目前無法自動下載：",
+      "unknown": "引擎無法確認檔案是否完整，仍可嘗試使用。",
+      "unreadable": "無法讀取檔案狀態：{{error}}",
+      "download": "下載",
+      "open": "前往",
+      "lastFailed": "上次下載失敗：{{error}}",
+      "details": "檔案位置與版本",
+      "usedMode": "⌥X 使用的模式（{{mode}}）",
+      "otherMode": "{{mode}}（⌥X 不使用）",
+      "expected": "約 {{size}}",
+      "optional": "選用",
+      "refreshHint": "來源可能已更新。重新檢查時，若有新版本會一併下載。",
+      "refresh": "重新檢查"
+    },
+    "mode": {
+      "streaming": "流式",
+      "batch": "批次"
+    },
+    "state": {
+      "ready": "就緒",
+      "missing": "缺少",
+      "incomplete": "不完整",
+      "corrupt": "已損壞",
+      "unknown": "未知"
+    },
+    "blocker": {
+      "downloads_disabled": "引擎設定為不下載（例如啟用了「僅使用本機檔案」）。",
+      "action_required": "需要先完成以下步驟。",
+      "unsupported": "引擎無法自動取得此檔案，需要手動放置。"
+    },
+    "step": {
+      "environment": "建立 Python 環境",
+      "packages": "安裝套件",
+      "model": "下載模型檔案",
+      "checking": "處理中",
+      "removing": "解除安裝中"
+    },
+    "settings": {
+      "title": "模型設定",
+      "intro": "未修改的項目使用引擎預設值，只有修改過的項目會被儲存。",
+      "modified_other": "已修改 {{count}} 項",
+      "group": {
+        "options": "辨識參數",
+        "config": "模型載入",
+        "provider": "引擎專屬參數",
+        "deadlines": "串流時限"
+      },
+      "groupHint": {
+        "options": "每次辨識時傳給引擎的參數（RuntimeParams）。",
+        "config": "建立模型時使用的初始化設定，例如下載目錄與運算裝置。",
+        "provider": "此引擎特有的解碼參數，其他引擎不適用。",
+        "deadlines": "流式辨識的逾時設定（StreamDeadlines）。選擇「空值」可停用該時限；「使用預設值」則由引擎決定。"
+      },
+      "default": "預設：{{value}}",
+      "unset": "未設定",
+      "isDefault": "（預設）",
+      "none": "無",
+      "auto": "自動偵測",
+      "reset": "{{name}}：恢復預設值",
+      "resetHint": "恢復預設值",
+      "removeSecret": "移除 {{name}}",
+      "removeSecretHint": "移除已儲存的值",
+      "notSaved": "儲存失敗，原設定未變更：{{error}}",
+      "fixFirst": "有欄位格式不正確",
+      "unsaved": "有未儲存的變更",
+      "revert": "捨棄變更",
+      "save": "儲存",
+      "onePerLine": "每行一項",
+      "needInteger": "需為整數",
+      "needNumber": "需為數字",
+      "badJson": "JSON 格式不正確",
+      "json": "以 JSON 格式輸入",
+      "secretRemoving": "儲存後移除",
+      "undo": "復原",
+      "secretSaved": "已儲存於鑰匙圈",
+      "secretReplace": "更換",
+      "secretNew": "輸入新的值",
+      "value": {
+        "fail": "依嚴格模式處理",
+        "degrade_to_prompt": "改為併入提示詞",
+        "word": "逐字",
+        "segment": "逐段",
+        "char": "逐字元"
+      },
+      "unused_other": "Jezo 不使用的項目（{{count}}）",
+      "unusedHint": "這些設定照樣會傳給引擎，但 Jezo 目前不讀取它們的結果（Jezo 只錄製麥克風音訊，並只保留辨識文字），因此不會改變語音輸入。",
+      "useDefault": "使用預設值",
+      "nullValue": "空值",
+      "numberOptions": "{{name}}的數值選項"
+    },
+    "field": {
+      "language": {
+        "label": "語言",
+        "hint": "辨識時使用的語言。未設定時由引擎決定，通常為自動偵測。"
+      },
+      "candidate_languages": {
+        "label": "候選語言",
+        "hint": "自動偵測時僅在這些語言中判斷，每行一個語言代碼。"
+      },
+      "prompt": {
+        "label": "提示詞（prompt）",
+        "hint": "提供給模型的上下文文字。未設定時，Jezo 會自動帶入待辦與對話內容。"
+      },
+      "phrase_hints": {
+        "label": "熱詞（phrase hints）",
+        "hint": "需要優先辨識的詞彙，每行一個。未設定時由 Jezo 自動提供。"
+      },
+      "on_unsupported": {
+        "label": "不支援時的處理",
+        "hint": "引擎不支援熱詞等參數時，是否改為併入提示詞。"
+      },
+      "done_timeout": {
+        "label": "結束逾時（秒）",
+        "hint": "音訊結束後等待最終結果的時間上限。"
+      },
+      "max_idle": {
+        "label": "閒置逾時（秒）",
+        "hint": "超過此時間未收到音訊即結束工作階段。"
+      },
+      "max_session_seconds": {
+        "label": "工作階段時長上限（秒）",
+        "hint": "單次辨識的最長時間。"
+      },
+      "default_language": {
+        "label": "預設語言",
+        "hint": "未指定語言時使用。"
+      },
+      "default_candidate_languages": {
+        "label": "預設候選語言",
+        "hint": "自動偵測時預設的候選語言。"
+      },
+      "download_root": {
+        "label": "下載目錄",
+        "hint": "模型檔案的存放位置。未設定時使用引擎的預設快取位置。"
+      },
+      "local_files_only": {
+        "label": "僅使用本機檔案",
+        "hint": "啟用後不會下載，只使用已存在的檔案。"
+      },
+      "revision": {
+        "label": "模型版本（revision）",
+        "hint": "模型來源的分支、標籤或 commit。"
+      },
+      "hf_token": {
+        "label": "Hugging Face Token",
+        "hint": "下載需授權的模型時使用，儲存於系統鑰匙圈。"
+      },
+      "strict": {
+        "label": "嚴格模式",
+        "hint": "啟用時遇到不支援的參數會報錯；停用時略過並記錄診斷訊息。"
+      },
+      "model_path": {
+        "label": "本機模型路徑",
+        "hint": "以本機的模型目錄取代預設權重。"
+      },
+      "device": {
+        "label": "運算裝置",
+        "hint": "例如 cpu、cuda 或 auto。"
+      },
+      "word_timestamps": {
+        "label": "時間戳記",
+        "hint": "輸出每個字或每一段的時間戳記。"
+      },
+      "diarization": {
+        "label": "說話者分離（diarization）",
+        "hint": "標示每段話的說話者。"
+      },
+      "allow_private_urls": {
+        "label": "允許私有網址",
+        "hint": "放寬 SSRF 限制，允許以內網或本機網址提供音訊（仍需 HTTPS）。"
+      }
+    },
+    "engines": {
+      "installed_other": "安裝完成，新增 {{count}} 個模型",
+      "installedNothing": "安裝完成，但未找到新模型。此套件可能不是 Standard ASR 引擎。",
+      "addTitle": "安裝引擎",
+      "addIntro": "引擎是實作 Standard ASR 協定的 Python 套件，每個引擎提供一個或多個模型。",
+      "requirement": "套件",
+      "requirementHint": "輸入 PyPI 套件名稱、Git 網址或本機路徑。",
+      "find": "在 GitHub 瀏覽引擎",
+      "install": "安裝",
+      "menu": "{{name}} 選項",
+      "uninstall": "解除安裝",
+      "uninstallTitle": "解除安裝 {{name}}？",
+      "uninstallBody_other": "此引擎提供的 {{count}} 個模型將從清單移除。已下載的模型檔案會保留，重新安裝後無需再次下載。",
+      "uninstallActive": "目前使用中的模型也屬於此引擎，解除安裝後需另選模型。",
+      "uninstalled": "已解除安裝 {{name}}",
+      "uninstallFailed": "解除安裝失敗"
+    },
+    "updates": {
+      "done_other": "已更新 {{count}} 個套件",
+      "title": "更新",
+      "intro": "勾選的套件會在同一次依賴解析中一併更新，確保 Standard ASR 與引擎版本相容。",
+      "oldCore": "已安裝的 Standard ASR 版本較舊，建議與引擎一併更新。",
+      "checking": "檢查中…",
+      "none": "所有套件皆為最新版本。",
+      "mainCurrent": "Standard ASR 與引擎皆為最新版本。",
+      "notChecked": "尚未檢查。",
+      "dependencies_other": "其他依賴套件（{{count}}）",
+      "failed_other": "{{count}} 個套件檢查失敗",
+      "toolsNote": "Python 與 uv 不在此更新：uv 隨 Jezo 更新，Python 版本列於「環境資訊」。",
+      "checkAgain": "重新檢查",
+      "update_other": "更新 {{count}} 個"
+    },
+    "diagnostics": {
+      "yes": "是",
+      "no": "否",
+      "missing": "未安裝",
+      "stableText": "stable_text（PR 107）",
+      "sessionChecks": "工作階段能力檢查（PR 107）",
+      "model": "⌥X 使用的模型",
+      "none": "無",
+      "title": "環境資訊",
+      "intro": "回報問題時，可複製以下資訊。",
+      "empty": "（無輸出）",
+      "session": "辨識診斷訊息",
+      "sessionNone": "目前沒有。",
+      "sessionHint": "引擎在辨識過程中回報的診斷訊息，自 Jezo 本次啟動起記錄。診斷訊息不一定代表辨識失敗。",
+      "run": "執行檢查"
+    }
   }
 }

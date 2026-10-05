@@ -1,55 +1,26 @@
 // Holding ⌥X to talk, from the microphone to the agent. Chromium's fake
 // microphone plays a sentence macOS speaks; the ⌥X window streams it to
-// Standard ASR, which this test installs from 設定 the way a user would.
+// Standard ASR. Setup goes through the public IPC; e2e/asr.spec.ts covers 設定.
 // Needs macOS on Apple Silicon, uv, and a local model server.
 
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { ElectronApplication, Page } from '@playwright/test'
 import { expect, open, test } from './jezo'
+import { fakeMicrophone, spoken } from './speech-audio'
 
-const ready = process.platform === 'darwin' && process.arch === 'arm64' && (() => {
-  try {
-    execFileSync('uv', ['--version'])
-    return true
-  } catch {
-    return false
-  }
-})()
-
-/**
- * A spoken sentence as 16 kHz mono WAV, with silence after it so the fake
- * microphone doesn't loop back into it. An empty sentence is silence only.
- */
-function spoken(sentence: string) {
-  const dir = mkdtempSync(join(tmpdir(), 'jezo-voice-'))
-  let said = Buffer.alloc(0)
-  if (sentence) {
-    execFileSync('say', ['-v', 'Meijia', '-o', join(dir, 'said.aiff'), sentence])
-    execFileSync('afconvert', ['-f', 'WAVE', '-d', 'LEI16@16000', '-c', '1', join(dir, 'said.aiff'), join(dir, 'said.wav')])
-    const wav = readFileSync(join(dir, 'said.wav'))
-    said = wav.subarray(wav.indexOf('data') + 8)
-  }
-  const pcm = Buffer.concat([said, Buffer.alloc(16000 * 2 * 6)])
-  const header = Buffer.alloc(44)
-  header.write('RIFF', 0)
-  header.writeUInt32LE(36 + pcm.length, 4)
-  header.write('WAVEfmt ', 8)
-  header.writeUInt32LE(16, 16)
-  header.writeUInt16LE(1, 20)
-  header.writeUInt16LE(1, 22)
-  header.writeUInt32LE(16000, 24)
-  header.writeUInt32LE(32000, 28)
-  header.writeUInt16LE(2, 32)
-  header.writeUInt16LE(16, 34)
-  header.write('data', 36)
-  header.writeUInt32LE(pcm.length, 40)
-  const file = join(dir, 'padded.wav')
-  writeFileSync(file, Buffer.concat([header, pcm]))
-  return file
-}
+const ready =
+  process.platform === 'darwin' &&
+  process.arch === 'arm64' &&
+  (() => {
+    try {
+      execFileSync('uv', ['--version'])
+      return true
+    } catch {
+      return false
+    }
+  })()
 
 /** What the ⌥X key sends the window when it's held and released. The key itself is the OS's. */
 function hotkey(app: ElectronApplication, kind: 'voice-start' | 'voice-end') {
@@ -60,31 +31,34 @@ function hotkey(app: ElectronApplication, kind: 'voice-start' | 'voice-end') {
   }, kind)
 }
 
-/** Installs speech recognition from 設定, the way a user would. */
+/** The one-click install, through the same IPC call 設定 makes. */
 async function install(page: Page) {
-  await open(page, '設定')
-  await page.getByRole('button', { name: '安裝' }).click()
-  await expect(page.getByText(/Qwen3-ASR 0.6B，在這台電腦上跑/)).toBeVisible({ timeout: 540_000 })
+  await page.evaluate(() => window.jezo.speech.install())
+  const status = await page.evaluate(() => window.jezo.speech.status())
+  expect(status.installed).toBe(true)
+  expect(status.step).toBeNull()
+  expect(status.error).toBeNull()
 }
 
 /** A todo in the backlog whose name a recognizer gets wrong on its own: 鵝鑾鼻 comes out 俄伦鼻. */
 function campingTodo(root: string) {
   mkdirSync(join(root, 'todos/items'), { recursive: true })
-  writeFileSync(join(root, 'todos/items/t-camp.md'), '---\nid: t-camp\ntitle: 整理鵝鑾鼻露營裝備\nstate: open\nestimate: 40\n---\n')
+  writeFileSync(
+    join(root, 'todos/items/t-camp.md'),
+    '---\nid: t-camp\ntitle: 整理鵝鑾鼻露營裝備\nstate: open\nestimate: 40\n---\n',
+  )
 }
-
-const fakeMicrophone = (file: string) => [
-  '--use-fake-ui-for-media-stream',
-  '--use-fake-device-for-media-stream',
-  // The audio service's sandbox can't read the file otherwise.
-  '--disable-features=AudioServiceOutOfProcess,AudioServiceSandbox',
-  `--use-file-for-fake-audio-capture=${file}`,
-]
 
 test.describe('dictation knows the words in the workspace', { tag: '@speech' }, () => {
   test.skip(!ready, 'Needs macOS on Apple Silicon and uv.')
   test.describe.configure({ timeout: 600_000 })
-  test.use({ prepare: { model: null, workspace: campingTodo, args: fakeMicrophone(ready ? spoken('我要整理鵝鑾鼻露營裝備') : '') } })
+  test.use({
+    prepare: {
+      model: null,
+      workspace: campingTodo,
+      args: fakeMicrophone(ready ? spoken('我要整理鵝鑾鼻露營裝備') : ''),
+    },
+  })
 
   test("a todo's name comes out the way it's written in the todo", async ({ jezo }) => {
     const { app, page } = jezo
@@ -127,7 +101,8 @@ function engineCommit(data: string) {
     for (const python of readdirSync(lib)) {
       const site = join(lib, python, 'site-packages')
       const info = readdirSync(site).find((name) => name.startsWith('std_mlx_audio-') && name.endsWith('.dist-info'))
-      if (info) return JSON.parse(readFileSync(join(site, info, 'direct_url.json'), 'utf8')).vcs_info.commit_id as string
+      if (info)
+        return JSON.parse(readFileSync(join(site, info, 'direct_url.json'), 'utf8')).vcs_info.commit_id as string
     }
   } catch {
     // Not there yet.
@@ -147,22 +122,48 @@ test.describe('an install from before this Jezo', { tag: '@speech' }, () => {
       data: (dir) => {
         const venv = join(dir, 'speech/venv')
         execFileSync('uv', ['venv', '--python', '3.12', venv])
-        const core = 'standard-asr[server] @ git+https://github.com/standard-voice/standard_asr.git@1b2cf3fa5860c075e5160eb60b26b708a7c8bfea'
+        const core =
+          'standard-asr[server] @ git+https://github.com/standard-voice/standard_asr.git@1b2cf3fa5860c075e5160eb60b26b708a7c8bfea'
         writeFileSync(join(dir, 'speech/overrides.txt'), `${core}\n`)
         // From the speech folder, as Jezo does: uv cuts an --overrides path at a space.
-        execFileSync('uv', ['pip', 'install', '--python', join(venv, 'bin/python'), '--overrides', 'overrides.txt', core, `std-mlx-audio @ git+https://github.com/standard-voice/std-mlx-audio.git@${OLD_ENGINE}`], { cwd: join(dir, 'speech') })
+        execFileSync(
+          'uv',
+          [
+            'pip',
+            'install',
+            '--python',
+            join(venv, 'bin/python'),
+            '--overrides',
+            'overrides.txt',
+            core,
+            `std-mlx-audio @ git+https://github.com/standard-voice/std-mlx-audio.git@${OLD_ENGINE}`,
+          ],
+          { cwd: join(dir, 'speech') },
+        )
       },
     },
   })
 
-  test('is moved to the commits this Jezo names when it starts, and then works', async ({ jezo }) => {
+  test('keeps the installed version until the owner updates core and engine together', async ({ jezo }, info) => {
     const { page, data } = jezo
     expect(engineCommit(data)).toBe(OLD_ENGINE)
-    await expect.poll(() => engineCommit(data), { timeout: 300_000 }).not.toBe(OLD_ENGINE)
-    const pinned = readFileSync('src/main/speech/speech.ts', 'utf8').match(/std-mlx-audio\.git', commit: '([0-9a-f]{40})'/)![1]
-    expect(engineCommit(data)).toBe(pinned)
-    await open(page, '設定')
-    await expect(page.getByText(/Qwen3-ASR 0.6B，在這台電腦上跑/)).toBeVisible({ timeout: 120_000 })
+    await page.evaluate(() => window.jezo.speech.command({ kind: 'refresh' }))
+    expect(engineCommit(data)).toBe(OLD_ENGINE)
+    const before = await page.evaluate(() => window.jezo.speech.inventory())
+    expect(before.runtime).toEqual({ stableText: false, sessionCapabilityChecks: false })
+    await page.evaluate(() => window.jezo.speech.command({ kind: 'checkUpdates' }))
+    const update = await page.evaluate(async () => (await window.jezo.speech.inventory()).updates.find((item) => item.name === 'std-mlx-audio'))
+    expect(update?.error).toBeNull()
+    expect(update?.requirement).toBeTruthy()
+    expect(update?.latest).toMatch(/^[0-9a-f]{40}$/)
+    await page.evaluate(() => window.jezo.speech.command({ kind: 'updatePackages', names: ['standard-asr', 'std-mlx-audio'] }))
+    await expect.poll(() => engineCommit(data), { timeout: 300_000 }).toBe(update!.latest)
+    const after = await page.evaluate(() => window.jezo.speech.inventory())
+    expect(after.runtime).toEqual({ stableText: true, sessionCapabilityChecks: true })
+    expect(after.models.filter((model) => model.error)).toEqual([])
+    await jezo.restart()
+    expect((await jezo.page.evaluate(() => window.jezo.speech.inventory())).runtime).toEqual(after.runtime)
+    await info.attach('manual-contract-upgrade', { body: JSON.stringify({ before, after }, null, 2), contentType: 'application/json' })
     expect(jezo.errors).toEqual([])
   })
 })
@@ -186,14 +187,17 @@ test.describe('holding ⌥X', { tag: '@speech' }, () => {
 
     // What was said is sent as the question, and shows as one.
     await expect(quick.locator('[data-selectable]').first()).toHaveText(/打給媽.*明天晚上八點/, { timeout: 30_000 })
-    await expect.poll(() => read('todos/items/t-u2.md').data.scheduled, { timeout: 240_000 }).toMatch(/T20:00(\[Asia\/Taipei\])?$/)
+    await expect
+      .poll(() => read('todos/items/t-u2.md').data.scheduled, { timeout: 240_000 })
+      .toMatch(/T20:00(\[Asia\/Taipei\])?$/)
   })
 })
 
 test.describe('dictating in the chat box', { tag: '@speech' }, () => {
   test.skip(!ready, 'Needs macOS on Apple Silicon and uv.')
   test.describe.configure({ timeout: 600_000 })
-  const long = '我今天想把升等文件的影響那一段寫完，然後下午去健身房，晚上再打電話給媽媽，問她週末要不要一起吃飯，順便把露營的東西整理好。'
+  const long =
+    '我今天想把升等文件的影響那一段寫完，然後下午去健身房，晚上再打電話給媽媽，問她週末要不要一起吃飯，順便把露營的東西整理好。'
   test.use({ prepare: { model: null, args: fakeMicrophone(ready ? spoken(long) : '') } })
 
   test('what is heard grows the box with it, and stays inside it', async ({ jezo }, info) => {

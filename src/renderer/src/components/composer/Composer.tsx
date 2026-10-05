@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { inAppScript } from '@/lib/chinese'
+import { useStore } from '@/data/store'
 import { useDictation } from '@/lib/mic'
 import type { SlashCommand } from '../../../../shared/session'
 import { ModelChip } from './ModelChip'
@@ -88,10 +89,19 @@ export function Composer({
   // What was said goes into the box, after what was typed; the user sends it.
   const stopListening = async () => {
     setListening(false)
-    const said = inAppScript((await window.jezo.speech.end()).trim()) || heard
+    const result = await window.jezo.speech.end()
+    if (result.error) toast.error(result.error)
+    const said = inAppScript(result.text.trim())
     setHeard('')
     if (said) onChange(value ? `${value.trimEnd()} ${said}` : said)
     input.current?.focus()
+  }
+  // The old recording is already ending in main. Keep this window's draft
+  // without asking to end the recording that the other window now owns.
+  const onReplaced = () => {
+    setListening(false)
+    setHeard('')
+    if (heard) onChange(value ? `${value.trimEnd()} ${heard}` : heard)
   }
   // A window put away, like ⌥X dismissed, stops listening and keeps what was heard: the microphone isn't left on out of sight.
   const stopRef = useRef(stopListening)
@@ -151,7 +161,7 @@ export function Composer({
         </div>
         <ModelChip openModels={modelMenu} />
         {listening ? (
-          <Listening session={session} onHeard={setHeard} onStop={() => void stopListening()} onUnavailable={() => setListening(false)} />
+          <Listening session={session} onHeard={setHeard} onStop={() => void stopListening()} onReplaced={onReplaced} onUnavailable={() => setListening(false)} />
         ) : (
           <Button
             variant="ghost"
@@ -199,17 +209,19 @@ function Heard({ className, children }: { className: string; children: React.Rea
 }
 
 /** The microphone while it's on: its level as three bars, and a click to stop. */
-function Listening({ session, onHeard, onStop, onUnavailable }: { session?: string | null; onHeard: (text: string) => void; onStop: () => void; onUnavailable: () => void }) {
+function Listening({ session, onHeard, onStop, onReplaced, onUnavailable }: { session?: string | null; onHeard: (text: string) => void; onStop: () => void; onReplaced: () => void; onUnavailable: () => void }) {
   const { t } = useTranslation()
   const mic = useDictation(3, session)
   useEffect(() => window.jezo.speech.onText((text) => onHeard(inAppScript(text))), [onHeard])
   // Another window took the microphone (⌥X held while dictating here): stop, keeping what was heard.
-  useEffect(() => window.jezo.speech.onReplaced(onStop), [onStop])
+  useEffect(() => window.jezo.speech.onReplaced(onReplaced), [onReplaced])
   useEffect(() => {
     if (mic.ready && !mic.error) return
     void window.jezo.speech.end()
     onUnavailable()
-    toast(mic.error ? t('composer.micDenied') : t('composer.speechMissing'))
+    toast(mic.error ?? t('composer.speechMissing'), {
+      action: { label: t('composer.speechSettings'), onClick: () => useStore.getState().navigate('settings', 'speech') },
+    })
   }, [mic.ready, mic.error])
   return (
     <Button

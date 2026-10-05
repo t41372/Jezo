@@ -15,18 +15,6 @@
   "evening": "Evening check-in",
   "eveningHint": "At this time every day, talk about how the day went",
   "hotkeyHintPressOnly": "Press to type. Holding to talk doesn't work on this computer.",
-  "speech": "Speech recognition",
-  "speechHint": "For holding ⌥X to talk. Runs {{engine}} on this computer; your voice never leaves it.",
-  "speechReady": "{{engine}}, running on this computer",
-  "speechInstall": "Install",
-  "speechRetry": "Try again",
-  "speechFailed": "The install failed: {{error}}",
-  "speechNeedsUv": "Needs uv (Python's package tool) installed first.",
-  "speechStep": {
-    "environment": "Setting up Python…",
-    "packages": "Installing Standard ASR…",
-    "model": "Downloading the speech model; this can take a few minutes…"
-  },
   "models": {
     "main": "Jezo's model",
     "mainHint": "Your pick",
@@ -125,11 +113,314 @@
     "builtAt": "Built",
     "system": "System",
     "copy": "Copy",
-    "copied": "Copied"
+    "copied": "Copied",
+    "tagline": "A local-first personal agent that helps turn your goals into plans and follow-through so you can focus on the present.",
+    "source": "Source code",
+    "license": "License",
+    "licenseHint": "Open source: free to use, modify and distribute.",
+    "star": "Like Jezo?",
+    "starHint": "Give it a star on GitHub, so more people who need it can find it.",
+    "starButton": "Star it",
+    "build": "Build",
+    "notInstalled": "Not installed",
+    "unreadable": "Couldn't read"
   },
-  "speechUpdateFailed": "Couldn’t update it, so the installed version is running: {{error}}",
   "reminders": {
     "title": "Deadline reminders",
     "hint": "Once, at 6 pm the day before a deadline, or 3 hours before a deadline with a time. Not once it’s done or dropped."
+  },
+  "speech": {
+    "title": "Speech recognition",
+    "using": "{{model}} · {{engine}}",
+    "listSeparator": ", ",
+    "installHint": "Voice input with ⌥X needs a speech recognition (ASR) model. Installing creates a Python environment and downloads the default engine and model.",
+    "needsUv": "Requires uv (a Python package manager) to be installed first.",
+    "installFailed": "Installation failed: {{error}}",
+    "install": "Install",
+    "retry": "Retry",
+    "noModel": "No model selected. Select one to use voice input",
+    "modelBroken": "{{model}} can't be loaded. Check its settings",
+    "intro": "Choose the speech recognition (ASR) model used for voice input with ⌥X. Models are provided by installed Standard ASR engines; installing an engine makes its models available.",
+    "checkUpdates": "Check for updates",
+    "more": "More speech recognition options",
+    "refresh": "Refresh",
+    "search": "Search models",
+    "addEngine": "Install engine",
+    "installOther": "Install another engine",
+    "noEngines": "No engines installed.",
+    "unsaved": "Unsaved",
+    "reading": "Loading…",
+    "oldCore": "The installed Standard ASR is outdated and lacks session capability checks (PR 107). Recognition still works; updating it together with the engines is recommended.",
+    "configurationError": "This model can't be created with the current settings: {{error}}",
+    "active": "In use",
+    "use": "Use this model",
+    "downloadAndUse": "Download and use",
+    "nowUsing": "Switched to {{model}}",
+    "useFailed": "Couldn't switch models",
+    "downloadFailed": "Download failed",
+    "declarations": "Full capability declaration (JSON)",
+    "facts": {
+      "title": "Capabilities",
+      "mode": "Recognition",
+      "live": "Streaming",
+      "liveHint": "Partial results are shown while you speak.",
+      "liveNoPartials": "Streaming, without partial results",
+      "liveNoPartialsHint": "Audio is sent to the model as you speak, but text appears only when you finish.",
+      "afterwards": "Batch",
+      "afterwardsHint": "The whole recording is transcribed after you release ⌥X; no text appears while recording.",
+      "guidance": "Context",
+      "guidance_both": "Prompt and phrase hints",
+      "guidance_prompt": "Prompt",
+      "guidance_hints": "Phrase hints",
+      "guidance_none": "Not supported",
+      "guidedHint": "Jezo passes your todos, goals and page names to the model as context, which improves accuracy on names and terms.",
+      "unguidedHint": "No context can be passed, so names and terms are more likely to be misrecognized.",
+      "languages": "Languages",
+      "languagesDetect_one": "{{count}}, with automatic detection",
+      "languagesDetect_other": "{{count}}, with automatic detection",
+      "languagesCount_one": "{{count}}",
+      "languagesCount_other": "{{count}}",
+      "whichLanguages": "Show all languages",
+      "audio": "Input audio",
+      "audioValue": "16-bit PCM, {{rate}} kHz",
+      "audioStreamHint": "Sent in chunks while recording.",
+      "audioBatchHint": "Sent as a whole after recording ends.",
+      "declared": "Based on the engine's declaration. The model can't be created with the current settings, so its actual capabilities are known only once the settings are fixed."
+    },
+    "files": {
+      "title": "Model files",
+      "none": "This model needs no additional files.",
+      "ready": "Downloaded.",
+      "readySize": "Downloaded, {{size}} in total.",
+      "needDownload": "Not downloaded. The model can be used once the download completes.",
+      "needDownloadSize": "Not downloaded (about {{size}}). The model can be used once the download completes.",
+      "blocked": "Required files are missing and can't be downloaded automatically:",
+      "unknown": "The engine can't confirm whether the files are complete. You can still try using the model.",
+      "unreadable": "Couldn't read the file status: {{error}}",
+      "download": "Download",
+      "open": "Open",
+      "lastFailed": "The last download failed: {{error}}",
+      "details": "File locations and versions",
+      "usedMode": "Mode used by ⌥X ({{mode}})",
+      "otherMode": "{{mode}} (not used by ⌥X)",
+      "expected": "about {{size}}",
+      "optional": "optional",
+      "refreshHint": "The source may have been updated. Checking again downloads a newer version if there is one.",
+      "refresh": "Check again"
+    },
+    "mode": {
+      "streaming": "streaming",
+      "batch": "batch"
+    },
+    "state": {
+      "ready": "ready",
+      "missing": "missing",
+      "incomplete": "incomplete",
+      "corrupt": "corrupt",
+      "unknown": "unknown"
+    },
+    "blocker": {
+      "downloads_disabled": "The engine is configured not to download (for example, “Local files only” is on).",
+      "action_required": "The following steps are required first.",
+      "unsupported": "The engine can't obtain this file itself; it has to be placed manually."
+    },
+    "step": {
+      "environment": "Creating the Python environment",
+      "packages": "Installing packages",
+      "model": "Downloading model files",
+      "checking": "Working",
+      "removing": "Uninstalling"
+    },
+    "settings": {
+      "title": "Model settings",
+      "intro": "Unchanged settings use the engine's defaults; only the settings you change are saved.",
+      "modified_one": "{{count}} changed",
+      "modified_other": "{{count}} changed",
+      "group": {
+        "options": "Recognition parameters",
+        "config": "Model loading",
+        "provider": "Engine-specific parameters",
+        "deadlines": "Streaming deadlines"
+      },
+      "groupHint": {
+        "options": "Parameters passed to the engine for each recognition (RuntimeParams).",
+        "config": "Initialization settings used when the model is created, such as the download directory and the device.",
+        "provider": "Decoding parameters specific to this engine; other engines don't accept them.",
+        "deadlines": "Timeouts for streaming recognition (StreamDeadlines). Choose No value to disable a deadline; Use default leaves it to the engine."
+      },
+      "default": "Default: {{value}}",
+      "unset": "Not set",
+      "isDefault": " (default)",
+      "none": "None",
+      "auto": "Detect automatically",
+      "reset": "Reset {{name}} to default",
+      "resetHint": "Reset to default",
+      "removeSecret": "Remove {{name}}",
+      "removeSecretHint": "Remove the saved value",
+      "notSaved": "Not saved; the previous settings are unchanged: {{error}}",
+      "fixFirst": "Some fields are invalid",
+      "unsaved": "Unsaved changes",
+      "revert": "Discard changes",
+      "save": "Save",
+      "onePerLine": "One per line",
+      "needInteger": "Must be an integer",
+      "needNumber": "Must be a number",
+      "badJson": "Invalid JSON",
+      "json": "Enter as JSON",
+      "secretRemoving": "Removed on save",
+      "undo": "Undo",
+      "secretSaved": "Saved in the keychain",
+      "secretReplace": "Replace",
+      "secretNew": "Enter a new value",
+      "value": {
+        "fail": "Follow strict mode",
+        "degrade_to_prompt": "Merge into the prompt",
+        "word": "Per word",
+        "segment": "Per segment",
+        "char": "Per character"
+      },
+      "unused_one": "Not used by Jezo ({{count}})",
+      "unused_other": "Not used by Jezo ({{count}})",
+      "unusedHint": "These settings are still passed to the engine, but Jezo doesn't read their results (it records microphone audio and keeps only the recognized text), so they don't change voice input.",
+      "useDefault": "Use default",
+      "nullValue": "No value",
+      "numberOptions": "Value options for {{name}}"
+    },
+    "field": {
+      "language": {
+        "label": "Language",
+        "hint": "The language to recognize. When not set, the engine decides, usually by detecting it."
+      },
+      "candidate_languages": {
+        "label": "Candidate languages",
+        "hint": "Restricts automatic detection to these languages. One language code per line."
+      },
+      "prompt": {
+        "label": "Prompt",
+        "hint": "Context text given to the model. When not set, Jezo provides context from your todos and conversation."
+      },
+      "phrase_hints": {
+        "label": "Phrase hints",
+        "hint": "Terms to recognize preferentially, one per line. When not set, Jezo provides them."
+      },
+      "on_unsupported": {
+        "label": "When unsupported",
+        "hint": "Whether to merge parameters the engine doesn't support, such as phrase hints, into the prompt."
+      },
+      "done_timeout": {
+        "label": "Completion timeout (s)",
+        "hint": "How long to wait for the final result after the audio ends."
+      },
+      "max_idle": {
+        "label": "Idle timeout (s)",
+        "hint": "The session ends after this long without audio."
+      },
+      "max_session_seconds": {
+        "label": "Maximum session length (s)",
+        "hint": "The longest a single recognition can last."
+      },
+      "default_language": {
+        "label": "Default language",
+        "hint": "Used when no language is specified."
+      },
+      "default_candidate_languages": {
+        "label": "Default candidate languages",
+        "hint": "The default candidates for automatic detection."
+      },
+      "download_root": {
+        "label": "Download directory",
+        "hint": "Where model files are stored. When not set, the engine's default cache is used."
+      },
+      "local_files_only": {
+        "label": "Local files only",
+        "hint": "When on, nothing is downloaded; only existing files are used."
+      },
+      "revision": {
+        "label": "Model revision",
+        "hint": "A branch, tag or commit of the model source."
+      },
+      "hf_token": {
+        "label": "Hugging Face token",
+        "hint": "Used to download gated models. Stored in the system keychain."
+      },
+      "strict": {
+        "label": "Strict mode",
+        "hint": "When on, unsupported parameters cause an error; when off, they're skipped with a diagnostic."
+      },
+      "model_path": {
+        "label": "Local model path",
+        "hint": "A local model directory used instead of the preset's weights."
+      },
+      "device": {
+        "label": "Device",
+        "hint": "For example cpu, cuda or auto."
+      },
+      "word_timestamps": {
+        "label": "Timestamps",
+        "hint": "Output timestamps for each word or segment."
+      },
+      "diarization": {
+        "label": "Speaker diarization",
+        "hint": "Label who is speaking in each segment."
+      },
+      "allow_private_urls": {
+        "label": "Allow private URLs",
+        "hint": "Relaxes the SSRF policy so audio may come from a private or loopback URL (HTTPS is still required)."
+      }
+    },
+    "engines": {
+      "installed_one": "Installed; {{count}} model added",
+      "installed_other": "Installed; {{count}} models added",
+      "installedNothing": "Installed, but no new models were found. The package may not be a Standard ASR engine.",
+      "addTitle": "Install engine",
+      "addIntro": "An engine is a Python package implementing the Standard ASR protocol. Each engine provides one or more models.",
+      "requirement": "Package",
+      "requirementHint": "Enter a PyPI package name, a Git URL or a local path.",
+      "find": "Browse engines on GitHub",
+      "install": "Install",
+      "menu": "{{name}} options",
+      "uninstall": "Uninstall",
+      "uninstallTitle": "Uninstall {{name}}?",
+      "uninstallBody_one": "The model it provides will be removed from the list. Downloaded model files are kept, so reinstalling doesn't download them again.",
+      "uninstallBody_other": "The {{count}} models it provides will be removed from the list. Downloaded model files are kept, so reinstalling doesn't download them again.",
+      "uninstallActive": "The model currently in use belongs to this engine; you'll need to select another one.",
+      "uninstalled": "Uninstalled {{name}}",
+      "uninstallFailed": "Uninstall failed"
+    },
+    "updates": {
+      "done_one": "Updated {{count}} package",
+      "done_other": "Updated {{count}} packages",
+      "title": "Updates",
+      "intro": "Selected packages are updated together in one dependency resolution, keeping Standard ASR and the engines compatible.",
+      "oldCore": "The installed Standard ASR is outdated; updating it together with the engines is recommended.",
+      "checking": "Checking…",
+      "none": "All packages are up to date.",
+      "mainCurrent": "Standard ASR and the engines are up to date.",
+      "notChecked": "Not checked yet.",
+      "dependencies_one": "Other dependency ({{count}})",
+      "dependencies_other": "Other dependencies ({{count}})",
+      "failed_one": "{{count}} package couldn't be checked",
+      "failed_other": "{{count}} packages couldn't be checked",
+      "toolsNote": "Python and uv aren't updated here: uv updates with Jezo, and the Python version is listed under Environment.",
+      "checkAgain": "Check again",
+      "update_one": "Update {{count}}",
+      "update_other": "Update {{count}}"
+    },
+    "diagnostics": {
+      "yes": "Yes",
+      "no": "No",
+      "missing": "Not installed",
+      "stableText": "stable_text (PR 107)",
+      "sessionChecks": "Session capability checks (PR 107)",
+      "model": "Model used by ⌥X",
+      "none": "None",
+      "title": "Environment",
+      "intro": "Copy this information when reporting a problem.",
+      "empty": "(no output)",
+      "session": "Recognition diagnostics",
+      "sessionNone": "None.",
+      "sessionHint": "Diagnostics reported by engines during recognition since Jezo started. A diagnostic doesn't necessarily mean recognition failed.",
+      "run": "Run checks"
+    }
   }
 }

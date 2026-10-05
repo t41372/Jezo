@@ -15,28 +15,40 @@ export function useDictation(count: number, session?: string | null) {
   useEffect(() => {
     let stopped = false
     let stream: MediaStream | null = null
-    // 16 kHz is what the engines take; Chromium resamples the microphone to it.
-    const context = new AudioContext({ sampleRate: 16000 })
+    // Streaming PCM uses the selected engine's declared rate; Chromium resamples it.
+    let context: AudioContext | null = null
     let frame = 0
     let last = 0
 
     const start = async () => {
-      const [media, available] = await Promise.all([navigator.mediaDevices.getUserMedia({ audio: true }), window.jezo.speech.start(session)])
-      if (stopped) return media.getTracks().forEach((track) => track.stop())
+      const rate = await window.jezo.speech.sampleRate()
+      if (stopped) return
+      if (!rate) { setReady(false); return }
+      context = new AudioContext({ sampleRate: rate })
+      const media = await navigator.mediaDevices.getUserMedia({ audio: true })
       stream = media
-      setReady(available)
+      if (stopped) return media.getTracks().forEach((track) => track.stop())
+      const opening = window.jezo.speech.start(session)
       const source = context.createMediaStreamSource(media)
       const analyser = context.createAnalyser()
       analyser.fftSize = 512
       source.connect(analyser)
-      if (available) {
-        await context.audioWorklet.addModule(workletUrl)
-        if (stopped) return
-        const pcm = new AudioWorkletNode(context, 'pcm16')
-        pcm.port.onmessage = (e: MessageEvent<ArrayBuffer>) => window.jezo.speech.audio(e.data)
-        source.connect(pcm)
-        // A node that isn't connected on to the output isn't run. It outputs silence.
-        pcm.connect(context.destination)
+      await context.audioWorklet.addModule(workletUrl)
+      if (stopped) return
+      const pcm = new AudioWorkletNode(context, 'pcm16')
+      pcm.port.onmessage = (e: MessageEvent<ArrayBuffer>) => window.jezo.speech.audio(e.data)
+      source.connect(pcm)
+      // Capture while Python opens: the main process queues these first words.
+      pcm.connect(context.destination)
+      const available = await opening
+      if (stopped) return
+      setReady(available !== false)
+      if (!available) {
+        media.getTracks().forEach((track) => track.stop())
+        void context.close()
+        const status = await window.jezo.speech.status()
+        if (status.error) setError(status.error)
+        return
       }
       const samples = new Float32Array(analyser.fftSize)
       const tick = (time: number) => {
@@ -49,13 +61,20 @@ export function useDictation(count: number, session?: string | null) {
       }
       frame = requestAnimationFrame(tick)
     }
-    start().catch((e: unknown) => setError(String(e)))
+    start().catch((e: unknown) => {
+      stopped = true
+      cancelAnimationFrame(frame)
+      stream?.getTracks().forEach((track) => track.stop())
+      void context?.close()
+      void window.jezo.speech.end()
+      setError(String(e))
+    })
 
     return () => {
       stopped = true
       cancelAnimationFrame(frame)
       stream?.getTracks().forEach((track) => track.stop())
-      void context.close()
+      void context?.close()
     }
   }, [])
 

@@ -108,6 +108,9 @@ function systemName() {
 }
 ipcMain.handle('app:about', (): About => ({
   version: __JEZO_BUILD__.version,
+  license: __JEZO_BUILD__.license,
+  homepage: __JEZO_BUILD__.homepage,
+  pi: __JEZO_BUILD__.pi,
   commit: __JEZO_BUILD__.commit,
   dirty: __JEZO_BUILD__.dirty,
   builtAt: __JEZO_BUILD__.date,

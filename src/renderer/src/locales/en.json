@@ -187,7 +187,7 @@
     "micDenied": "Can't use the microphone. Turn on Jezo in System Settings → Privacy & Security → Microphone.",
     "thinking": "Thinking…",
     "noModel": "No model to use. Open LM Studio or Ollama, or switch to a cloud model in Settings.",
-    "speechMissing": "Speech recognition isn't installed yet. Install it in Settings to talk instead of typing.",
+    "speechMissing": "Speech recognition isn't ready. Check Settings → Speech recognition.",
     "listening": "Listening…",
     "followUp": "Reply…",
     "hintAsk": "Ask Jezo",
@@ -229,7 +229,7 @@
     "send": "Send",
     "stop": "Stop",
     "micDenied": "Jezo can't use the microphone. Allow it in System Settings, Privacy & Security.",
-    "speechMissing": "Speech recognition isn't installed yet. Install it in Settings to talk instead of typing.",
+    "speechMissing": "Speech recognition isn't ready.",
     "queue": "Queue message",
     "steer": "Steer current work",
     "queued": "Up next",
@@ -245,7 +245,8 @@
         "extension": "Extension",
         "app": "Jezo"
       }
-    }
+    },
+    "speechSettings": "Open settings"
   },
   "related": {
     "title": "Related",

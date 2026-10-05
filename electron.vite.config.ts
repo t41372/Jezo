@@ -20,8 +20,13 @@ function git(...args: string[]) {
  * committed. The version is read here because `app.getVersion()` gives
  * Electron's own when the app is started from a script, as the E2E tests do.
  */
+const manifest = JSON.parse(readFileSync('package.json', 'utf8')) as { version: string; license: string; homepage: string }
 const build = {
-  version: (JSON.parse(readFileSync('package.json', 'utf8')) as { version: string }).version,
+  version: manifest.version,
+  license: manifest.license,
+  homepage: manifest.homepage,
+  // The agent's own version, from the copy this build bundles.
+  pi: (JSON.parse(readFileSync('node_modules/@earendil-works/pi-coding-agent/package.json', 'utf8')) as { version: string }).version,
   commit: git('rev-parse', 'HEAD'),
   dirty: git('status', '--porcelain', '--', 'src', 'packages', 'resources', 'native', 'package.json', 'bun.lock', 'electron.vite.config.ts') !== '',
   date: new Date().toISOString(),

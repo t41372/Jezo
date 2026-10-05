@@ -1,24 +1,33 @@
-// Hold-to-talk between the windows and the speech server. One utterance at a time.
-
+// One recording per window owns its startup queue, even when another hold overtakes it.
 import { BrowserWindow, ipcMain, systemPreferences, webContents } from 'electron'
 import type { SpeechContext } from './context'
 import type { Speech } from './speech'
 
 type Utterance = Awaited<ReturnType<Speech['listen']>>
+type Result = { text: string; error: string | null }
+interface Recording {
+  owner: number
+  opening: Promise<Utterance>
+  utterance: Utterance
+  queued: ArrayBuffer[]
+  finishing: Promise<Result> | null
+}
 
 export interface SpeechSources {
-  /** What the user is likely to say into this conversation, or into a new one. */
   context(session: string | null, vocabulary: string[]): SpeechContext
 }
 
 export function serveSpeech(speech: Speech, sources: SpeechSources) {
-  let current: Utterance = null
-  // The app's page names and language, from the main window, which has them.
+  let current: Recording | null = null
   let vocabulary: string[] = []
   let language = 'en'
 
   ipcMain.handle('speech:status', () => speech.status())
   ipcMain.handle('speech:install', () => speech.install())
+  ipcMain.handle('speech:inventory', () => speech.inventory())
+  ipcMain.handle('speech:model', (_, id: string) => speech.model(id))
+  ipcMain.handle('speech:command', (_, command) => speech.command(command))
+  ipcMain.handle('speech:sample-rate', () => speech.sampleRate())
   ipcMain.on('speech:vocabulary', (_, words: string[], lang: string) => {
     vocabulary = words
     language = lang
@@ -27,56 +36,59 @@ export function serveSpeech(speech: Speech, sources: SpeechSources) {
     for (const window of BrowserWindow.getAllWindows()) window.webContents.send('speech:status', status)
   })
 
-  // Starting can wait on the server, or on an update before it starts. Audio that
-  // arrives meanwhile is kept for the utterance, and letting go meanwhile ends it once it's open.
-  let starting: Promise<Utterance> | null = null
-  /** The opening that letting go took over, which ends it itself. */
-  let claimed: Promise<Utterance> | null = null
-  let early: ArrayBuffer[] = []
-  /**
-   * The window the utterance is for. Its audio and its letting go are the only
-   * ones that count; another window starting one tells it to stop, so two
-   * microphones never feed one utterance.
-   */
-  let owner: number | null = null
+  function finish(recording: Recording): Promise<Result> {
+    recording.finishing ??= (async () => {
+      const utterance = recording.utterance ?? (await recording.opening)
+      for (const chunk of recording.queued.splice(0)) utterance?.audio(chunk)
+      return utterance ? utterance.end() : { text: '', error: speech.status().error }
+    })()
+    return recording.finishing
+  }
 
   ipcMain.handle('speech:start', async (event, session?: string | null) => {
-    // A new utterance ends one still open, and the window it was for stops listening.
-    void current?.end()
-    current = null
-    if (owner !== null && owner !== event.sender.id) webContents.fromId(owner)?.send('speech:replaced')
-    owner = event.sender.id
-    // The main window asks here; the ⌥X window has asked already, before it shows.
-    if (process.platform === 'darwin' && !(await systemPreferences.askForMediaAccess('microphone'))) return false
-    early = []
-    const opening = speech.listen((text) => event.sender.send('speech:text', text), sources.context(session ?? null, vocabulary), language)
-    starting = opening
-    const utterance = await opening
-    if (starting !== opening) {
-      // Let go already, or overtaken by a newer hold, whose utterance is the one that counts.
-      if (claimed !== opening) void utterance?.end()
-      return utterance !== null
+    const previous = current
+    if (previous) {
+      void finish(previous)
+      if (previous.owner !== event.sender.id) webContents.fromId(previous.owner)?.send('speech:replaced')
     }
-    starting = null
-    for (const chunk of early.splice(0)) utterance?.audio(chunk)
-    current = utterance
-    return utterance !== null
+    const recording: Recording = {
+      owner: event.sender.id,
+      opening: Promise.resolve(null),
+      utterance: null,
+      queued: [],
+      finishing: null,
+    }
+    current = recording
+    recording.opening = (async () => {
+      if (process.platform === 'darwin' && !(await systemPreferences.askForMediaAccess('microphone'))) return null
+      return speech.listen(
+        (text) => {
+          // An older hold must not replace text in the same window's newer hold.
+          if (current === recording || !current || current.owner !== recording.owner)
+            event.sender.send('speech:text', text)
+        },
+        sources.context(session ?? null, vocabulary),
+        language,
+      )
+    })()
+    const utterance = await recording.opening
+    if (current === recording && !recording.finishing) {
+      recording.utterance = utterance
+      for (const chunk of recording.queued.splice(0)) utterance?.audio(chunk)
+    }
+    return utterance?.sampleRate ?? false
   })
   ipcMain.on('speech:audio', (event, chunk: ArrayBuffer) => {
-    if (event.sender.id !== owner) return
-    if (current) current.audio(chunk)
-    else if (starting) early.push(chunk)
+    const recording = current
+    if (!recording || recording.owner !== event.sender.id || recording.finishing) return
+    if (recording.utterance) recording.utterance.audio(chunk)
+    else recording.queued.push(chunk)
   })
-  ipcMain.handle('speech:end', async (event) => {
-    // A window whose utterance another one took over has nothing left to end.
-    if (event.sender.id !== owner) return ''
-    owner = null
-    const pending = starting
-    starting = null
-    claimed = pending
-    const utterance = current ?? (pending && (await pending))
+  ipcMain.handle('speech:end', (event) => {
+    const recording = current
+    if (!recording || recording.owner !== event.sender.id) return { text: '', error: null }
+    // Detach before awaiting startup. A new recording owns completely separate state.
     current = null
-    if (utterance && pending) for (const chunk of early.splice(0)) utterance.audio(chunk)
-    return utterance ? utterance.end() : ''
+    return finish(recording)
   })
 }

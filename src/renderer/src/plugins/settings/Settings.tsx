@@ -11,7 +11,8 @@ import { About } from './About'
 import { ModelsCard } from './ModelsCard'
 import { Providers } from './Providers'
 import { ScheduleRows } from './ScheduleRows'
-import { SpeechRow } from './SpeechRow'
+import { SpeechPage } from './speech/SpeechPage'
+import { SpeechRow } from './speech/SpeechRow'
 
 export function Settings() {
   const { t } = useTranslation('settings')
@@ -28,6 +29,7 @@ export function Settings() {
   const sub = useStore((s) => s.nav.sub)
   if (sub === 'providers') return <Providers />
   if (sub === 'about') return <About />
+  if (sub === 'speech') return <SpeechPage />
   return (
     <div className="flex-1 overflow-auto px-10 py-9">
       <div className="mx-auto flex max-w-[620px] flex-col gap-4.5">

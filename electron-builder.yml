@@ -41,6 +41,8 @@ mac:
         - jezo-foundation-models
 # What a new workspace starts with (src/main/workspace/seed.ts).
 extraResources:
+  - from: resources/standard-asr.py
+    to: standard-asr.py
   # uv, for speech recognition's Python environment (scripts/uv.ts).
   - from: vendor/uv
     to: uv

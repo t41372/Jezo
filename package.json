@@ -5,6 +5,11 @@
   "type": "module",
   "description": "A local-first personal agent for todos, goals, calendar, and habits",
   "license": "Apache-2.0",
+  "homepage": "https://github.com/t41372/Jezo",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/t41372/Jezo.git"
+  },
   "main": "./out/main/index.js",
   "packageManager": "bun@1.3.14",
   "scripts": {

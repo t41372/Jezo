@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jezo-asr-replay"
+version = "0.0.1"
+dependencies = ["standard-asr"]
+
+[project.entry-points."standard_asr.models"]
+"jezo-replay/session" = "jezo_asr_replay:create"
+
+[tool.setuptools]
+py-modules = ["jezo_asr_replay"]

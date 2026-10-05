@@ -32,6 +32,11 @@ export interface Config {
   }
   /** Notifications before deadlines (src/main/reminders.ts). On unless turned off in 設定. */
   reminders: { deadlines: boolean }
+  speech?: {
+    model: string | null
+    models: Record<string, import('../shared/speech').SpeechModelSettings>
+    sources: Record<string, string>
+  }
 }
 
 const defaults = (): Config => ({

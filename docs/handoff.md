@@ -4,6 +4,10 @@ This is a working note, not a design doc. It holds what the agent building
 Jezo was in the middle of, and the decisions waiting on Tim. Delete it once
 it's empty.
 
+## Speech recognition (2026-10-04)
+
+設定 → 語音辨識 is rebuilt (frontend.md, backend.md "Speech"), waiting on Tim's look. Not verified yet: recognition through the remote Qwen3-ASR plugin (it needs a vLLM or DashScope server), Windows and Linux paths in a packaged app, private Git sources for engines, and every third-party schema shape. Upstream problems found along the way go in `.local-standard-asr-upstream-notes.md`, which stays out of git.
+
 ## Decisions waiting on Tim
 
 ### Offline sync (designing ahead)

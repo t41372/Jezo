@@ -109,15 +109,23 @@ export interface SpeechStatus {
   /** The engine and model this machine uses, like "Qwen3-ASR 0.6B". */
   engine: string
   /** The install step running now. */
-  step: 'environment' | 'packages' | 'model' | null
+  step: 'environment' | 'packages' | 'model' | 'checking' | 'removing' | null
   /** Why the last install failed; "uv" when uv isn't installed. */
   error: string | null
   uv: boolean
+  model: string | null
+  progress: { phase: string; artifact_id?: string; completed_units?: number; total_units?: number; unit?: string } | null
 }
 
 /** Which Jezo is running, for 設定 → 關於. */
 export interface About {
   version: string
+  /** The SPDX identifier, like "Apache-2.0". */
+  license: string
+  /** The source repository's page. */
+  homepage: string
+  /** The bundled pi coding agent, which is Jezo's agent. */
+  pi: string
   /** The full commit the app was built from; empty when it wasn't built from a git checkout. */
   commit: string
   /** Whether the build had changes that weren't committed, so the commit alone doesn't describe it. */
@@ -196,17 +204,22 @@ export interface JezoBridge {
   speech: {
     status(): Promise<SpeechStatus>
     install(): Promise<void>
+    inventory(): Promise<import('./speech').SpeechInventory>
+    model(id: string): Promise<import('./speech').SpeechModelDetail>
+    command(command: import('./speech').SpeechCommand): Promise<void>
+    /** The declared PCM rate, available before the inference process opens. */
+    sampleRate(): Promise<number | null>
     onStatus(listener: (status: SpeechStatus) => void): () => void
     /**
      * Starts listening. `session` is the conversation the words go into, so
      * recognition can expect what was just said there. False when speech isn't installed.
      */
-    start(session?: string | null): Promise<boolean>
+    start(session?: string | null): Promise<number | false>
     /** Tells recognition the app's page names, in the app's language, which it should expect to hear. */
     setVocabulary(words: string[], language: string): void
     audio(chunk: ArrayBuffer): void
     /** The audio is over; resolves to everything that was said. */
-    end(): Promise<string>
+    end(): Promise<{ text: string; error: string | null }>
     onText(listener: (text: string) => void): () => void
     /** Another window started listening, which ends this one's utterance. */
     onReplaced(listener: () => void): () => void

@@ -1,303 +1,182 @@
-// Speech recognition through Standard ASR (docs/design/backend.md, "Speech").
-// Jezo keeps a Python environment of its own, made with uv, holding the
-// standard-asr core and one engine, and runs its reference server on a local
-// port. Holding ⌥X streams audio to it and gets the text back as it's heard.
-
-import { type ChildProcess, execFile, spawn } from 'node:child_process'
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { createServer } from 'node:net'
-import { homedir } from 'node:os'
-import { join } from 'node:path'
-import { promisify } from 'node:util'
-import { app } from 'electron'
+// Recognition uses the installed Standard ASR SDK in the managed Python sidecar.
+// Entry points and declarations decide which model and audio path are used.
+import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process'
 import type { SpeechStatus } from '../../shared/bridge'
-import { guidanceOf, options, type Guidance, type SpeechContext } from './context'
-
-const run = promisify(execFile)
-
-/** A package from git at a fixed commit: `name` as pip names it, `dist` as its installed metadata does. */
-interface Pinned {
-  name: string
-  dist: string
-  repo: string
-  commit: string
-}
-
-const requirement = (p: Pinned, extras = '') => `${p.name}${extras} @ git+${p.repo}@${p.commit}`
+import type { SpeechCommand } from '../../shared/speech'
+import { guidanceOf, options, type SpeechContext } from './context'
+import { adapterPath, SpeechEnvironment, speechBin } from './environment'
+import { SpeechTranscript } from './transcript'
 
 /**
- * The core and the engines, from git: the release on PyPI predates protocol
- * 0.2, and main has fixes and changes to the protocol that aren't released
- * yet (Tim, 2026-10-01). Each is fixed to a commit on main, so every install
- * gets the same code and a change on main can't break an install that works;
- * moving a commit here updates installs when Jezo next starts.
+ * Steps that replace packages or files a recording would load. Reading,
+ * checking for updates and saving settings don't stop anyone from talking.
  */
-const CORE: Pinned = { name: 'standard-asr', dist: 'standard_asr', repo: 'https://github.com/standard-voice/standard_asr.git', commit: '1b2cf3fa5860c075e5160eb60b26b708a7c8bfea' }
-
-/** The engine for this machine. MLX runs on Apple Silicon's GPU; elsewhere faster-whisper runs on the CPU. */
-const ENGINE =
-  process.platform === 'darwin' && process.arch === 'arm64'
-    ? {
-        name: 'Qwen3-ASR 0.6B',
-        model: 'mlx-audio/qwen3-asr-0.6b',
-        package: { name: 'std-mlx-audio', dist: 'std_mlx_audio', repo: 'https://github.com/standard-voice/std-mlx-audio.git', commit: '474277b39192abc8bed9be8d2d66d06ec0fd43e2' },
-      }
-    : {
-        name: 'Whisper small',
-        model: 'faster-whisper/small',
-        package: { name: 'std-faster-whisper', dist: 'std_faster_whisper', repo: 'https://github.com/standard-voice/std-faster-whisper.git', commit: 'eaf1e597fdba924720b76fceb409ecabac3fdf82' },
-      }
-
-const dir = () => join(app.getPath('userData'), 'speech')
-const bin = (name: string) => join(dir(), 'venv', 'bin', name)
-
-/** The commit a git package was installed from, from the metadata pip leaves (PEP 610), or null. */
-function installedCommit(p: Pinned) {
-  const lib = join(dir(), 'venv', 'lib')
-  try {
-    for (const python of readdirSync(lib)) {
-      const site = join(lib, python, 'site-packages')
-      const info = readdirSync(site).find((name) => name.startsWith(`${p.dist}-`) && name.endsWith('.dist-info'))
-      if (info) return (JSON.parse(readFileSync(join(site, info, 'direct_url.json'), 'utf8')) as { vcs_info?: { commit_id?: string } }).vcs_info?.commit_id ?? null
-    }
-  } catch {
-    // Not installed, or installed some other way.
-  }
-  return null
-}
-
-/** Whether what's installed is older or newer than the commits above. */
-const outdated = () => [CORE, ENGINE.package].some((p) => installedCommit(p) !== p.commit)
-
-/**
- * uv: the one a packaged Jezo brings (scripts/uv.ts), or else wherever it's
- * installed. A packaged app doesn't get the shell's PATH, so the usual places
- * are tried too.
- */
-function findUv() {
-  const candidates = [
-    ...(app.isPackaged ? [join(process.resourcesPath, 'uv', process.platform === 'win32' ? 'uv.exe' : 'uv')] : []),
-    ...(process.env.PATH ?? '').split(':').map((p) => join(p, 'uv')),
-    '/opt/homebrew/bin/uv',
-    '/usr/local/bin/uv',
-    join(homedir(), '.local/bin/uv'),
-    join(homedir(), '.cargo/bin/uv'),
-  ]
-  return candidates.find((p) => existsSync(p)) ?? null
-}
-
-async function freePort(): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const server = createServer()
-    server.listen(0, '127.0.0.1', () => {
-      const { port } = server.address() as { port: number }
-      server.close(() => resolve(port))
-    })
-    server.on('error', reject)
-  })
-}
-
-export type StepListener = (status: SpeechStatus) => void
+const changing = (step: SpeechStatus['step']) => step !== null && step !== 'checking'
 
 export class Speech {
-  private server: ChildProcess | null = null
-  private port: number | null = null
-  private starting: Promise<number | null> | null = null
-  /** What the engine takes besides audio, read from the server once; null until that worked. */
-  private guidance: Guidance | null = null
-  private step: SpeechStatus['step'] = null
-  private error: string | null = null
-  private listeners = new Set<StepListener>()
+  private active = new Set<ChildProcessWithoutNullStreams>()
+  private environment = new SpeechEnvironment(() => {
+    if (this.active.size) throw new Error('Finish dictation before changing speech recognition')
+  })
 
-  status(): SpeechStatus {
-    return {
-      installed: existsSync(bin('standard-asr')),
-      engine: ENGINE.name,
-      step: this.step,
-      error: this.error,
-      uv: findUv() !== null,
-    }
+  status() {
+    return this.environment.status()
   }
-
-  onStatus(listener: StepListener) {
-    this.listeners.add(listener)
-    return () => this.listeners.delete(listener)
+  onStatus(listener: Parameters<SpeechEnvironment['onStatus']>[0]) {
+    return this.environment.onStatus(listener)
   }
-
-  private report(step: SpeechStatus['step'], error: string | null = null) {
-    this.step = step
-    this.error = error
-    for (const listener of this.listeners) listener(this.status())
+  install() {
+    return this.environment.install()
   }
-
-  /** Makes the environment, installs the core and the engine, and gets the model. Safe to run again. */
-  async install() {
-    const uv = findUv()
-    if (!uv) return this.report(null, 'uv')
-    try {
-      this.report('environment')
-      if (!existsSync(bin('python'))) await run(uv, ['venv', '--python', '3.12', join(dir(), 'venv')])
-      await this.installPackages(uv)
-      this.report('model')
-      await run(bin('standard-asr'), ['pull', ENGINE.model, '--json'], { maxBuffer: 16 * 1024 * 1024 })
-      this.report(null)
-      // A server already running has the old packages loaded.
-      this.stop()
-      void this.start()
-    } catch (error) {
-      this.report(null, String((error as { stderr?: string }).stderr || error).slice(-600))
-    }
+  inventory() {
+    return this.environment.inventory()
   }
-
-  /**
-   * Installs the core and the engine at their commits. The engines ask for
-   * the core at main by URL, which pip would take as a second, conflicting
-   * source; the override makes the commit above the only one.
-   */
-  private async installPackages(uv: string) {
-    this.report('packages')
-    writeFileSync(join(dir(), 'overrides.txt'), `${requirement(CORE, '[server]')}\n`)
-    // Named relative to the speech folder: uv cuts an --overrides path at a space, and the
-    // app's data is in "Application Support" (uv 0.12.22).
-    await run(uv, ['pip', 'install', '--python', bin('python'), '--overrides', 'overrides.txt', requirement(CORE, '[server]'), requirement(ENGINE.package)], { cwd: dir(), maxBuffer: 16 * 1024 * 1024 })
+  model(id: string) {
+    return this.environment.model(id)
   }
-
-  /**
-   * Moves an install to the commits this Jezo names, before the server starts.
-   * If it can't (offline, say), the server runs what's there, and 設定 says why.
-   */
-  private async update() {
-    const uv = findUv()
-    if (!uv || !outdated()) return
-    try {
-      await this.installPackages(uv)
-      this.report(null)
-    } catch (error) {
-      this.report(null, String((error as { stderr?: string }).stderr || error).slice(-600))
-    }
+  command(command: SpeechCommand) {
+    return this.environment.command(command)
   }
-
-  /** Starts the server if it isn't running. Resolves to its port, or null if speech isn't installed. */
-  start(): Promise<number | null> {
-    if (this.port) return Promise.resolve(this.port)
-    if (!this.status().installed) return Promise.resolve(null)
-    this.starting ??= (async () => {
-      await this.update()
-      const port = await freePort()
-      this.server = spawn(bin('standard-asr'), ['serve', '--host', '127.0.0.1', '--port', String(port)], {
-        // The model was fetched at install; nothing downloads while the user talks.
-        env: { ...process.env, STANDARD_ASR_ALLOW_DOWNLOAD: '0' },
-        stdio: 'ignore',
-      })
-      this.server.on('exit', () => {
-        this.server = null
-        this.port = null
-        this.starting = null
-      })
-      for (let i = 0; i < 120; i++) {
-        try {
-          if ((await fetch(`http://127.0.0.1:${port}/v1/health`)).ok) {
-            this.port = port
-            return port
-          }
-        } catch {
-          // Not up yet.
-        }
-        await new Promise((r) => setTimeout(r, 250))
-      }
-      this.stop()
+  async sampleRate() {
+    const status = this.status()
+    if (!status.installed || !status.model || changing(status.step)) return null
+    const model = (await this.inventory()).models.find((m) => m.id === status.model)
+    if (!model || model.error) {
+      this.environment.report(null, model?.error ?? 'The selected speech model is no longer installed')
       return null
-    })()
-    return this.starting
+    }
+    return model.dictation?.sampleRate ?? null
   }
-
-  stop() {
-    this.guidance = null
-    this.server?.kill()
-    this.server = null
-    this.port = null
-    this.starting = null
-  }
-
-  /**
-   * What the engine takes besides audio. A failed read is tried again on the
-   * next utterance; until then, nothing extra is sent, which every engine takes.
-   */
-  private async guidanceOf(port: number): Promise<Guidance> {
-    if (this.guidance) return this.guidance
+  /** Read declarations at startup without downloading, upgrading, or loading a model. */
+  async start() {
+    if (!this.status().installed) return null
     try {
-      const response = await fetch(`http://127.0.0.1:${port}/v1/capabilities/${ENGINE.model}`, { signal: AbortSignal.timeout(2000) })
-      if (response.ok) this.guidance = guidanceOf(await response.json())
-    } catch {
-      // Tried again next time.
+      return await this.inventory()
+    } catch (error) {
+      this.environment.report(null, String(error))
+      return null
     }
-    return this.guidance ?? {}
+  }
+  stop() {
+    for (const process of this.active) process.kill()
+    this.active.clear()
   }
 
-  /**
-   * Streams one utterance. `onText` gets the whole text heard so far each time
-   * it changes; `end()` says the audio is over and resolves to the final text.
-   * `context` is what the user is likely to say (./context.ts), sent as far as
-   * the engine takes it; `language` is the app's, for how it's written.
-   */
   async listen(onText: (text: string) => void, context?: SpeechContext, language = 'en') {
-    const port = await this.start()
-    if (!port) return null
-    const guidance = context ? await this.guidanceOf(port) : {}
-    const ws = new WebSocket(`ws://127.0.0.1:${port}/v1/stream/${ENGINE.model}`)
-    ws.binaryType = 'arraybuffer'
-    // Audio that arrives before the connection opens waits here.
-    const queued: ArrayBuffer[] = []
-    // The protocol's reduce: segments in reading order, each replaced whole by its latest text.
-    const order: string[] = []
-    const texts = new Map<string, string>()
-    const joined = () => order.map((id) => texts.get(id) ?? '').join('')
-    let finish: (text: string) => void
-    const done = new Promise<string>((resolve) => (finish = resolve))
-
-    ws.onopen = () => {
-      const guided = context && options(context, guidance, language)
-      ws.send(JSON.stringify({ audio_format: { encoding: 'pcm_s16le', sample_rate: 16000, channels: 1 }, ...(guided && { options: guided }) }))
-      for (const chunk of queued.splice(0)) ws.send(chunk)
+    const status = this.status()
+    if (!status.installed || !status.model || changing(status.step)) return null
+    const inventory = await this.inventory()
+    const model = inventory.models.find((m) => m.id === status.model)
+    if (!model || model.error) {
+      this.environment.report(null, model?.error ?? 'The selected speech model is no longer installed')
+      return null
     }
-    ws.onmessage = (message) => {
-      const event = JSON.parse(String(message.data)) as {
-        type: string
-        segment_id?: string
-        text?: string
-        old_ids?: string[]
-        new_ids?: string[]
-        recoverable?: boolean
-        message?: string
-      }
-      if ((event.type === 'partial' || event.type === 'final') && event.segment_id) {
-        if (!order.includes(event.segment_id)) order.push(event.segment_id)
-        texts.set(event.segment_id, event.text ?? '')
-        onText(joined())
-      } else if (event.type === 'supersede' && event.old_ids?.length && event.new_ids) {
-        const at = order.indexOf(event.old_ids[0])
-        for (const id of event.old_ids) {
-          order.splice(order.indexOf(id), 1)
-          texts.delete(id)
+    const capabilities = model.capabilities
+    const guided = context
+      ? {
+          batch: options(context, guidanceOf(capabilities, 'batch'), language),
+          streaming: options(context, guidanceOf(capabilities, 'streaming'), language),
         }
-        order.splice(Math.max(0, at), 0, ...event.new_ids)
-      } else if (event.type === 'done' || (event.type === 'error' && (event.message !== undefined || event.recoverable === false))) {
-        finish(joined())
-        ws.close()
-      }
+      : {}
+    const child = spawn(speechBin('python'), [adapterPath()], {
+      env: { ...process.env, STANDARD_ASR_ALLOW_DOWNLOAD: '0' },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    })
+    this.active.add(child)
+    let pending = ''
+    let stderr = ''
+    let ended = false
+    const transcript = new SpeechTranscript()
+    let failed = false
+    let failure: string | null = null
+    let finish!: (result: { text: string; error: string | null }) => void
+    const done = new Promise<{ text: string; error: string | null }>((resolve) => {
+      finish = resolve
+    })
+    let ready!: (format: { sampleRate: number } | null) => void
+    const opening = new Promise<{ sampleRate: number } | null>((resolve) => {
+      ready = resolve
+    })
+    const fail = (reason: string) => {
+      failed = true
+      failure = reason
+      this.environment.report(null, reason)
+      ready(null)
+      // Preserve text for display, but never send a failed recognition as a request.
+      finish(transcript.result(reason))
+      child.kill()
     }
-    ws.onclose = () => finish(joined())
-    ws.onerror = () => finish(joined())
-
+    child.stderr.on('data', (chunk) => {
+      stderr = (stderr + String(chunk)).slice(-2000)
+    })
+    child.on('error', (error) => fail(String(error)))
+    child.stdin.on('error', () => {
+      /* close reports an early process exit. */
+    })
+    child.on('close', (code) => {
+      this.active.delete(child)
+      ready(null)
+      const result = transcript.result(failure ?? (code !== 0 ? stderr || `Speech process exited (${code})` : null))
+      if (!failed && result.error) this.environment.report(null, result.error)
+      finish(result)
+    })
+    child.stdout.on('data', (chunk) => {
+      pending += String(chunk)
+      let end: number
+      while ((end = pending.indexOf('\n')) >= 0) {
+        const line = pending.slice(0, end)
+        pending = pending.slice(end + 1)
+        try {
+          const { kind, value } = JSON.parse(line)
+          if (kind === 'ready') ready(value)
+          else if (kind === 'error') fail(typeof value === 'string' ? value : value.message)
+          else if (kind === 'transcript') {
+            transcript.complete(value.text)
+            onText(transcript.preview)
+            this.environment.recordDiagnostics(model.id, value.diagnostics ?? [])
+          } else if (kind === 'diagnostics') this.environment.recordDiagnostics(model.id, value)
+          else if (kind === 'event') {
+            const event = value
+            if (transcript.event(event)) onText(transcript.preview)
+            else if (event.type === 'error') {
+              this.environment.recordDiagnostics(model.id, [{
+                ...event,
+                level: 'warning',
+                message: event.extra?.detail || event.code || 'Speech recognition failed',
+              }])
+              if (!event.recoverable) {
+                failed = true
+                failure = event.extra?.detail || event.code || 'Speech recognition failed'
+                this.environment.report(null, failure)
+                // Drain the adapter's final diagnostics before resolving or
+                // killing anything; strict capability failures live there.
+                ended = true
+                child.stdin.end()
+              }
+            }
+          }
+        } catch (error) {
+          fail(`Speech adapter: ${error}`)
+        }
+      }
+    })
+    child.stdin.write(
+      JSON.stringify(
+        this.environment.request('listen', { model: model.id, guidance: guided, sampleRate: await this.sampleRate() }),
+      ) + '\n',
+    )
+    const format = await opening
+    if (!format || failed || child.killed) return null
+    this.environment.report(null)
     return {
+      sampleRate: format.sampleRate,
       audio(chunk: ArrayBuffer) {
-        if (ws.readyState === WebSocket.OPEN) ws.send(chunk)
-        else if (ws.readyState === WebSocket.CONNECTING) queued.push(chunk)
+        if (!ended && !child.killed)
+          child.stdin.write(JSON.stringify({ kind: 'audio', data: Buffer.from(chunk).toString('base64') }) + '\n')
       },
       end() {
-        // Any text frame means the audio is over.
-        if (ws.readyState === WebSocket.OPEN) ws.send('')
-        else if (ws.readyState === WebSocket.CONNECTING) ws.addEventListener('open', () => ws.send(''))
+        if (!ended && !child.killed) child.stdin.end(JSON.stringify({ kind: 'end' }) + '\n')
+        ended = true
         return done
       },
     }

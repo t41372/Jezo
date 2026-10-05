@@ -79,6 +79,10 @@ const bridge: JezoBridge = {
   speech: {
     status: () => ipcRenderer.invoke('speech:status'),
     install: () => ipcRenderer.invoke('speech:install'),
+    inventory: () => ipcRenderer.invoke('speech:inventory'),
+    model: (id) => ipcRenderer.invoke('speech:model', id),
+    command: (command) => ipcRenderer.invoke('speech:command', command),
+    sampleRate: () => ipcRenderer.invoke('speech:sample-rate'),
     onStatus: (listener) => listen<SpeechStatus>('speech:status', listener),
     start: (session) => ipcRenderer.invoke('speech:start', session),
     setVocabulary: (words, language) => ipcRenderer.send('speech:vocabulary', words, language),

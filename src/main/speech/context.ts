@@ -11,7 +11,7 @@ import type { Item } from '../../shared/workspace'
 export interface Guidance {
   /** `maxTokens` counted the way the standard counts them (see `units`); null when it has no limit. */
   prompt?: { maxTokens: number | null }
-  phraseHints?: { maxTerms: number | null; maxChars: number | null }
+  phraseHints?: { maxTerms: number | null; maxChars: number | null; maxWords?: number | null }
 }
 
 export interface SpeechContext {
@@ -33,13 +33,19 @@ const BUDGET = 400
 const LINE = 150
 
 /** The guidance an engine declares for streaming, from `GET /v1/capabilities/<model>`. */
-export function guidanceOf(capabilities: unknown): Guidance {
+export function guidanceOf(capabilities: unknown, mode: 'batch' | 'streaming' = 'streaming'): Guidance {
   type Node = { supported?: boolean; constraints?: Record<string, number | null> }
-  const guidance = (capabilities as { streaming?: { guidance?: { prompt?: Node; phrase_hints?: Node } } } | null)?.streaming?.guidance
+  const guidance = (
+    capabilities as Partial<Record<'batch' | 'streaming', { guidance?: { prompt?: Node; phrase_hints?: Node } }>> | null
+  )?.[mode]?.guidance
   const out: Guidance = {}
   if (guidance?.prompt?.supported) out.prompt = { maxTokens: guidance.prompt.constraints?.max_tokens ?? null }
   if (guidance?.phrase_hints?.supported) {
-    out.phraseHints = { maxTerms: guidance.phrase_hints.constraints?.max_terms ?? null, maxChars: guidance.phrase_hints.constraints?.max_chars_per_term ?? null }
+    out.phraseHints = {
+      maxTerms: guidance.phrase_hints.constraints?.max_terms ?? null,
+      maxChars: guidance.phrase_hints.constraints?.max_chars_per_term ?? null,
+      maxWords: guidance.phrase_hints.constraints?.max_words_per_term ?? null,
+    }
   }
   return out
 }
@@ -52,7 +58,8 @@ export function guidanceOf(capabilities: unknown): Guidance {
  * and four characters: five.
  */
 export function units(text: string) {
-  const spaceless = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}\p{Script=Yi}]/gu
+  const spaceless =
+    /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}\p{Script=Yi}]/gu
   return text.split(/\s+/).filter(Boolean).length + (text.match(spaceless)?.length ?? 0)
 }
 
@@ -91,21 +98,28 @@ export function gather(input: {
   const open = items.filter((i) => i.kind === 'todo' && (i.data.state === 'open' || i.data.state === 'draft'))
   const title = (i: Item) => String(i.data.title ?? i.data.name ?? '').trim()
   const week = new Date(Date.parse(today) + 7 * 86_400_000).toISOString().slice(0, 10)
-  const on = (from: string, to: string) => open.filter((i) => {
-    const date = dateOf(i.data.scheduled)
-    return date !== null && date >= from && date <= to
-  })
+  const on = (from: string, to: string) =>
+    open.filter((i) => {
+      const date = dateOf(i.data.scheduled)
+      return date !== null && date >= from && date <= to
+    })
   const terms = [
     'Jezo',
     ...(input.page ? [input.page] : []),
     ...input.vocabulary,
     ...items.filter((i) => i.kind === 'goal' && i.data.state !== 'done').map(title),
     ...on(today, today).map(title),
-    ...open.filter((i) => !i.data.scheduled).sort((a, b) => String(a.data.rank ?? '~').localeCompare(String(b.data.rank ?? '~'))).map(title),
+    ...open
+      .filter((i) => !i.data.scheduled)
+      .sort((a, b) => String(a.data.rank ?? '~').localeCompare(String(b.data.rank ?? '~')))
+      .map(title),
     ...on(today, week).map(title),
   ]
   return {
-    recent: input.conversation.map((line) => line.replace(/\s+/g, ' ').trim()).filter(Boolean).slice(-2),
+    recent: input.conversation
+      .map((line) => line.replace(/\s+/g, ' ').trim())
+      .filter(Boolean)
+      .slice(-2),
     terms: [...new Set(terms.filter(Boolean))],
   }
 }
@@ -119,15 +133,20 @@ export function gather(input: {
  * saying). Nothing the engine doesn't declare is sent, because the reference
  * server refuses a session that asks for it.
  */
-export function options(context: SpeechContext, guidance: Guidance, language: string): { prompt?: string; phrase_hints?: string[] } | undefined {
+export function options(
+  context: SpeechContext,
+  guidance: Guidance,
+  language: string,
+): { prompt?: string; phrase_hints?: string[] } | undefined {
   const out: { prompt?: string; phrase_hints?: string[] } = {}
   const budget = Math.min(BUDGET, guidance.prompt?.maxTokens ?? BUDGET)
   let used = 0
   if (guidance.phraseHints) {
-    const { maxTerms, maxChars } = guidance.phraseHints
+    const { maxTerms, maxChars, maxWords } = guidance.phraseHints
     const hints: string[] = []
     for (const term of context.terms) {
       if (!term.trim() || (maxChars !== null && [...term].length > maxChars)) continue
+      if (maxWords != null && term.trim().split(/\s+/).length > maxWords) continue
       if (maxTerms !== null && hints.length >= maxTerms) break
       // The conversation, if it fits, gets what's left.
       if (used + units(term) > budget / 2) continue

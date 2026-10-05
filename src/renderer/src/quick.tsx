@@ -115,8 +115,14 @@ function Quick() {
           // The engine finishes the last words after the audio ends, which takes a moment.
           const partial = inAppScript(heard.current.trim())
           setAsked(partial || null)
-          window.jezo.speech.end().then((final) => {
-            const said = inAppScript(final.trim()) || partial
+          window.jezo.speech.end().then((result) => {
+            const said = inAppScript(result.text.trim())
+            if (result.error) {
+              setAsked(null)
+              setText(said)
+              toast.error(result.error)
+              return
+            }
             if (said) ask(said)
             else window.jezo.quick.hide()
           })
@@ -318,7 +324,7 @@ function Voice({ context, session }: { context: string | null; session: string |
     <>
       <div className="flex min-h-[54px] items-center gap-3 rounded-[26px] border border-card-border bg-card py-2 pr-2 pl-4">
         <p className={cn('min-w-0 flex-1 text-[15.5px] leading-relaxed', !heard && 'text-muted-foreground')}>
-          {mic.error ? t('quick.micDenied') : !mic.ready ? t('quick.speechMissing') : heard || t('quick.listening')}
+          {mic.error || (!mic.ready ? t('quick.speechMissing') : heard || t('quick.listening'))}
         </p>
         <div className="flex h-7 items-center gap-[3px]" aria-hidden>
           {mic.levels.map((level, i) => (
