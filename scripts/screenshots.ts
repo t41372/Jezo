@@ -16,12 +16,19 @@
 // A new picture is an entry in SHOTS, a new language one in LANGUAGES and in
 // CONVERSATION, and a new backdrop a JPEG in the backdrops folder. Buttons are
 // found by the app's own strings, so changing a string doesn't break this.
+//
+// Speech recognition is the one thing not in the sample workspace: installing
+// it takes minutes and a few GB. Its picture borrows the speech folder of the
+// Jezo on this computer (in ~/Library/Application Support/jezo), and shows
+// whichever engines are installed there; the README's was taken with
+// std-mlx-audio and std-faster-whisper. The page only reads it. Without one,
+// that picture is skipped.
 // sky.jpg and rain.jpg were painted by OpenAI's image model through Codex (2026-10-02).
 
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { _electron as electron, type ElectronApplication, type Page } from '@playwright/test'
 
@@ -37,6 +44,8 @@ interface Shot {
   backdrop: string
   /** Gets the window to what the picture shows. */
   show: (page: Page, t: Strings) => Promise<void>
+  /** Needs speech recognition installed in the Jezo on this computer. */
+  speech?: true
 }
 
 /** The app's strings in the language being shot: a namespace (a plugin's id, or common) and a dotted key. */
@@ -44,6 +53,8 @@ type Strings = (ns: string, key: string) => string
 
 const nav = (page: Page, t: Strings, plugin: string) => page.locator('nav button', { hasText: t(plugin, 'page.title') }).first().click()
 
+// The light ones come first, so the theme changes once. The ones that show the
+// plan as drafts come before the first that accepts it.
 const SHOTS: Shot[] = [
   {
     name: 'chat',
@@ -61,14 +72,57 @@ const SHOTS: Shot[] = [
     theme: 'light',
     backdrop: 'sky',
     show: async (page, t) => {
-      await acceptPlan(page, t)
       await nav(page, t, 'todos')
+      // The promo doc's first section: a draft, with the agent's reason and its steps.
+      await page.getByText(/Impact/).first().click()
+    },
+  },
+  {
+    name: 'notes',
+    theme: 'light',
+    backdrop: 'sky',
+    show: (page, t) => nav(page, t, 'notes'),
+  },
+  {
+    name: 'goal',
+    theme: 'light',
+    backdrop: 'sky',
+    show: async (page, t) => {
+      await nav(page, t, 'goals')
+      // The promo doc: its rules, open because the agent proposes to move one.
+      await page.getByText(/Q4/).first().click()
+    },
+  },
+  {
+    name: 'speech',
+    theme: 'light',
+    backdrop: 'sky',
+    speech: true,
+    show: async (page, t) => {
+      await nav(page, t, 'settings')
+      await page.getByRole('button', { name: new RegExp(`^${t('settings', 'speech.title')}`) }).click()
+      // The model ⌥X uses, with its capabilities, files and settings.
+      await page.getByRole('heading', { name: SPEECH_MODEL.split('/')[1], level: 2 }).waitFor({ timeout: 60_000 })
+      await page.getByText(t('settings', 'speech.reading')).first().waitFor({ state: 'detached', timeout: 60_000 })
+      // The list scrolled to its end, so the engines after the first show too.
+      await page.locator('nav').last().evaluate((list) => list.scrollTo(0, list.scrollHeight))
+    },
+  },
+  {
+    name: 'skill',
+    theme: 'light',
+    backdrop: 'sky',
+    show: async (page, t) => {
+      await more(page, t, 'skills')
+      // A method Jezo comes with, as the file the agent reads.
+      const title = /^\s+title: (.+)$/m.exec(readFileSync(join(repo, `resources/workspace.${language}/skills/if-then-plans/SKILL.md`), 'utf8'))![1]
+      await page.getByText(title, { exact: true }).click()
     },
   },
   {
     name: 'today',
-    theme: 'dark',
-    backdrop: 'rain',
+    theme: 'light',
+    backdrop: 'sky',
     show: async (page, t) => {
       await acceptPlan(page, t)
       await nav(page, t, 'today')
@@ -76,14 +130,32 @@ const SHOTS: Shot[] = [
   },
   {
     name: 'calendar',
-    theme: 'dark',
-    backdrop: 'rain',
+    theme: 'light',
+    backdrop: 'sky',
     show: async (page, t) => {
       await acceptPlan(page, t)
       await nav(page, t, 'calendar')
     },
   },
+  {
+    name: 'installed',
+    theme: 'dark',
+    backdrop: 'rain',
+    show: (page, t) => more(page, t, 'skills'),
+  },
+  {
+    name: 'memory',
+    theme: 'dark',
+    backdrop: 'rain',
+    show: (page, t) => more(page, t, 'memory'),
+  },
 ]
+
+/** Opens a section of 更多. */
+async function more(page: Page, t: Strings, section: string) {
+  await nav(page, t, 'more')
+  await page.getByRole('button', { name: new RegExp(`^${t('more', `sections.${section}.title`)}`) }).click()
+}
 
 /** The morning's conversation in each language: what the user asked, what the agent thought, and what it said. */
 const CONVERSATION: Record<Language, { asked: string; thoughts: [string, string, string]; plan: string; said: string }> = {
@@ -123,10 +195,17 @@ const MATERIAL: Record<Theme, { filter: string; tint: string }> = {
   dark: { filter: 'blur(30px) saturate(1.5) brightness(0.8)', tint: 'rgb(22 20 34 / 0.38)' },
 }
 
+/** The speech folder of the Jezo on this computer, and the model the picture shows: the one a first install sets up. */
+const SPEECH = join(homedir(), 'Library/Application Support/jezo/speech')
+const SPEECH_MODEL = 'mlx-audio/qwen3-asr-0.6b'
+
 const repo = join(import.meta.dirname, '..')
 const out = join(repo, 'docs/screenshots')
 const only = process.argv.slice(2)
-const shots = only.length ? SHOTS.filter((s) => only.includes(s.name)) : SHOTS
+const shots = (only.length ? SHOTS.filter((s) => only.includes(s.name)) : SHOTS).filter((s) => {
+  if (s.speech && !existsSync(SPEECH)) console.log(`Skipping ${s.name}: speech recognition isn't installed in ${SPEECH}.`)
+  return !s.speech || existsSync(SPEECH)
+})
 let language: Language = 'en'
 
 for (language of LANGUAGES) {
@@ -147,6 +226,10 @@ for (language of LANGUAGES) {
   // ─── 2. The app ───
 
   mkdirSync(join(dir, 'data'), { recursive: true })
+  if (shots.some((s) => s.speech)) {
+    symlinkSync(SPEECH, join(dir, 'data/speech'))
+    writeFileSync(join(dir, 'data/config.json'), JSON.stringify({ speech: { model: SPEECH_MODEL, models: {}, sources: {} } }))
+  }
   const app = await electron.launch({
     executablePath: createRequire(join(repo, 'package.json'))('electron') as string,
     args: [join(repo, 'out/main/index.js')],
@@ -174,6 +257,8 @@ for (language of LANGUAGES) {
       await page.locator('nav button').first().waitFor()
     }
     await shot.show(page, t)
+    // Off the page, so whatever was clicked last isn't shown hovered.
+    await page.mouse.move(1, WINDOW.height / 2)
     // Lets the page settle: fonts, the fold opening, the rail's highlight moving.
     await page.waitForTimeout(800)
     await compose(stage, await page.screenshot({ omitBackground: true }), shot, join(out, language, `${shot.name}.jpg`))

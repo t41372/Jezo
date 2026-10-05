@@ -20,20 +20,65 @@ Jezo's agent is [pi](https://github.com/earendil-works/pi), a full open-source c
 - **Today** shows what's now, what's next, and what's due.
 - **Todos** have a time, a deadline, the situation you'll do them in (“after getting coffee at work”), steps, notes and attachments. They can repeat. Deadlines get a reminder.
 - **Calendar.** Your Mac's calendars, Google Calendar with your own client, and any ICS feed sit next to your todos. Drag a todo onto the week to schedule it. Jezo only reads your calendars.
-- **Goals** break down into if-then rules, and the agent watches which rules actually work for you.
+- **Goals** break down into if-then rules, and the agent watches which rules actually work for you. When one keeps not happening, it proposes a better one.
 - **Notes and ⌥X.** Press ⌥X anywhere to ask Jezo something or jot a note. Hold it to talk instead. Notes are sorted into todos, goals and things to remember when you hand them over.
 - **Routines.** A morning plan, an evening check-in and a weekly review run on their own, and you can add your own. Ones that were missed while your computer slept are caught up.
 - **Experiments.** Want to know if doing the hardest thing first helps? Jezo can run an A/B over a few weeks and tell you what your own data says.
 - **Memory.** It remembers what you tell it, and forgets what you delete.
 - **Undo.** Every change the agent makes is listed in **Change history**, and can be taken back.
 
-<p align="center">
-  <img src="docs/screenshots/en/today.jpg" width="49%" alt="Today, in the dark theme: what's now, what's next, and what's done">
-  <img src="docs/screenshots/en/todos.jpg" width="49%" alt="Todos, grouped by when they're planned">
-</p>
-<p align="center"><img src="docs/screenshots/en/calendar.jpg" alt="The week on the calendar, in the dark theme, with the backlog beside it"></p>
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="docs/screenshots/en/today.jpg"><img src="docs/screenshots/en/today.jpg" alt="Today, with the plan accepted"></a>
+      <br><b>Today</b> · what's now, and what's later, once you've accepted the plan.
+    </td>
+    <td width="50%" valign="top">
+      <a href="docs/screenshots/en/todos.jpg"><img src="docs/screenshots/en/todos.jpg" alt="Todos grouped by when they're planned, with one open beside them"></a>
+      <br><b>Todos</b> · grouped by when they're planned. Open one to see why the agent put it there, and its steps.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="docs/screenshots/en/calendar.jpg"><img src="docs/screenshots/en/calendar.jpg" alt="The week on the calendar, with the agent's drafts dashed and the backlog beside it"></a>
+      <br><b>Calendar</b> · the week, with the agent's drafts dashed and the backlog beside it to drag in.
+    </td>
+    <td width="50%" valign="top">
+      <a href="docs/screenshots/en/goal.jpg"><img src="docs/screenshots/en/goal.jpg" alt="A goal's rules, and the agent proposing to move the one that went unused"></a>
+      <br><b>Goals</b> · its rules, and the agent proposing to move the one that went unused.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="docs/screenshots/en/notes.jpg"><img src="docs/screenshots/en/notes.jpg" alt="Notes not sorted yet, and the button that hands them to the agent"></a>
+      <br><b>Notes</b> · jotted down unsorted, then handed to the agent to sort.
+    </td>
+    <td width="50%" valign="top">
+      <a href="docs/screenshots/en/skill.jpg"><img src="docs/screenshots/en/skill.jpg" alt="A method Jezo comes with, shown as the file the agent reads"></a>
+      <br><b>A method</b> · a skill is a file you can read, turn off, or ask the agent to change.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="docs/screenshots/en/installed.jpg"><img src="docs/screenshots/en/installed.jpg" alt="More → Installed, in the dark theme: the methods Jezo comes with"></a>
+      <br><b>Installed</b> · every method, pi package and MCP server, each one with a switch. In the dark theme.
+    </td>
+    <td width="50%" valign="top">
+      <a href="docs/screenshots/en/memory.jpg"><img src="docs/screenshots/en/memory.jpg" alt="What it remembers, in the dark theme: what you told it, kept apart from what it guessed"></a>
+      <br><b>Memory</b> · what you told it, kept apart from what it guessed and why. In the dark theme.
+    </td>
+  </tr>
+</table>
 
-The app is in English, Simplified Chinese and Traditional Chinese, and follows your system's language.
+The app is in English, Simplified Chinese and Traditional Chinese, and follows your system's language. It comes in a light and a dark theme.
+
+## Speech recognition
+
+Hold ⌥X, or click **Talk** in the chat, and say it instead of typing. Recognition runs on your Mac through [Standard ASR](https://github.com/standard-voice/standard_asr), the open standard between apps and speech recognition engines. One click in **Settings → Speech recognition** installs Qwen3-ASR 0.6B on Apple's MLX: it knows 30 languages and shows the words while you speak.
+
+Any engine that speaks Standard ASR works the same way. Install it by its package name, Git address or folder, and its models join the list, with no code in Jezo for it. Each model shows what it can do in the field's own terms (streaming or batch, prompt and phrase hints, languages, input audio), whether its files are downloaded, and every setting its engine has. Jezo tells the model what you're likely to say, from your todos, goals and the app's page names, so names come out right.
+
+<p align="center"><img src="docs/screenshots/en/speech.jpg" alt="Settings → Speech recognition: the models of two installed engines, and the one in use with its capabilities, its files and its settings"></p>
 
 ## Built on pi
 
@@ -63,7 +108,7 @@ Jezo runs on Macs with Apple silicon.
 1. Download the `.dmg` from [Releases](../../releases) and drag Jezo into Applications.
 2. Jezo isn't signed yet, so macOS refuses the first time you open it. Open **System Settings → Privacy & Security**, scroll down to the line about Jezo, and click **Open Anyway**.
 3. Pick a model. If [LM Studio](https://lmstudio.ai) or [Ollama](https://ollama.com) is running, Jezo finds it on its own. Or add a key for Anthropic, OpenAI, Google, OpenRouter or another provider in **Settings → Model providers**.
-4. For talking instead of typing, click **Install** under **Speech recognition** in Settings. It downloads a small speech model that runs on your Mac.
+4. For talking instead of typing, click **Install** under **Speech recognition** in Settings. It sets up Standard ASR with Qwen3-ASR 0.6B, which runs on your Mac.
 
 Your data is in `~/Jezo`: markdown files, one per todo, goal and note. Keys go to the macOS keychain.
 
@@ -82,7 +127,7 @@ bun run package    # an unsigned app in dist/
 
 The end-to-end tests run the real app against a throwaway workspace. The ones that talk to a model need LM Studio with `qwen3.6-35b-a3b-splash` (set `JEZO_TEST_MODEL` to use another) and skip themselves when no local model server is running. The ones tagged `@speech` need speech recognition installed. CI runs everything else.
 
-The pictures above come from `node scripts/screenshots.ts`, run after `bun run build`: for each language it takes each one from the built app on the same sample workspace the tests use, written in that language, and lays the see-through window over a painting in `docs/screenshots/backdrops/`. A new picture is one entry in the script.
+The pictures above come from `node scripts/screenshots.ts`, run after `bun run build`: for each language it takes each one from the built app on the same sample workspace the tests use, written in that language, and lays the see-through window over a painting in `docs/screenshots/backdrops/`. The speech recognition picture borrows the speech recognition installed in your own Jezo, and is skipped without one. A new picture is one entry in the script.
 
 ## How it's built
 
