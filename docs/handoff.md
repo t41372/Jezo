@@ -1,4 +1,4 @@
-# Handoff: where the work stands (2026-10-02)
+# Handoff: where the work stands (2026-10-10)
 
 This is a working note, not a design doc. It holds what the agent building
 Jezo was in the middle of, and the decisions waiting on Tim. Delete it once
@@ -53,13 +53,15 @@ Research, reviews and measurements are in `.claude/research/2026-10-01/issues/`.
 Left over:
 - std-mlx-audio's own tests: four in `test_batch.py` fail on macOS before and after `474277b`, comparing `/var/...` with `/private/var/...`.
 
-### Release (2026-10-02)
+### Releases
+
+0.1.0 (2026-10-02) and 0.2.0 (2026-10-10, the rebuilt 設定 → 語音辨識) are on GitHub. For 0.1.0:
+
 
 Tim asked for a code review loop with Codex until nothing worth fixing was left, a squashed history, CI, a README with pictures in English and Simplified Chinese, and Simplified Chinese in the app, ahead of merging and the first release.
 - Four review rounds ran (round 1 in six parts by area, then each round on the previous round's fixes); round 4 found nothing. Each finding was checked against the code and the docs before anything changed; the ones judged deliberate are written into the design docs.
 - CI is `.github/workflows/ci.yml` (typecheck, unit tests, build, E2E without `@speech`; the model tests skip without a local model). `release.yml` builds an unsigned dmg and zip on a `v*` tag into a draft release.
 - The README's pictures come from `node scripts/screenshots.ts` after a build.
-- Waiting on Tim: pushing the squashed branch, merging to main, and tagging v0.1.0.
 - Not done: speech on Windows (backend.md, "Speech"); signing and notarizing the app.
 
 ## Work in progress, in order
