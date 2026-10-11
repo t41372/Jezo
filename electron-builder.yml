@@ -27,6 +27,12 @@ electronFuses:
   runAsNode: true
 mac:
   category: public.app-category.productivity
+  # Jezo has no Developer ID yet. Signed ad hoc, the whole app is sealed: left
+  # unsigned, only Electron's own binary carries a signature, which no longer
+  # matches the app around it, and macOS calls a downloaded copy damaged
+  # instead of offering Open Anyway. Hardened runtime belongs with notarizing.
+  identity: '-'
+  hardenedRuntime: false
   extendInfo:
     # Shown when macOS asks for the microphone, the first time ⌥X is held to talk.
     NSMicrophoneUsageDescription: Jezo listens while you hold ⌥X, so you can talk to it instead of typing.

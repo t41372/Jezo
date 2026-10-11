@@ -106,7 +106,10 @@ Jezo 没有任何遥测，我们不收集你的任何信息。pi 自带的遥测
 Jezo 支持 Apple 芯片的 Mac。
 
 1. 从 [Releases](../../releases) 下载 `.dmg`，把 Jezo 拖进「应用程序」。
-2. Jezo 还没有签名，第一次打开时 macOS 会拦下来。打开 **系统设置 → 隐私与安全性**，往下找到关于 Jezo 的那一行，点 **仍要打开**。
+2. Jezo 还没有 Apple 开发者签名，第一次打开时 macOS 会拦下来。每下载一个新版本，做一次：
+   1. 打开 Jezo。macOS 说无法验证 Jezo 时，点 **完成**，不要点 **移到废纸篓**。
+   2. 打开 **系统设置 → 隐私与安全性**，往下找到“已阻止 Jezo 以保护 Mac”，点 **仍要打开**。如果要求输入密码，就输入。
+   3. macOS 再问一次时，再点 **仍要打开**。
 3. 选一个模型。如果 [LM Studio](https://lmstudio.ai) 或 [Ollama](https://ollama.com) 正在运行，Jezo 会自己找到。也可以在 **设置 → 模型服务商** 填入 Anthropic、OpenAI、Google、OpenRouter 等服务商的密钥。
 4. 想用语音代替打字，在设置的 **语音识别** 点 **安装**。它会装好 Standard ASR 和 Qwen3-ASR 0.6B，都在你的 Mac 上运行。
 
@@ -122,7 +125,7 @@ bun run dev        # 启动 app，带热更新
 bun run typecheck
 bun run test       # 单元测试
 bun run e2e        # 在构建好的 app 里跑端到端测试
-bun run package    # 在 dist/ 生成未签名的 app
+bun run package    # 在 dist/ 生成没有开发者签名的 app
 ```
 
 端到端测试会在一个临时工作区里运行真正的 app。需要模型的测试要用 LM Studio 加载 `qwen3.6-35b-a3b-splash`（设置 `JEZO_TEST_MODEL` 可以换成别的），没有本地模型服务时会自动跳过。标了 `@speech` 的测试需要先装好语音识别。其他的都在 CI 里跑。

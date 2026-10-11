@@ -106,7 +106,10 @@ Jezo has no telemetry, and we don't collect anything about you. pi's own telemet
 Jezo runs on Macs with Apple silicon.
 
 1. Download the `.dmg` from [Releases](../../releases) and drag Jezo into Applications.
-2. Jezo isn't signed yet, so macOS refuses the first time you open it. Open **System Settings → Privacy & Security**, scroll down to the line about Jezo, and click **Open Anyway**.
+2. Jezo isn't signed by an Apple developer yet, so macOS stops it the first time it opens. Once for each version you download:
+   1. Open Jezo. When macOS says it couldn't verify Jezo, click **Done**, not **Move to Trash**.
+   2. Open **System Settings → Privacy & Security**, scroll down to "Jezo was blocked to protect your Mac", and click **Open Anyway**. Enter your password if asked.
+   3. Click **Open Anyway** once more when macOS asks.
 3. Pick a model. If [LM Studio](https://lmstudio.ai) or [Ollama](https://ollama.com) is running, Jezo finds it on its own. Or add a key for Anthropic, OpenAI, Google, OpenRouter or another provider in **Settings → Model providers**.
 4. For talking instead of typing, click **Install** under **Speech recognition** in Settings. It sets up Standard ASR with Qwen3-ASR 0.6B, which runs on your Mac.
 
@@ -122,7 +125,7 @@ bun run dev        # the app, with hot reload
 bun run typecheck
 bun run test       # unit tests
 bun run e2e        # end-to-end tests in the built app
-bun run package    # an unsigned app in dist/
+bun run package    # the app in dist/, without a developer signature
 ```
 
 The end-to-end tests run the real app against a throwaway workspace. The ones that talk to a model need LM Studio with `qwen3.6-35b-a3b-splash` (set `JEZO_TEST_MODEL` to use another) and skip themselves when no local model server is running. The ones tagged `@speech` need speech recognition installed. CI runs everything else.

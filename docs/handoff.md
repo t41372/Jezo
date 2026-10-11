@@ -62,7 +62,7 @@ Tim asked for a code review loop with Codex until nothing worth fixing was left,
 - Four review rounds ran (round 1 in six parts by area, then each round on the previous round's fixes); round 4 found nothing. Each finding was checked against the code and the docs before anything changed; the ones judged deliberate are written into the design docs.
 - CI is `.github/workflows/ci.yml` (typecheck, unit tests, build, E2E without `@speech`; the model tests skip without a local model). `release.yml` builds an unsigned dmg and zip on a `v*` tag into a draft release.
 - The README's pictures come from `node scripts/screenshots.ts` after a build.
-- Not done: speech on Windows (backend.md, "Speech"); signing and notarizing the app.
+- Not done: speech on Windows (backend.md, "Speech"); signing with a Developer ID and notarizing, which waits on Tim having an Apple Developer account. Until then the app is signed ad hoc (backend.md, "Signing").
 
 ## Work in progress, in order
 

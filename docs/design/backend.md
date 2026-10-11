@@ -12,6 +12,8 @@ The main process is ESM. pi's packages only export ESM (`require()` fails with `
   - The disk image is recompressed with LZMA (`scripts/dmg.ts`), which electron-builder can't write: 156 MB as lzfse, 121 MB as LZMA.
   - The app is 404 MB installed. Electron's 203 MB binary is already stripped. Not done: removing SwiftShader (17 MB, the GPU fallback a virtual machine needs), downloading uv on first use (34 MB, but speech would then need the network to install), and bundling pi and its provider SDKs into the main process (maybe 60 MB, against pi's dynamic imports).
 
+**Signing** (Tim, 2026-10-10: no Apple Developer account yet). The app is signed ad hoc, which needs no account. Left unsigned, as 0.1.0 was, only Electron's own binary carried a signature, and it didn't match the app around it: `codesign --verify` failed, and macOS calls a downloaded app like that damaged, with no Open Anyway. Signed ad hoc, the whole app verifies, and the README walks through Open Anyway. Hardened runtime stays off until there's a Developer ID to notarize with; turning it on then needs entitlements for the microphone, calendars, JIT and native modules signed by others (the ⌥X addon, pi extensions from npm).
+
 ## The workspace
 
 A directory the user picks, `~/Jezo` by default. It isn't under `~/Documents`, which macOS may sync to iCloud ([storage.md](storage.md), "Synced folders"). Where it is, the model choice, and other per-machine settings live in the app's data directory, not in the workspace.

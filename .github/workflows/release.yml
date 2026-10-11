@@ -1,7 +1,8 @@
 # Builds the Mac app for a version tag (v0.1.0) and attaches it to a draft
 # release, for a person to read over and publish. Run by hand, it builds the
 # same app and keeps it as the run's artifact, to try before tagging. The app
-# isn't signed or notarized yet, so macOS asks before opening it the first time.
+# is signed only ad hoc and isn't notarized yet, so macOS asks before opening it
+# the first time (docs/design/backend.md, "Signing").
 # macOS 26's SDK is needed for the Apple Foundation Models helper.
 
 name: Release
