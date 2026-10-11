@@ -494,7 +494,9 @@ function DropArea() {
 
   return (
     <div ref={setNodeRef} className="flex min-h-0 flex-1 flex-col">
-      <div ref={content} className="flex min-h-0 flex-1 flex-col">
+      {/* isolate keeps the chips' z-index among themselves: a hovered chip is z-40, and
+          one clicked under where the drawer opens stayed hovered and showed through it. */}
+      <div ref={content} className="isolate flex min-h-0 flex-1 flex-col">
         <EventCalendarContent className="min-h-0 flex-1" />
       </div>
       {ghost && (

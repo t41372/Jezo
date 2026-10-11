@@ -308,25 +308,41 @@ test('a file that breaks its format shows in 更多, can go to the agent, and le
   expect(jezo.errors).toEqual([])
 })
 
-test("a todo's drawer on the calendar sits above everything the calendar draws, and Escape closes it", async ({ jezo }) => {
-  const { page } = jezo
-  await open(page, '行事曆')
-  await page.locator('[data-slot=event-calendar-event]').filter({ hasText: '晨跑' }).first().click()
-  const drawer = page.locator('aside')
-  await expect(drawer).toContainText('晨跑 5 km')
-  // Every point of the drawer belongs to it: the calendar's sticky toolbar and raised chips stay underneath.
-  const covered = await page.evaluate(() => {
-    // Where the drawer shows: inside main, which clips it, and below the window's drag strip.
-    const r = document.querySelector('aside')!.getBoundingClientRect()
-    const m = document.querySelector('main')!.getBoundingClientRect()
-    const points: [number, number][] = []
-    for (let x = r.left + 4; x < Math.min(r.right, m.right); x += 40) for (let y = Math.max(r.top, 44); y < Math.min(r.bottom, m.bottom); y += 40) points.push([x, y])
-    return points.filter(([x, y]) => !document.elementFromPoint(x, y)?.closest('aside')).map(([x, y]) => `${x},${y} ${document.elementFromPoint(x, y)?.outerHTML.slice(0, 120)}`)
+test.describe('a todo beside 晨跑 at the same time', () => {
+  // Two todos at once sit side by side, and the second chip is raised above the first.
+  test.use({
+    prepare: {
+      workspace: (root) => {
+        const scheduled = readFileSync(join(root, 'todos/items/t-1.md'), 'utf8').match(/^scheduled: .*$/m)![0]
+        writeFileSync(join(root, 'todos/items/t-beside.md'), `---\nid: t-beside\ntitle: 伸展\nstate: open\nestimate: 35\n${scheduled}\nrank: a1\n---\n`)
+      },
+    },
   })
-  expect(covered).toEqual([])
-  await page.keyboard.press('Escape')
-  await expect(drawer).toHaveCount(0)
-  expect(jezo.errors).toEqual([])
+
+  test("a todo's drawer on the calendar sits above everything the calendar draws, and Escape closes it", async ({ jezo }) => {
+    const { page } = jezo
+    await open(page, '行事曆')
+    // In the day view, 伸展 takes the right half of the column, where the drawer opens.
+    await page.getByRole('button', { name: '日', exact: true }).click()
+    await expect(page.locator('[data-slot=event-calendar-event]').filter({ hasText: '伸展' })).toBeVisible()
+    await page.locator('[data-slot=event-calendar-event]').filter({ hasText: '晨跑' }).first().click()
+    const drawer = page.locator('aside')
+    await expect(drawer).toContainText('晨跑 5 km')
+    await drawer.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)))
+    // Every point of the drawer belongs to it: the calendar's sticky toolbar and raised chips stay underneath.
+    const covered = await page.evaluate(() => {
+      // Where the drawer shows: inside main, which clips it, and below the window's drag strip.
+      const r = document.querySelector('aside')!.getBoundingClientRect()
+      const m = document.querySelector('main')!.getBoundingClientRect()
+      const points: [number, number][] = []
+      for (let x = r.left + 4; x < Math.min(r.right, m.right); x += 40) for (let y = Math.max(r.top, 44); y < Math.min(r.bottom, m.bottom); y += 40) points.push([x, y])
+      return points.filter(([x, y]) => !document.elementFromPoint(x, y)?.closest('aside')).map(([x, y]) => `${x},${y} ${document.elementFromPoint(x, y)?.outerHTML.slice(0, 120)}`)
+    })
+    expect(covered).toEqual([])
+    await page.keyboard.press('Escape')
+    await expect(drawer).toHaveCount(0)
+    expect(jezo.errors).toEqual([])
+  })
 })
 
 test('a markdown link between two todos shows on both, and opens the other', async ({ jezo }) => {
