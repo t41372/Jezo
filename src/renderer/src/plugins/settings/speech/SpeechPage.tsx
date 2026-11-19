@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { useStore } from '@/data/store'
-import type { SpeechInventory, SpeechModel, SpeechPackage } from '../../../../../shared/speech'
+import { speechCoreCurrent, type SpeechInventory, type SpeechModel, type SpeechPackage } from '../../../../../shared/speech'
 import { message, run, useInventory, useSpeechStatus } from './data'
 import { AddEngine, Diagnostics, EngineMenu, ErrorText, Updates } from './Engines'
 import { useDrafted } from './SettingsForm'
@@ -114,14 +114,14 @@ export function SpeechPage() {
 }
 
 /**
- * Standard ASR changed what a session promises without changing its version
+ * Standard ASR changes its pre-release contract without changing its version
  * number, so an older install is named here, with the way to update. It's
  * never updated on its own.
  */
 function OldCore({ inventory, busy, onUpdate }: { inventory: SpeechInventory; busy: boolean; onUpdate: () => void }) {
   const { t } = useTranslation('settings')
   const runtime = inventory.runtime
-  if (!runtime || (runtime.stableText && runtime.sessionCapabilityChecks)) return null
+  if (!runtime || speechCoreCurrent(runtime)) return null
   return (
     <div className="flex items-center gap-3 rounded-xl bg-muted px-3.5 py-2.5 text-[13px]">
       <p className="flex-1 text-pretty">{t('speech.oldCore')}</p>

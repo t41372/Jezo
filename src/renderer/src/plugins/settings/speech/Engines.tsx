@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import type { SpeechStatus } from '../../../../../shared/bridge'
-import type { SpeechInventory, SpeechPackage, SpeechUpdate } from '../../../../../shared/speech'
+import { speechCoreCurrent, type SpeechInventory, type SpeechPackage, type SpeechUpdate } from '../../../../../shared/speech'
 import { message, run } from './data'
 import { StepText } from './Progress'
 
@@ -231,7 +231,7 @@ export function Updates({ open, inventory, status, onClose }: { open: boolean; i
       setUpdating(false)
     }
   }
-  const old = inventory?.runtime && (!inventory.runtime.stableText || !inventory.runtime.sessionCapabilityChecks)
+  const old = inventory?.runtime && !speechCoreCurrent(inventory.runtime)
   const failed = updates.filter((u) => u.error)
   const row = (u: SpeechUpdate) => (
     <label key={u.name} className="flex items-center gap-3 px-3.5 py-2 text-[13px]">
@@ -328,6 +328,7 @@ export function Diagnostics({ open, inventory, status, onClose }: { open: boolea
     ['uv', inventory.uv ?? t('speech.diagnostics.missing')],
     [t('speech.diagnostics.stableText'), yes(inventory.runtime?.stableText)],
     [t('speech.diagnostics.sessionChecks'), yes(inventory.runtime?.sessionCapabilityChecks)],
+    [t('speech.diagnostics.capabilityRoles'), yes(inventory.runtime?.capabilityRoles)],
     [t('speech.diagnostics.model'), status?.model ?? t('speech.diagnostics.none')],
   ]
   const text = [

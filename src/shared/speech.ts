@@ -64,6 +64,18 @@ export interface SpeechModeCapabilities {
   [field: string]: unknown
 }
 
+/** What the installed Standard ASR core can do, read from the core itself. */
+export interface SpeechRuntime {
+  stableText: boolean
+  sessionCapabilityChecks: boolean
+  capabilityRoles: boolean
+}
+
+/** Whether the installed core has every contract change this Jezo's default setup relies on. */
+export function speechCoreCurrent(runtime: SpeechRuntime): boolean {
+  return runtime.stableText && runtime.sessionCapabilityChecks && runtime.capabilityRoles
+}
+
 export interface SpeechCapabilities {
   batch?: SpeechModeCapabilities | null
   streaming?: SpeechModeCapabilities | null
@@ -151,8 +163,8 @@ export interface SpeechInventory {
   models: SpeechModel[]
   packages: SpeechPackage[]
   python: string | null
-  /** Pre-release protocol versions alone cannot identify the PR 107 contract. */
-  runtime: { stableText: boolean; sessionCapabilityChecks: boolean } | null
+  /** Pre-release protocol versions alone cannot identify the PR 107 and PR 124 contracts. */
+  runtime: SpeechRuntime | null
   uv: string | null
   updates: SpeechUpdate[]
   checkedAt: string | null

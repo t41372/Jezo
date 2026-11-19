@@ -7,7 +7,7 @@ No application handlers or SDK methods are replaced.
 from typing import ClassVar, Literal
 
 from standard_asr.engine import (
-    BaseConfig, BaseProperties, DeclaredCapabilities, DeclaredEngineMetadata,
+    BaseConfig, BaseProperties, Capabilities, DeclaredEngineMetadata,
     EngineBase, NO_ARTIFACT_LIFECYCLE, StreamingCapabilities,
     TranscriptionEvent, TranscriptionSession,
 )
@@ -46,7 +46,7 @@ class Engine(EngineBase):
         accepted_input={"array"}, native_sample_rate=16000,
         accepted_sample_rates=[16000], wire_encodings=["pcm_s16le"],
     )
-    declared_capabilities = DeclaredCapabilities(
+    declared_capabilities = Capabilities(
         streaming_input={"supported": True},
         streaming=StreamingCapabilities(emits_partials={"supported": True}),
     )

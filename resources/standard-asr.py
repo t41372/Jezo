@@ -89,12 +89,16 @@ def config_for(registry, key, request):
 
 def runtime_features():
     import standard_asr
+    import standard_asr.contract.capabilities as capabilities
     from standard_asr import TranscriptionEvent
 
-    # PR 107 changed the pre-release contract without changing protocol 0.2.
-    # Report features rather than guessing from the unchanged package version.
+    # PR 107 and PR 124 changed the pre-release contract without changing
+    # protocol 0.2. Report features rather than guessing from the unchanged
+    # package version.
+    current = getattr(capabilities, "Capabilities", None)
     return {"stableText": "stable_text" in TranscriptionEvent.model_fields,
-            "sessionCapabilityChecks": callable(getattr(standard_asr, "bind_session_capabilities", None))}
+            "sessionCapabilityChecks": callable(getattr(standard_asr, "bind_session_capabilities", None)),
+            "capabilityRoles": callable(getattr(current, "can_request", None))}
 
 
 def params_for(registry, key, settings):

@@ -45,7 +45,7 @@ test.describe('Standard ASR PR 107 backend', { tag: '@speech' }, () => {
     const { page, data } = jezo
     await page.evaluate(() => window.jezo.speech.install())
     const inventory = await page.evaluate(() => window.jezo.speech.inventory())
-    expect(inventory.runtime).toEqual({ stableText: true, sessionCapabilityChecks: true })
+    expect(inventory.runtime).toEqual({ stableText: true, sessionCapabilityChecks: true, capabilityRoles: true })
     expect(inventory.models.filter((model) => model.error)).toEqual([])
 
     const replay = await run(join(data, 'speech/venv/bin/python'), ['-B', 'e2e/fixtures/asr-session-replay.py'])
@@ -101,7 +101,7 @@ test.describe('Standard ASR PR 107 backend', { tag: '@speech' }, () => {
     expect(mlxResult.text.toLowerCase()).toContain('milk')
 
     await page.evaluate(() => window.jezo.speech.command({ kind: 'installPlugin', requirement:
-      'std-faster-whisper @ git+https://github.com/standard-voice/std-faster-whisper.git@aee319ff713d0e1d3656609954097fc1cdbfc8ef' }))
+      'std-faster-whisper @ git+https://github.com/standard-voice/std-faster-whisper.git@e54f0d58d6cff91ac12e8bd4bcf296b855f3671c' }))
     await page.evaluate(() => window.jezo.speech.command({ kind: 'saveModel', model: 'faster-whisper/tiny',
       settings: { config: { device: 'cpu', compute_type: 'int8' }, options: { language: 'en' }, provider: {} }, secrets: {} }))
     await page.evaluate(() => window.jezo.speech.command({ kind: 'acquire', model: 'faster-whisper/tiny', mode: 'batch', refresh: false }))
@@ -113,7 +113,7 @@ test.describe('Standard ASR PR 107 backend', { tag: '@speech' }, () => {
     // The remote Qwen plugin now conforms; discovery/config/artifacts require
     // no network inference service, but actual remote inference still does.
     await page.evaluate(() => window.jezo.speech.command({ kind: 'installPlugin', requirement:
-      'std-qwen3-asr @ git+https://github.com/standard-voice/std-qwen3-asr.git@7b0bc5444f35cbb346d86c61dfaab70aff0fe2dd' }))
+      'std-qwen3-asr @ git+https://github.com/standard-voice/std-qwen3-asr.git@150edba907acc5e9efa03a30157f3434610f8197' }))
     const final = await page.evaluate(() => window.jezo.speech.inventory())
     expect(final.models.filter((model) => model.engine === 'qwen3-asr')).toHaveLength(3)
     expect(final.models.filter((model) => model.error)).toEqual([])

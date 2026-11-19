@@ -10,7 +10,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from standard_asr import TranscriptionEvent, TranscriptionSession
-from standard_asr.contract.capabilities import DeclaredCapabilities, StreamingCapabilities
+from standard_asr.contract.capabilities import Capabilities, StreamingCapabilities
 
 spec = importlib.util.spec_from_file_location(
     "jezo_asr", Path(__file__).resolve().parents[2] / "resources/standard-asr.py")
@@ -31,10 +31,10 @@ class ReplaySession(TranscriptionSession):
 def run(name, events, capabilities, strict=False):
     # Structural engines need the adapter's binding; EngineBase already binds.
     engine = SimpleNamespace(
-        declared_capabilities=DeclaredCapabilities(streaming=StreamingCapabilities(
+        declared_capabilities=Capabilities(streaming=StreamingCapabilities(
             emits_partials={"supported": True}, partial_stability={"supported": True},
             re_segments={"supported": True})),
-        effective_capabilities=DeclaredCapabilities(streaming=StreamingCapabilities(**capabilities)))
+        effective_capabilities=Capabilities(streaming=StreamingCapabilities(**capabilities)))
     adapter.OUTPUT = io.StringIO()
     adapter.stream_session(engine, ReplaySession(events, strict))
     return {"name": name, "messages": [json.loads(line) for line in adapter.OUTPUT.getvalue().splitlines()]}

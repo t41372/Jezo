@@ -17,13 +17,14 @@ import type {
   SpeechPackage,
   SpeechUpdate,
 } from '../../shared/speech'
+import { speechCoreCurrent } from '../../shared/speech'
 import { getConfig, setConfig } from '../config'
 import { getSecret, secretNames, storeSecret } from '../secrets'
 import { speechError } from './errors'
 
 const run = promisify(execFile)
 const CORE_REPO = 'https://github.com/standard-voice/standard_asr.git'
-const CORE_COMMIT = '97bfdb28134c114088ec335596aa6bca53f9204f'
+const CORE_COMMIT = '4a70a91e54f23b2230e36dcab463e513631fee92'
 const CORE_REQUIREMENT = `standard-asr[audio] @ git+${CORE_REPO}@${CORE_COMMIT}`
 
 /** Suggestions for first setup. Installed entry points, never these suggestions, are the catalog. */
@@ -33,13 +34,13 @@ export const preferred =
         name: 'Qwen3-ASR 0.6B',
         model: 'mlx-audio/qwen3-asr-0.6b',
         requirement:
-          'std-mlx-audio @ git+https://github.com/standard-voice/std-mlx-audio.git@080beb1b89ed1795532c70cf1ef3db465ae8657c',
+          'std-mlx-audio @ git+https://github.com/standard-voice/std-mlx-audio.git@3f5549f9ade8654a74c981512c00763dfc3fb91b',
       }
     : {
         name: 'Whisper small',
         model: 'faster-whisper/small',
         requirement:
-          'std-faster-whisper @ git+https://github.com/standard-voice/std-faster-whisper.git@aee319ff713d0e1d3656609954097fc1cdbfc8ef',
+          'std-faster-whisper @ git+https://github.com/standard-voice/std-faster-whisper.git@e54f0d58d6cff91ac12e8bd4bcf296b855f3671c',
       }
 
 export const speechDir = () => join(app.getPath('userData'), 'speech')
@@ -381,7 +382,7 @@ export class SpeechEnvironment {
       await this.ensureCore()
       const runtime = (await this.inventory()).runtime
       await this.pipInstall([
-        ...(!runtime?.stableText || !runtime.sessionCapabilityChecks ? [CORE_REQUIREMENT] : []),
+        ...(!runtime || !speechCoreCurrent(runtime) ? [CORE_REQUIREMENT] : []),
         preferred.requirement,
       ])
       const inventory = await this.inventory()
