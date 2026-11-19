@@ -1,4 +1,4 @@
-# Handoff: where the work stands (2026-10-10)
+# Handoff: where the work stands (2026-11-18)
 
 This is a working note, not a design doc. It holds what the agent building
 Jezo was in the middle of, and the decisions waiting on Tim. Delete it once
@@ -55,7 +55,7 @@ Left over:
 
 ### Releases
 
-0.1.0 (2026-10-02) and 0.2.0 (2026-10-10, the rebuilt 設定 → 語音辨識) are on GitHub. For 0.1.0:
+0.1.0 (2026-10-02), 0.2.0 (2026-10-10, the rebuilt 設定 → 語音辨識) and 0.2.1 (2026-11-18, Standard ASR fixes) are on GitHub. For 0.1.0:
 
 
 Tim asked for a code review loop with Codex until nothing worth fixing was left, a squashed history, CI, a README with pictures in English and Simplified Chinese, and Simplified Chinese in the app, ahead of merging and the first release.
