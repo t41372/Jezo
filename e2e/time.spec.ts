@@ -24,8 +24,13 @@ test.afterAll(() => {
   process.env.JEZO_LOCALTIME = before
 })
 
-// The day in Phoenix when the test starts. A New York 09:00 falls on it in Phoenix (06:00) and in Tokyo (22:00).
+// The day in Phoenix when the test starts. A New York 08:00 or 09:00 falls on it in Phoenix and in Tokyo.
 const today = Temporal.Now.plainDateISO('America/Phoenix').toString()
+
+// What a New York time today reads in another zone. New York changes its clocks
+// and Phoenix and Tokyo don't, so 09:00 there is 06:00 or 07:00 in Phoenix by season.
+const newYork = (time: string, zone: string) =>
+  Temporal.ZonedDateTime.from(`${today}T${time}[America/New_York]`).withTimeZone(zone).toPlainTime().toString({ smallestUnit: 'minute' })
 
 function write(root: string, path: string, data: object, body = '') {
   mkdirSync(join(root, path, '..'), { recursive: true })
@@ -52,9 +57,9 @@ test('every time keeps its zone and shows right wherever the device is, and reco
   }
   await open(page, '行事曆')
 
-  // In Phoenix, New York's 09:00 is 06:00, and the walk is at 07:00.
+  // In Phoenix, New York's 09:00 is 06:00 or 07:00, and the walk is at 07:00.
   await openTodo('跟紐約的同事通話')
-  await expect(drawerTime).toContainText('06:00')
+  await expect(drawerTime).toContainText(newYork('09:00', 'America/Phoenix'))
   await page.keyboard.press('Escape')
   await openTodo('早上散步')
   await expect(drawerTime).toContainText('07:00')
@@ -66,9 +71,9 @@ test('every time keeps its zone and shows right wherever the device is, and reco
   await expect.poll(() => app.evaluate(() => process.env.TZ)).toBe('Asia/Tokyo')
   await expect(page.getByText('現在用東京時間了')).toBeVisible()
 
-  // Both show at the right moment in Tokyo's hours: 09:00 New York is 22:00, 07:00 Phoenix is 23:00.
+  // Both show at the right moment in Tokyo's hours: 09:00 New York is 22:00 or 23:00, 07:00 Phoenix is 23:00.
   await openTodo('跟紐約的同事通話')
-  await expect(drawerTime).toContainText('22:00')
+  await expect(drawerTime).toContainText(newYork('09:00', 'Asia/Tokyo'))
   await page.keyboard.press('Escape')
   await openTodo('早上散步')
   await expect(drawerTime).toContainText('23:00')
@@ -79,11 +84,11 @@ test('every time keeps its zone and shows right wherever the device is, and reco
   expect(read('todos/items/t-call.md').data.scheduled).toBe(`${today}T09:00[America/New_York]`)
   expect(read('todos/items/t-walk.md').data.scheduled).toBe(`${today}T07:00[America/Phoenix]`)
 
-  // Moved to 23:00 from Tokyo, the call stays a New York time: 10:00 there.
+  // Moved an hour earlier from Tokyo, the call stays a New York time: 08:00 there.
   await openTodo('跟紐約的同事通話')
   await drawerTime.click()
-  await page.getByLabel('時間').fill('23:00')
-  await expect.poll(() => read('todos/items/t-call.md').data.scheduled).toBe(`${today}T10:00[America/New_York]`)
+  await page.getByLabel('時間').fill(newYork('08:00', 'Asia/Tokyo'))
+  await expect.poll(() => read('todos/items/t-call.md').data.scheduled).toBe(`${today}T08:00[America/New_York]`)
   await page.keyboard.press('Escape')
   await page.keyboard.press('Escape')
 
@@ -184,15 +189,15 @@ test.describe('planning in another zone', () => {
     await page.locator('[data-zone-picker] button').filter({ hasText: '東京' }).first().click()
     await expect(page.locator('[data-calendar-zone]')).toHaveAttribute('data-calendar-zone', 'Asia/Tokyo')
 
-    // 09:00 New York is 22:00 in Tokyo; the picker says which zone it reads.
+    // 09:00 New York is 22:00 or 23:00 in Tokyo; the picker says which zone it reads.
     await page.locator('[data-slot=event-calendar-event]').filter({ hasText: '跟紐約的同事通話' }).first().click()
     const drawerTime = page.locator('aside [data-slot-field]')
-    await expect(drawerTime).toContainText('22:00')
+    await expect(drawerTime).toContainText(newYork('09:00', 'Asia/Tokyo'))
     await drawerTime.click()
     await expect(page.getByText('以東京時間填寫')).toBeVisible()
-    // 23:00 Tokyo is 10:00 New York, and the call stays a New York time.
-    await page.getByLabel('時間').fill('23:00')
-    await expect.poll(() => read('todos/items/t-call.md').data.scheduled).toBe(`${today}T10:00[America/New_York]`)
+    // Filled in Tokyo's hours as an hour earlier, the call stays a New York time: 08:00 there.
+    await page.getByLabel('時間').fill(newYork('08:00', 'Asia/Tokyo'))
+    await expect.poll(() => read('todos/items/t-call.md').data.scheduled).toBe(`${today}T08:00[America/New_York]`)
     expect(jezo.errors).toEqual([])
   })
 })
