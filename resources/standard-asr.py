@@ -43,6 +43,16 @@ def package(dist):
     }
 
 
+def protocol_document(declaration):
+    """A capability or metadata declaration as the protocol's JSON document.
+
+    Standard ASR PR 124 renamed canonical_json() to to_protocol_dict(). An
+    installed core stays as it is until the owner updates it, so both work.
+    """
+    to_document = getattr(declaration, "to_protocol_dict", None) or declaration.canonical_json
+    return to_document()
+
+
 def declarations(registry, key):
     from standard_asr.runtime.interface import require_engine_protocol
 
@@ -54,8 +64,8 @@ def declarations(registry, key):
         cls = registry.engine_class(key)
         props = require_engine_protocol(cls)
         result.update(properties=props.model_dump(mode="json"),
-                      capabilities=cls.declared_capabilities.canonical_json(),
-                      metadata=cls.declared_metadata.canonical_json(),
+                      capabilities=protocol_document(cls.declared_capabilities),
+                      metadata=protocol_document(cls.declared_metadata),
                       dictation=dictation(cls.declared_capabilities.supports, props))
     except Exception as error:
         result["error"] = error_message(error)
@@ -134,7 +144,7 @@ def detail(registry, key, request):
     try:
         engine = registry.create(key, **config)
         effective = getattr(engine, "effective_capabilities", cls.declared_capabilities)
-        result["effectiveCapabilities"] = effective.canonical_json()
+        result["effectiveCapabilities"] = protocol_document(effective)
         result["dictation"] = dictation(engine.supports, engine.properties)
     except Exception as error:
         result["configurationError"] = error_message(error)
