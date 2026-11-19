@@ -83,6 +83,20 @@ const NOT_PERMITTED = 'Operation not permitted'
 const TEMP = join(tmpdir(), 'jezo-shell')
 process.env.CLAUDE_CODE_TMPDIR = TEMP
 
+// Lets commands verify TLS certificates the way they do outside the sandbox.
+// macOS's curl asks TrustEvaluationAgent when a site's root isn't in
+// /etc/ssl/cert.pem (example.com since its 2026 certificate change), and Go
+// programs like gh ask trustd. The sandbox calls the trustd one weaker network
+// isolation because trustd could carry data past a network allowlist; with the
+// network open there's no allowlist to get past. Both are read only from the
+// sandbox's own config, which has no network allowlist here (allowedDomains
+// unset), so the network stays open and no proxy starts.
+SandboxManager.updateConfig({
+  network: { allowMachLookup: ['com.apple.TrustEvaluationAgent'] },
+  filesystem: { allowWrite: [], denyRead: [], denyWrite: [] },
+  enableWeakerNetworkIsolation: true,
+} as unknown as Parameters<typeof SandboxManager.updateConfig>[0])
+
 export function shellOperations(workspace: Workspace, context: () => { actor: Actor; heard: string[]; closed: string[] }, checkpoints?: CommandCheckpoints): BashOperations {
   const local = createLocalBashOperations()
   return {
