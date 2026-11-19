@@ -70,6 +70,9 @@ test('every time keeps its zone and shows right wherever the device is, and reco
   await app.evaluate(({ app }) => app.emit('browser-window-focus'))
   await expect.poll(() => app.evaluate(() => process.env.TZ)).toBe('Asia/Tokyo')
   await expect(page.getByText('現在用東京時間了')).toBeVisible()
+  // It sits over the evening's events, and waits while the pointer is on it. Read, it goes.
+  await page.mouse.move(0, 0)
+  await expect(page.getByText('現在用東京時間了')).toBeHidden({ timeout: 10_000 })
 
   // Both show at the right moment in Tokyo's hours: 09:00 New York is 22:00 or 23:00, 07:00 Phoenix is 23:00.
   await openTodo('跟紐約的同事通話')
